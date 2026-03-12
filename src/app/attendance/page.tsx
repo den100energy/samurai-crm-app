@@ -1,0 +1,98 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+import Link from 'next/link'
+import { supabase } from '@/lib/supabase'
+
+type Student = { id: string; name: string; group_name: string | null }
+
+const GROUPS = ['Дети 4-9', 'Подростки (нач)', 'Подростки (оп)', 'Цигун', 'Индивидуальные']
+
+export default function AttendancePage() {
+  const [students, setStudents] = useState<Student[]>([])
+  const [group, setGroup] = useState(GROUPS[0])
+  const [date, setDate] = useState(new Date().toISOString().split('T')[0])
+  const [present, setPresent] = useState<Set<string>>(new Set())
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+
+  useEffect(() => {
+    async function load() {
+      const { data } = await supabase.from('students').select('id, name, group_name')
+        .eq('group_name', group).eq('status', 'active').order('name')
+      setStudents(data || [])
+      setPresent(new Set((data || []).map((s: Student) => s.id)))
+    }
+    load()
+  }, [group])
+
+  function toggle(id: string) {
+    setPresent(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  async function save() {
+    setSaving(true)
+    const rows = students.map(s => ({
+      student_id: s.id,
+      date,
+      group_name: group,
+      present: present.has(s.id),
+    }))
+    await supabase.from('attendance').upsert(rows, { onConflict: 'student_id,date' })
+    setSaving(false)
+    setSaved(true)
+    setTimeout(() => setSaved(false), 2000)
+  }
+
+  return (
+    <main className="max-w-lg mx-auto p-4">
+      <div className="flex items-center gap-3 mb-4">
+        <Link href="/" className="text-gray-400 hover:text-gray-600">←</Link>
+        <h1 className="text-xl font-bold text-gray-800">Посещаемость</h1>
+      </div>
+
+      <input type="date" value={date} onChange={e => setDate(e.target.value)}
+        className="w-full border border-gray-200 rounded-xl px-4 py-2.5 mb-3 outline-none focus:border-gray-400" />
+
+      <div className="flex gap-2 overflow-x-auto pb-2 mb-4">
+        {GROUPS.map(g => (
+          <button key={g} onClick={() => setGroup(g)}
+            className={`whitespace-nowrap px-3 py-1.5 rounded-full text-sm font-medium transition-colors
+              ${group === g ? 'bg-black text-white' : 'bg-white text-gray-600 border border-gray-200'}`}>
+            {g}
+          </button>
+        ))}
+      </div>
+
+      {students.length === 0 ? (
+        <div className="text-center text-gray-400 py-12">Нет учеников в этой группе</div>
+      ) : (
+        <>
+          <div className="space-y-2 mb-4">
+            {students.map(s => (
+              <button key={s.id} onClick={() => toggle(s.id)}
+                className={`w-full flex items-center px-4 py-3 rounded-xl border transition-colors
+                  ${present.has(s.id)
+                    ? 'bg-green-50 border-green-200'
+                    : 'bg-red-50 border-red-200'}`}>
+                <span className="text-xl mr-3">{present.has(s.id) ? '✅' : '❌'}</span>
+                <span className="font-medium text-gray-800">{s.name}</span>
+              </button>
+            ))}
+          </div>
+          <div className="text-sm text-gray-500 text-center mb-3">
+            Присутствует: {present.size} из {students.length}
+          </div>
+          <button onClick={save} disabled={saving}
+            className="w-full bg-black text-white py-3 rounded-xl font-medium disabled:opacity-50">
+            {saved ? '✓ Сохранено!' : saving ? 'Сохранение...' : 'Сохранить посещаемость'}
+          </button>
+        </>
+      )}
+    </main>
+  )
+}
