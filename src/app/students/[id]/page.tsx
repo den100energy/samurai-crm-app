@@ -96,6 +96,26 @@ export default function StudentPage() {
     setSubs(prev => prev.map(s => s.id === subId ? { ...s, paid: !paid } : s))
   }
 
+  async function sendReminder() {
+    if (!student) return
+    const activeSub = subs[0]
+    const subInfo = activeSub
+      ? activeSub.sessions_left != null
+        ? `Осталось занятий: ${activeSub.sessions_left}`
+        : activeSub.end_date
+        ? `Абонемент до: ${activeSub.end_date}`
+        : ''
+      : 'Абонемент не найден'
+
+    const message = `👋 Напоминание для тренера:\n\nУченик: <b>${student.name}</b>\nГруппа: ${student.group_name || '—'}\n${subInfo}\n\nТелефон: ${student.phone || '—'}`
+    await fetch('/api/notify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message }),
+    })
+    alert('Напоминание отправлено в Telegram!')
+  }
+
   async function archive() {
     if (!confirm('Архивировать ученика?')) return
     await supabase.from('students').update({ status: 'archived' }).eq('id', id)
@@ -237,6 +257,10 @@ export default function StudentPage() {
         )}
       </div>
 
+      <button onClick={sendReminder}
+        className="w-full border border-gray-200 text-gray-600 text-sm py-2.5 rounded-xl mb-2">
+        📨 Отправить напоминание в Telegram
+      </button>
       <button onClick={archive} className="w-full text-red-400 text-sm py-2">
         Архивировать ученика
       </button>

@@ -1,27 +1,8 @@
+'use client'
+
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
-
-async function getDashboardData() {
-  const today = new Date().toISOString().split('T')[0]
-  const in7days = new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0]
-
-  const [{ data: expiring }, { data: noSessions }, { data: totalStudents }] = await Promise.all([
-    supabase.from('subscriptions')
-      .select('id, students(name)')
-      .gte('end_date', today)
-      .lte('end_date', in7days),
-    supabase.from('subscriptions')
-      .select('id, students(name)')
-      .eq('sessions_left', 0),
-    supabase.from('students').select('id').eq('status', 'active'),
-  ])
-
-  return {
-    expiring: expiring || [],
-    noSessions: noSessions || [],
-    totalStudents: totalStudents?.length || 0,
-  }
-}
+import { useEffect, useState } from 'react'
 
 const sections = [
   { href: '/students', emoji: '🥋', title: 'Ученики', desc: 'Список, группы, абонементы' },
@@ -30,8 +11,35 @@ const sections = [
   { href: '/leads', emoji: '📋', title: 'Лиды', desc: 'Новые заявки' },
 ]
 
-export default async function Home() {
-  const { expiring, noSessions, totalStudents } = await getDashboardData()
+export default function Home() {
+  const [expiring, setExpiring] = useState<any[]>([])
+  const [noSessions, setNoSessions] = useState<any[]>([])
+  const [totalStudents, setTotalStudents] = useState(0)
+  const [notifying, setNotifying] = useState(false)
+
+  useEffect(() => {
+    async function load() {
+      const today = new Date().toISOString().split('T')[0]
+      const in7days = new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0]
+
+      const [{ data: exp }, { data: noSess }, { data: students }] = await Promise.all([
+        supabase.from('subscriptions').select('id, students(name)').gte('end_date', today).lte('end_date', in7days),
+        supabase.from('subscriptions').select('id, students(name)').eq('sessions_left', 0),
+        supabase.from('students').select('id').eq('status', 'active'),
+      ])
+      setExpiring(exp || [])
+      setNoSessions(noSess || [])
+      setTotalStudents(students?.length || 0)
+    }
+    load()
+  }, [])
+
+  async function sendReport() {
+    setNotifying(true)
+    await fetch('/api/notify-expiring', { method: 'POST' })
+    setNotifying(false)
+    alert('Отчёт отправлен в Telegram!')
+  }
 
   return (
     <main className="max-w-lg mx-auto p-4">
@@ -84,6 +92,11 @@ export default async function Home() {
           <div className="text-xs text-gray-400">истекает</div>
         </div>
       </div>
+
+      <button onClick={sendReport} disabled={notifying}
+        className="w-full border border-gray-200 text-gray-600 py-2.5 rounded-xl text-sm mb-4 disabled:opacity-50">
+        {notifying ? 'Отправка...' : '📨 Отправить отчёт в Telegram'}
+      </button>
 
       <div className="grid grid-cols-2 gap-4">
         {sections.map((s) => (
