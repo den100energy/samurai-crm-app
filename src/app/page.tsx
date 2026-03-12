@@ -8,6 +8,7 @@ const sections = [
   { href: '/students', emoji: '🥋', title: 'Ученики', desc: 'Список, группы, абонементы' },
   { href: '/attendance', emoji: '✅', title: 'Посещаемость', desc: 'Отметить занятие' },
   { href: '/finance', emoji: '💰', title: 'Финансы', desc: 'Платежи за месяц' },
+  { href: '/salary', emoji: '💵', title: 'Зарплата', desc: 'Расчёт для тренеров' },
   { href: '/leads', emoji: '📋', title: 'Лиды', desc: 'Новые заявки' },
   { href: '/analytics', emoji: '📊', title: 'Аналитика', desc: 'Посещаемость, зона риска' },
   { href: '/broadcast', emoji: '📣', title: 'Рассылка', desc: 'Сообщения по группам' },

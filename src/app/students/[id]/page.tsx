@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { QRCodeSVG } from 'qrcode.react'
 import { supabase } from '@/lib/supabase'
 
 type Student = {
@@ -32,8 +33,27 @@ type Attendance = {
   present: boolean
 }
 
+type Belt = {
+  id: string
+  belt_name: string
+  date: string
+  notes: string | null
+}
+
 const GROUPS = ['Дети 4-9', 'Подростки (нач)', 'Подростки (оп)', 'Цигун', 'Индивидуальные']
 const SUB_TYPES = ['8 занятий', '12 занятий', 'Безлимит (месяц)', 'Пробное', 'Индивидуальное']
+const BELTS = ['Белый', 'Жёлтый', 'Оранжевый', 'Зелёный', 'Синий', 'Фиолетовый', 'Коричневый', 'Чёрный']
+
+const BELT_COLORS: Record<string, string> = {
+  'Белый': 'bg-gray-100 text-gray-700',
+  'Жёлтый': 'bg-yellow-100 text-yellow-700',
+  'Оранжевый': 'bg-orange-100 text-orange-700',
+  'Зелёный': 'bg-green-100 text-green-700',
+  'Синий': 'bg-blue-100 text-blue-700',
+  'Фиолетовый': 'bg-purple-100 text-purple-700',
+  'Коричневый': 'bg-amber-100 text-amber-800',
+  'Чёрный': 'bg-gray-800 text-white',
+}
 
 export default function StudentPage() {
   const { id } = useParams<{ id: string }>()
@@ -41,22 +61,28 @@ export default function StudentPage() {
   const [student, setStudent] = useState<Student | null>(null)
   const [subs, setSubs] = useState<Subscription[]>([])
   const [attendance, setAttendance] = useState<Attendance[]>([])
+  const [belts, setBelts] = useState<Belt[]>([])
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState<Partial<Student>>({})
   const [showSubForm, setShowSubForm] = useState(false)
   const [subForm, setSubForm] = useState({ type: '', sessions_total: '', start_date: '', end_date: '', amount: '', paid: false })
+  const [showBeltForm, setShowBeltForm] = useState(false)
+  const [beltForm, setBeltForm] = useState({ belt_name: '', date: new Date().toISOString().split('T')[0], notes: '' })
+  const [showQR, setShowQR] = useState(false)
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     async function load() {
-      const [{ data: s }, { data: sb }, { data: at }] = await Promise.all([
+      const [{ data: s }, { data: sb }, { data: at }, { data: bl }] = await Promise.all([
         supabase.from('students').select('*').eq('id', id).single(),
         supabase.from('subscriptions').select('*').eq('student_id', id).order('created_at', { ascending: false }),
         supabase.from('attendance').select('*').eq('student_id', id).order('date', { ascending: false }).limit(20),
+        supabase.from('belts').select('*').eq('student_id', id).order('date', { ascending: false }),
       ])
       if (s) { setStudent(s); setForm(s) }
       setSubs(sb || [])
       setAttendance(at || [])
+      setBelts(bl || [])
     }
     load()
   }, [id])
@@ -97,6 +123,24 @@ export default function StudentPage() {
     setSubs(prev => prev.map(s => s.id === subId ? { ...s, paid: !paid } : s))
   }
 
+  async function addBelt(e: React.FormEvent) {
+    e.preventDefault()
+    const { data } = await supabase.from('belts').insert({
+      student_id: id,
+      belt_name: beltForm.belt_name,
+      date: beltForm.date,
+      notes: beltForm.notes || null,
+    }).select().single()
+    if (data) setBelts(prev => [data, ...prev])
+    setShowBeltForm(false)
+    setBeltForm({ belt_name: '', date: new Date().toISOString().split('T')[0], notes: '' })
+  }
+
+  async function deleteBelt(beltId: string) {
+    await supabase.from('belts').delete().eq('id', beltId)
+    setBelts(prev => prev.filter(b => b.id !== beltId))
+  }
+
   async function sendReminder() {
     if (!student) return
     const activeSub = subs[0]
@@ -107,7 +151,6 @@ export default function StudentPage() {
         ? `Абонемент до: ${activeSub.end_date}`
         : ''
       : 'Абонемент не найден'
-
     const message = `👋 Напоминание для тренера:\n\nУченик: <b>${student.name}</b>\nГруппа: ${student.group_name || '—'}\n${subInfo}\n\nТелефон: ${student.phone || '—'}`
     await fetch('/api/notify', {
       method: 'POST',
@@ -124,6 +167,19 @@ export default function StudentPage() {
     alert('Ссылка скопирована!\n' + url)
   }
 
+  function openWhatsApp() {
+    if (!student?.phone) return alert('Телефон не указан')
+    const phone = student.phone.replace(/\D/g, '')
+    const activeSub = subs[0]
+    const subInfo = activeSub?.sessions_left != null
+      ? `Осталось занятий: ${activeSub.sessions_left}`
+      : activeSub?.end_date
+      ? `Абонемент до: ${activeSub.end_date}`
+      : ''
+    const text = encodeURIComponent(`Здравствуйте! Напоминаем о занятиях в Школе Самурая.\n${subInfo}`)
+    window.open(`https://wa.me/${phone}?text=${text}`, '_blank')
+  }
+
   async function archive() {
     if (!confirm('Архивировать ученика?')) return
     await supabase.from('students').update({ status: 'archived' }).eq('id', id)
@@ -133,6 +189,8 @@ export default function StudentPage() {
   if (!student) return <div className="text-center text-gray-400 py-12">Загрузка...</div>
 
   const presentCount = attendance.filter(a => a.present).length
+  const currentBelt = belts[0]
+  const checkinUrl = typeof window !== 'undefined' ? `${window.location.origin}/checkin/${id}` : ''
 
   return (
     <main className="max-w-lg mx-auto p-4">
@@ -145,6 +203,7 @@ export default function StudentPage() {
         </button>
       </div>
 
+      {/* Student info */}
       <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm mb-4">
         <div className="flex items-center gap-3 mb-4">
           <div className="w-14 h-14 rounded-full bg-gray-100 flex items-center justify-center text-2xl font-bold text-gray-600">
@@ -157,6 +216,11 @@ export default function StudentPage() {
             <div>
               <div className="text-lg font-semibold text-gray-800">{student.name}</div>
               <div className="text-sm text-gray-400">{student.group_name || 'Группа не указана'}</div>
+              {currentBelt && (
+                <span className={`inline-block text-xs px-2 py-0.5 rounded-full mt-1 font-medium ${BELT_COLORS[currentBelt.belt_name] || 'bg-gray-100 text-gray-600'}`}>
+                  {currentBelt.belt_name} пояс
+                </span>
+              )}
             </div>
           )}
         </div>
@@ -180,13 +244,48 @@ export default function StudentPage() {
           </div>
         ) : (
           <div className="space-y-2 text-sm">
-            {student.phone && <div className="flex justify-between"><span className="text-gray-400">Телефон</span><span>{student.phone}</span></div>}
+            {student.phone && (
+              <div className="flex justify-between items-center">
+                <span className="text-gray-400">Телефон</span>
+                <div className="flex items-center gap-2">
+                  <span>{student.phone}</span>
+                  <button onClick={openWhatsApp}
+                    className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
+                    WA
+                  </button>
+                </div>
+              </div>
+            )}
             {student.birth_date && <div className="flex justify-between"><span className="text-gray-400">Дата рождения</span><span>{student.birth_date}</span></div>}
             <div className="flex justify-between"><span className="text-gray-400">Посещений (последние 20)</span><span>{presentCount}</span></div>
           </div>
         )}
       </div>
 
+      {/* QR code */}
+      <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm mb-4">
+        <div className="flex items-center justify-between">
+          <div className="font-semibold text-gray-800">QR-код для отметки</div>
+          <button onClick={() => setShowQR(!showQR)}
+            className="text-sm text-gray-500 border border-gray-200 px-3 py-1 rounded-xl">
+            {showQR ? 'Скрыть' : 'Показать'}
+          </button>
+        </div>
+        {showQR && (
+          <div className="mt-4 flex flex-col items-center gap-3">
+            <div className="p-3 bg-white border border-gray-200 rounded-2xl">
+              <QRCodeSVG value={checkinUrl} size={180} />
+            </div>
+            <div className="text-xs text-gray-400 text-center">Ученик сканирует — посещение записывается</div>
+            <button onClick={() => { navigator.clipboard.writeText(checkinUrl); alert('Ссылка скопирована!') }}
+              className="text-xs text-gray-500 underline">
+              Скопировать ссылку
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Subscriptions */}
       <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm mb-4">
         <div className="flex items-center justify-between mb-3">
           <div className="font-semibold text-gray-800">Абонементы</div>
@@ -249,6 +348,58 @@ export default function StudentPage() {
         )}
       </div>
 
+      {/* Belts */}
+      <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm mb-4">
+        <div className="flex items-center justify-between mb-3">
+          <div className="font-semibold text-gray-800">Пояса и аттестации</div>
+          <button onClick={() => setShowBeltForm(!showBeltForm)}
+            className="text-sm text-gray-500 border border-gray-200 px-3 py-1 rounded-xl">
+            + Добавить
+          </button>
+        </div>
+
+        {showBeltForm && (
+          <form onSubmit={addBelt} className="space-y-2 mb-4 p-3 bg-gray-50 rounded-xl">
+            <select required value={beltForm.belt_name} onChange={e => setBeltForm({...beltForm, belt_name: e.target.value})}
+              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none bg-white">
+              <option value="">Выберите пояс *</option>
+              {BELTS.map(b => <option key={b} value={b}>{b}</option>)}
+            </select>
+            <input value={beltForm.date} onChange={e => setBeltForm({...beltForm, date: e.target.value})}
+              type="date" className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none" />
+            <input value={beltForm.notes} onChange={e => setBeltForm({...beltForm, notes: e.target.value})}
+              placeholder="Заметка (необязательно)"
+              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none" />
+            <button type="submit" className="w-full bg-black text-white py-2 rounded-xl text-sm font-medium">
+              Сохранить
+            </button>
+          </form>
+        )}
+
+        {belts.length === 0 ? (
+          <div className="text-sm text-gray-400 text-center py-2">Аттестаций нет</div>
+        ) : (
+          <div className="space-y-2">
+            {belts.map((b, i) => (
+              <div key={b.id} className="flex items-center justify-between p-2 bg-gray-50 rounded-xl">
+                <div className="flex items-center gap-2">
+                  <span className={`text-xs px-2 py-1 rounded-full font-medium ${BELT_COLORS[b.belt_name] || 'bg-gray-100 text-gray-600'}`}>
+                    {b.belt_name}
+                  </span>
+                  <div>
+                    <div className="text-xs text-gray-500">{b.date}</div>
+                    {b.notes && <div className="text-xs text-gray-400">{b.notes}</div>}
+                  </div>
+                  {i === 0 && <span className="text-xs text-gray-400">(текущий)</span>}
+                </div>
+                <button onClick={() => deleteBelt(b.id)} className="text-xs text-red-400">✕</button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Attendance */}
       <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm mb-4">
         <div className="font-semibold text-gray-800 mb-3">История посещений</div>
         {attendance.length === 0 ? (
