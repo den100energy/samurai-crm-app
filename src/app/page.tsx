@@ -10,6 +10,7 @@ const sections = [
   { href: '/finance', emoji: '💰', title: 'Финансы', desc: 'Платежи за месяц' },
   { href: '/leads', emoji: '📋', title: 'Лиды', desc: 'Новые заявки' },
   { href: '/analytics', emoji: '📊', title: 'Аналитика', desc: 'Посещаемость, зона риска' },
+  { href: '/broadcast', emoji: '📣', title: 'Рассылка', desc: 'Сообщения по группам' },
 ]
 
 export default function Home() {
