@@ -12,6 +12,7 @@ type Student = {
   birth_date: string | null
   group_name: string | null
   status: string
+  parent_token: string | null
 }
 
 type Subscription = {
@@ -114,6 +115,13 @@ export default function StudentPage() {
       body: JSON.stringify({ message }),
     })
     alert('Напоминание отправлено в Telegram!')
+  }
+
+  function copyParentLink() {
+    if (!student?.parent_token) return alert('Токен не найден')
+    const url = `${window.location.origin}/parent/${student.parent_token}`
+    navigator.clipboard.writeText(url)
+    alert('Ссылка скопирована!\n' + url)
   }
 
   async function archive() {
@@ -257,6 +265,10 @@ export default function StudentPage() {
         )}
       </div>
 
+      <button onClick={copyParentLink}
+        className="w-full border border-gray-200 text-gray-600 text-sm py-2.5 rounded-xl mb-2">
+        🔗 Ссылка для родителя
+      </button>
       <button onClick={sendReminder}
         className="w-full border border-gray-200 text-gray-600 text-sm py-2.5 rounded-xl mb-2">
         📨 Отправить напоминание в Telegram
