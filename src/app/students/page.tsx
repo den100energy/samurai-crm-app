@@ -40,8 +40,12 @@ export default function StudentsPage() {
       <div className="flex items-center gap-3 mb-4">
         <Link href="/" className="text-gray-400 hover:text-gray-600">← </Link>
         <h1 className="text-xl font-bold text-gray-800">Ученики</h1>
+        <Link href="/import"
+          className="text-sm text-gray-500 border border-gray-200 px-3 py-2 rounded-xl">
+          📂 Импорт
+        </Link>
         <Link href="/students/new"
-          className="ml-auto bg-black text-white px-4 py-2 rounded-xl text-sm font-medium">
+          className="bg-black text-white px-4 py-2 rounded-xl text-sm font-medium">
           + Добавить
         </Link>
       </div>
