@@ -11,6 +11,7 @@ const sections = [
   { href: '/leads', emoji: '📋', title: 'Лиды', desc: 'Новые заявки' },
   { href: '/analytics', emoji: '📊', title: 'Аналитика', desc: 'Посещаемость, зона риска' },
   { href: '/broadcast', emoji: '📣', title: 'Рассылка', desc: 'Сообщения по группам' },
+  { href: '/events', emoji: '🎉', title: 'Мероприятия', desc: 'Соревнования, семинары' },
 ]
 
 export default function Home() {
