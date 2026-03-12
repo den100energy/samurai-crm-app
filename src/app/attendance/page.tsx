@@ -4,7 +4,13 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 
-type Student = { id: string; name: string; group_name: string | null }
+type Student = {
+  id: string
+  name: string
+  group_name: string | null
+  sessions_left: number | null
+  sub_id: string | null
+}
 
 const GROUPS = ['Дети 4-9', 'Подростки (нач)', 'Подростки (оп)', 'Цигун', 'Индивидуальные']
 
@@ -18,10 +24,34 @@ export default function AttendancePage() {
 
   useEffect(() => {
     async function load() {
-      const { data } = await supabase.from('students').select('id, name, group_name')
-        .eq('group_name', group).eq('status', 'active').order('name')
-      setStudents(data || [])
-      setPresent(new Set((data || []).map((s: Student) => s.id)))
+      // Загружаем учеников с их текущим абонементом
+      const { data: studentsData } = await supabase
+        .from('students')
+        .select('id, name, group_name')
+        .eq('group_name', group)
+        .eq('status', 'active')
+        .order('name')
+
+      if (!studentsData) return
+
+      // Для каждого ученика берём активный абонемент
+      const withSubs = await Promise.all(studentsData.map(async s => {
+        const { data: sub } = await supabase
+          .from('subscriptions')
+          .select('id, sessions_left')
+          .eq('student_id', s.id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+        return {
+          ...s,
+          sessions_left: sub?.sessions_left ?? null,
+          sub_id: sub?.id ?? null,
+        }
+      }))
+
+      setStudents(withSubs)
+      setPresent(new Set(withSubs.map(s => s.id)))
     }
     load()
   }, [group])
@@ -36,6 +66,8 @@ export default function AttendancePage() {
 
   async function save() {
     setSaving(true)
+
+    // Сохраняем посещаемость
     const rows = students.map(s => ({
       student_id: s.id,
       date,
@@ -43,9 +75,35 @@ export default function AttendancePage() {
       present: present.has(s.id),
     }))
     await supabase.from('attendance').upsert(rows, { onConflict: 'student_id,date' })
+
+    // Списываем занятия у тех кто присутствовал
+    for (const s of students) {
+      if (present.has(s.id) && s.sub_id && s.sessions_left !== null && s.sessions_left > 0) {
+        await supabase
+          .from('subscriptions')
+          .update({ sessions_left: s.sessions_left - 1 })
+          .eq('id', s.sub_id)
+      }
+    }
+
     setSaving(false)
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
+
+    // Обновляем остатки занятий локально
+    setStudents(prev => prev.map(s => {
+      if (present.has(s.id) && s.sessions_left !== null && s.sessions_left > 0) {
+        return { ...s, sessions_left: s.sessions_left - 1 }
+      }
+      return s
+    }))
+  }
+
+  function sessionsColor(s: Student) {
+    if (s.sessions_left === null) return ''
+    if (s.sessions_left === 0) return 'text-red-500 font-bold'
+    if (s.sessions_left <= 2) return 'text-orange-500 font-medium'
+    return 'text-gray-400'
   }
 
   return (
@@ -76,11 +134,14 @@ export default function AttendancePage() {
             {students.map(s => (
               <button key={s.id} onClick={() => toggle(s.id)}
                 className={`w-full flex items-center px-4 py-3 rounded-xl border transition-colors
-                  ${present.has(s.id)
-                    ? 'bg-green-50 border-green-200'
-                    : 'bg-red-50 border-red-200'}`}>
-                <span className="text-xl mr-3">{present.has(s.id) ? '✅' : '❌'}</span>
-                <span className="font-medium text-gray-800">{s.name}</span>
+                  ${present.has(s.id) ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200'}`}>
+                <span className="text-xl mr-3">{present.has(s.id) ? '✅' : '⬜'}</span>
+                <span className="font-medium text-gray-800 flex-1 text-left">{s.name}</span>
+                {s.sessions_left !== null && (
+                  <span className={`text-sm ml-2 ${sessionsColor(s)}`}>
+                    {s.sessions_left === 0 ? '❗ 0 занятий' : `${s.sessions_left} зан.`}
+                  </span>
+                )}
               </button>
             ))}
           </div>

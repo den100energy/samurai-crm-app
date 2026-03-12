@@ -1,4 +1,27 @@
 import Link from 'next/link'
+import { supabase } from '@/lib/supabase'
+
+async function getDashboardData() {
+  const today = new Date().toISOString().split('T')[0]
+  const in7days = new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0]
+
+  const [{ data: expiring }, { data: noSessions }, { data: totalStudents }] = await Promise.all([
+    supabase.from('subscriptions')
+      .select('id, students(name)')
+      .gte('end_date', today)
+      .lte('end_date', in7days),
+    supabase.from('subscriptions')
+      .select('id, students(name)')
+      .eq('sessions_left', 0),
+    supabase.from('students').select('id').eq('status', 'active'),
+  ])
+
+  return {
+    expiring: expiring || [],
+    noSessions: noSessions || [],
+    totalStudents: totalStudents?.length || 0,
+  }
+}
 
 const sections = [
   { href: '/students', emoji: '🥋', title: 'Ученики', desc: 'Список, группы, абонементы' },
@@ -7,13 +30,61 @@ const sections = [
   { href: '/leads', emoji: '📋', title: 'Лиды', desc: 'Новые заявки' },
 ]
 
-export default function Home() {
+export default async function Home() {
+  const { expiring, noSessions, totalStudents } = await getDashboardData()
+
   return (
     <main className="max-w-lg mx-auto p-4">
-      <div className="text-center py-8">
+      <div className="text-center py-6">
         <h1 className="text-2xl font-bold text-gray-800">⚔️ Школа Самурая</h1>
         <p className="text-gray-500 mt-1">Центр физического развития и самозащиты</p>
       </div>
+
+      {noSessions.length > 0 && (
+        <div className="bg-red-50 border border-red-200 rounded-2xl p-4 mb-3">
+          <div className="font-semibold text-red-700 mb-2">❗ Закончились занятия ({noSessions.length})</div>
+          <div className="space-y-1">
+            {noSessions.slice(0, 5).map((s: any) => (
+              <div key={s.id} className="text-sm text-red-600">{s.students?.name}</div>
+            ))}
+            {noSessions.length > 5 && <div className="text-sm text-red-400">и ещё {noSessions.length - 5}...</div>}
+          </div>
+        </div>
+      )}
+
+      {expiring.length > 0 && (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-2xl p-4 mb-3">
+          <div className="font-semibold text-yellow-700 mb-2">⚠️ Абонемент истекает через 7 дней ({expiring.length})</div>
+          <div className="space-y-1">
+            {expiring.slice(0, 5).map((s: any) => (
+              <div key={s.id} className="text-sm text-yellow-700">{s.students?.name}</div>
+            ))}
+            {expiring.length > 5 && <div className="text-sm text-yellow-500">и ещё {expiring.length - 5}...</div>}
+          </div>
+        </div>
+      )}
+
+      {noSessions.length === 0 && expiring.length === 0 && (
+        <div className="bg-green-50 border border-green-200 rounded-2xl p-3 mb-3 text-center text-sm text-green-700">
+          ✅ Всё в порядке — у всех учеников есть занятия
+        </div>
+      )}
+
+      <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm mb-4 flex justify-around text-center">
+        <div>
+          <div className="text-2xl font-bold text-gray-800">{totalStudents}</div>
+          <div className="text-xs text-gray-400">учеников</div>
+        </div>
+        <div>
+          <div className="text-2xl font-bold text-red-500">{noSessions.length}</div>
+          <div className="text-xs text-gray-400">без занятий</div>
+        </div>
+        <div>
+          <div className="text-2xl font-bold text-yellow-500">{expiring.length}</div>
+          <div className="text-xs text-gray-400">истекает</div>
+        </div>
+      </div>
+
       <div className="grid grid-cols-2 gap-4">
         {sections.map((s) => (
           <Link key={s.href} href={s.href}
