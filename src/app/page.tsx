@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react'
 const sections = [
   { href: '/students', emoji: '🥋', title: 'Ученики', desc: 'Список, группы, абонементы' },
   { href: '/attendance', emoji: '✅', title: 'Посещаемость', desc: 'Отметить занятие' },
-  { href: '/payments', emoji: '💰', title: 'Платежи', desc: 'Оплата и абонементы' },
+  { href: '/finance', emoji: '💰', title: 'Финансы', desc: 'Платежи за месяц' },
   { href: '/leads', emoji: '📋', title: 'Лиды', desc: 'Новые заявки' },
 ]
 
