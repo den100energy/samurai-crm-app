@@ -41,7 +41,6 @@ type Belt = {
 }
 
 const GROUPS = ['Дети 4-9', 'Подростки (нач)', 'Подростки (оп)', 'Цигун', 'Индивидуальные']
-const SUB_TYPES = ['8 занятий', '12 занятий', 'Безлимит (месяц)', 'Пробное', 'Индивидуальное']
 const BELTS = ['Белый', 'Жёлтый', 'Оранжевый', 'Зелёный', 'Синий', 'Фиолетовый', 'Коричневый', 'Чёрный']
 
 const BELT_COLORS: Record<string, string> = {
@@ -68,21 +67,24 @@ export default function StudentPage() {
   const [subForm, setSubForm] = useState({ type: '', sessions_total: '', start_date: '', end_date: '', amount: '', paid: false })
   const [showBeltForm, setShowBeltForm] = useState(false)
   const [beltForm, setBeltForm] = useState({ belt_name: '', date: new Date().toISOString().split('T')[0], notes: '' })
+  const [subTypes, setSubTypes] = useState<{ id: string; name: string; sessions_count: number | null; price: number | null }[]>([])
   const [showQR, setShowQR] = useState(false)
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     async function load() {
-      const [{ data: s }, { data: sb }, { data: at }, { data: bl }] = await Promise.all([
+      const [{ data: s }, { data: sb }, { data: at }, { data: bl }, { data: st }] = await Promise.all([
         supabase.from('students').select('*').eq('id', id).single(),
         supabase.from('subscriptions').select('*').eq('student_id', id).order('created_at', { ascending: false }),
         supabase.from('attendance').select('*').eq('student_id', id).order('date', { ascending: false }).limit(20),
         supabase.from('belts').select('*').eq('student_id', id).order('date', { ascending: false }),
+        supabase.from('subscription_types').select('id, name, sessions_count, price').order('created_at'),
       ])
       if (s) { setStudent(s); setForm(s) }
       setSubs(sb || [])
       setAttendance(at || [])
       setBelts(bl || [])
+      setSubTypes(st || [])
     }
     load()
   }, [id])
@@ -297,10 +299,22 @@ export default function StudentPage() {
 
         {showSubForm && (
           <form onSubmit={addSubscription} className="space-y-2 mb-4 p-3 bg-gray-50 rounded-xl">
-            <select required value={subForm.type} onChange={e => setSubForm({...subForm, type: e.target.value})}
+            <select required value={subForm.type} onChange={e => {
+                const selected = subTypes.find(t => t.name === e.target.value)
+                setSubForm({
+                  ...subForm,
+                  type: e.target.value,
+                  sessions_total: selected?.sessions_count?.toString() || subForm.sessions_total,
+                  amount: selected?.price?.toString() || subForm.amount,
+                })
+              }}
               className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none bg-white">
               <option value="">Тип абонемента *</option>
-              {SUB_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+              {subTypes.map(t => (
+                <option key={t.id} value={t.name}>
+                  {t.name}{t.sessions_count ? ` (${t.sessions_count} зан.)` : ''}{t.price ? ` — ${t.price} ₽` : ''}
+                </option>
+              ))}
             </select>
             <input value={subForm.sessions_total} onChange={e => setSubForm({...subForm, sessions_total: e.target.value})}
               placeholder="Количество занятий" type="number"

@@ -13,6 +13,7 @@ const sections = [
   { href: '/analytics', emoji: '📊', title: 'Аналитика', desc: 'Посещаемость, зона риска' },
   { href: '/broadcast', emoji: '📣', title: 'Рассылка', desc: 'Сообщения по группам' },
   { href: '/events', emoji: '🎉', title: 'Мероприятия', desc: 'Соревнования, семинары' },
+  { href: '/settings', emoji: '⚙️', title: 'Настройки', desc: 'Типы абонементов' },
 ]
 
 export default function Home() {
