@@ -25,6 +25,8 @@ type Subscription = {
   end_date: string | null
   paid: boolean
   amount: number | null
+  bonuses: Record<string, number> | null
+  bonuses_used: Record<string, number> | null
 }
 
 type Attendance = {
@@ -64,10 +66,10 @@ export default function StudentPage() {
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState<Partial<Student>>({})
   const [showSubForm, setShowSubForm] = useState(false)
-  const [subForm, setSubForm] = useState({ type: '', sessions_total: '', start_date: '', end_date: '', amount: '', paid: false })
+  const [subForm, setSubForm] = useState({ type: '', sessions_total: '', start_date: '', end_date: '', amount: '', paid: false, bonuses: {} as Record<string, number> })
   const [showBeltForm, setShowBeltForm] = useState(false)
   const [beltForm, setBeltForm] = useState({ belt_name: '', date: new Date().toISOString().split('T')[0], notes: '' })
-  const [subTypes, setSubTypes] = useState<{ id: string; name: string; sessions_count: number | null; price: number | null }[]>([])
+  const [subTypes, setSubTypes] = useState<{ id: string; name: string; group_type: string | null; sessions_count: number | null; price: number | null; bonuses: Record<string, number> | null }[]>([])
   const [showQR, setShowQR] = useState(false)
   const [saving, setSaving] = useState(false)
 
@@ -78,7 +80,7 @@ export default function StudentPage() {
         supabase.from('subscriptions').select('*').eq('student_id', id).order('created_at', { ascending: false }),
         supabase.from('attendance').select('*').eq('student_id', id).order('date', { ascending: false }).limit(20),
         supabase.from('belts').select('*').eq('student_id', id).order('date', { ascending: false }),
-        supabase.from('subscription_types').select('id, name, sessions_count, price').order('created_at'),
+        supabase.from('subscription_types').select('id, name, group_type, sessions_count, price, bonuses').order('created_at'),
       ])
       if (s) { setStudent(s); setForm(s) }
       setSubs(sb || [])
@@ -114,10 +116,21 @@ export default function StudentPage() {
       end_date: subForm.end_date || null,
       amount: subForm.amount ? parseFloat(subForm.amount) : null,
       paid: subForm.paid,
+      bonuses: subForm.bonuses,
+      bonuses_used: {},
     }).select().single()
     if (data) setSubs(prev => [data, ...prev])
     setShowSubForm(false)
-    setSubForm({ type: '', sessions_total: '', start_date: '', end_date: '', amount: '', paid: false })
+    setSubForm({ type: '', sessions_total: '', start_date: '', end_date: '', amount: '', paid: false, bonuses: {} })
+  }
+
+  async function useBonus(subId: string, bonusName: string, bonuses: Record<string, number>, bonusesUsed: Record<string, number>) {
+    const total = bonuses[bonusName] || 0
+    const used = bonusesUsed[bonusName] || 0
+    if (used >= total) return
+    const newUsed = { ...bonusesUsed, [bonusName]: used + 1 }
+    await supabase.from('subscriptions').update({ bonuses_used: newUsed }).eq('id', subId)
+    setSubs(prev => prev.map(s => s.id === subId ? { ...s, bonuses_used: newUsed } : s))
   }
 
   async function togglePaid(subId: string, paid: boolean) {
@@ -300,21 +313,28 @@ export default function StudentPage() {
         {showSubForm && (
           <form onSubmit={addSubscription} className="space-y-2 mb-4 p-3 bg-gray-50 rounded-xl">
             <select required value={subForm.type} onChange={e => {
-                const selected = subTypes.find(t => t.name === e.target.value)
+                const selected = subTypes.find(t => `${t.group_type}|${t.name}` === e.target.value)
                 setSubForm({
                   ...subForm,
                   type: e.target.value,
                   sessions_total: selected?.sessions_count?.toString() || subForm.sessions_total,
                   amount: selected?.price?.toString() || subForm.amount,
+                  bonuses: selected?.bonuses || {},
                 })
               }}
               className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none bg-white">
               <option value="">Тип абонемента *</option>
-              {subTypes.map(t => (
-                <option key={t.id} value={t.name}>
-                  {t.name}{t.sessions_count ? ` (${t.sessions_count} зан.)` : ''}{t.price ? ` — ${t.price} ₽` : ''}
-                </option>
-              ))}
+              {['Старт', 'Комбат'].map(group => {
+                const items = subTypes.filter(t => t.group_type === group)
+                if (!items.length) return null
+                return <optgroup key={group} label={group}>
+                  {items.map(t => (
+                    <option key={t.id} value={`${t.group_type}|${t.name}`}>
+                      {t.name}{t.sessions_count ? ` (${t.sessions_count} зан.)` : ''}{t.price ? ` — ${t.price.toLocaleString()} ₽` : ''}
+                    </option>
+                  ))}
+                </optgroup>
+              })}
             </select>
             <input value={subForm.sessions_total} onChange={e => setSubForm({...subForm, sessions_total: e.target.value})}
               placeholder="Количество занятий" type="number"
@@ -341,23 +361,62 @@ export default function StudentPage() {
         {subs.length === 0 ? (
           <div className="text-sm text-gray-400 text-center py-2">Абонементов нет</div>
         ) : (
-          <div className="space-y-2">
-            {subs.map(s => (
-              <div key={s.id} className="flex items-center justify-between p-2 bg-gray-50 rounded-xl">
-                <div>
-                  <div className="text-sm font-medium">{s.type}</div>
-                  <div className="text-xs text-gray-400">
-                    {s.sessions_left != null ? `${s.sessions_left}/${s.sessions_total} занятий` : ''}
-                    {s.end_date ? ` · до ${s.end_date}` : ''}
-                    {s.amount ? ` · ${s.amount} руб` : ''}
+          <div className="space-y-3">
+            {subs.map(s => {
+              const bonuses = s.bonuses || {}
+              const bonusesUsed = s.bonuses_used || {}
+              const bonusKeys = Object.keys(bonuses)
+              return (
+                <div key={s.id} className="p-3 bg-gray-50 rounded-xl">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <div className="text-sm font-medium">{s.type.includes('|') ? s.type.split('|').join(' · ') : s.type}</div>
+                      <div className="text-xs text-gray-400 mt-0.5">
+                        {s.sessions_left != null ? `${s.sessions_left}/${s.sessions_total} занятий` : ''}
+                        {s.end_date ? ` · до ${s.end_date}` : ''}
+                        {s.amount ? ` · ${s.amount.toLocaleString()} ₽` : ''}
+                      </div>
+                    </div>
+                    <button onClick={() => togglePaid(s.id, s.paid)}
+                      className={`shrink-0 text-xs px-2 py-1 rounded-full ${s.paid ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                      {s.paid ? 'Оплачен' : 'Не оплачен'}
+                    </button>
                   </div>
+                  {bonusKeys.length > 0 && (
+                    <div className="mt-2 pt-2 border-t border-gray-200 space-y-1.5">
+                      <div className="text-xs font-medium text-gray-500">Бонусы:</div>
+                      {bonusKeys.map(bonus => {
+                        const total = bonuses[bonus]
+                        const used = bonusesUsed[bonus] || 0
+                        const remaining = total - used
+                        return (
+                          <div key={bonus} className="flex items-center justify-between gap-2">
+                            <div className="flex-1">
+                              <div className="text-xs text-gray-700">{bonus}</div>
+                              <div className="flex gap-0.5 mt-0.5">
+                                {Array.from({ length: total }).map((_, i) => (
+                                  <div key={i} className={`w-3 h-3 rounded-full ${i < used ? 'bg-gray-400' : 'bg-blue-400'}`} />
+                                ))}
+                                <span className="text-xs text-gray-400 ml-1">{used}/{total}</span>
+                              </div>
+                            </div>
+                            {remaining > 0 && (
+                              <button onClick={() => useBonus(s.id, bonus, bonuses, bonusesUsed)}
+                                className="text-xs bg-blue-50 text-blue-600 border border-blue-200 px-2 py-1 rounded-lg">
+                                Использовать
+                              </button>
+                            )}
+                            {remaining === 0 && (
+                              <span className="text-xs text-gray-400">Использован</span>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
                 </div>
-                <button onClick={() => togglePaid(s.id, s.paid)}
-                  className={`text-xs px-2 py-1 rounded-full ${s.paid ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                  {s.paid ? 'Оплачен' : 'Не оплачен'}
-                </button>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </div>
