@@ -140,29 +140,57 @@ export default function SettingsPage() {
             Нет типов абонементов — добавьте первый
           </div>
         ) : (
-          <div className="space-y-2">
-            {types.map(t => (
-              <div key={t.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
-                <div>
-                  <div className="font-medium text-gray-800 text-sm">{t.name}</div>
-                  <div className="text-xs text-gray-400 mt-0.5">
-                    {t.sessions_count ? `${t.sessions_count} занятий` : 'Безлимит'}
-                    {t.price ? ` · ${t.price.toLocaleString('ru-RU')} ₽` : ''}
-                    {t.description ? ` · ${t.description}` : ''}
+          <div className="space-y-4">
+            {(['Старт', 'Комбат'] as const).map(group => {
+              const items = types.filter(t => t.name.startsWith(group))
+              if (items.length === 0) return null
+              return (
+                <div key={group}>
+                  <div className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">{group}</div>
+                  <div className="space-y-2">
+                    {items.map(t => (
+                      <div key={t.id} className="flex items-start justify-between p-3 bg-gray-50 rounded-xl gap-2">
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-gray-800 text-sm">{t.name}</div>
+                          <div className="text-xs text-gray-400 mt-0.5">
+                            {t.sessions_count ? `${t.sessions_count} зан.` : 'Безлимит'}
+                            {t.price ? ` · ${t.price.toLocaleString('ru-RU')} ₽` : ''}
+                          </div>
+                          {t.description && <div className="text-xs text-gray-400 mt-0.5">{t.description}</div>}
+                        </div>
+                        <div className="flex gap-2 shrink-0">
+                          <button onClick={() => startEdit(t)} className="text-xs text-gray-400 hover:text-gray-600">✏️</button>
+                          <button onClick={() => remove(t.id)} className="text-xs text-red-400 hover:text-red-600">✕</button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
-                <div className="flex gap-2">
-                  <button onClick={() => startEdit(t)}
-                    className="text-xs text-gray-400 hover:text-gray-600">
-                    ✏️
-                  </button>
-                  <button onClick={() => remove(t.id)}
-                    className="text-xs text-red-400 hover:text-red-600">
-                    ✕
-                  </button>
+              )
+            })}
+            {types.filter(t => !t.name.startsWith('Старт') && !t.name.startsWith('Комбат')).length > 0 && (
+              <div>
+                <div className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Другие</div>
+                <div className="space-y-2">
+                  {types.filter(t => !t.name.startsWith('Старт') && !t.name.startsWith('Комбат')).map(t => (
+                    <div key={t.id} className="flex items-start justify-between p-3 bg-gray-50 rounded-xl gap-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-gray-800 text-sm">{t.name}</div>
+                        <div className="text-xs text-gray-400 mt-0.5">
+                          {t.sessions_count ? `${t.sessions_count} зан.` : 'Безлимит'}
+                          {t.price ? ` · ${t.price.toLocaleString('ru-RU')} ₽` : ''}
+                        </div>
+                        {t.description && <div className="text-xs text-gray-400 mt-0.5">{t.description}</div>}
+                      </div>
+                      <div className="flex gap-2 shrink-0">
+                        <button onClick={() => startEdit(t)} className="text-xs text-gray-400 hover:text-gray-600">✏️</button>
+                        <button onClick={() => remove(t.id)} className="text-xs text-red-400 hover:text-red-600">✕</button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
-            ))}
+            )}
           </div>
         )}
       </div>
