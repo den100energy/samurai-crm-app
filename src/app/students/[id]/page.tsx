@@ -14,6 +14,14 @@ type Student = {
   group_name: string | null
   status: string
   parent_token: string | null
+  health_notes: string | null
+}
+
+const STATUS_INFO: Record<string, { label: string; color: string }> = {
+  active:    { label: 'Активен',       color: 'bg-green-100 text-green-700' },
+  suspended: { label: 'Приостановлен', color: 'bg-yellow-100 text-yellow-700' },
+  banned:    { label: 'Заблокирован',  color: 'bg-red-100 text-red-700' },
+  archived:  { label: 'Архив',         color: 'bg-gray-100 text-gray-500' },
 }
 
 type Subscription = {
@@ -108,6 +116,8 @@ export default function StudentPage() {
       phone: form.phone || null,
       birth_date: form.birth_date || null,
       group_name: form.group_name || null,
+      status: form.status || 'active',
+      health_notes: form.health_notes || null,
     }).eq('id', id)
     setStudent(prev => prev ? { ...prev, ...form } as Student : null)
     setEditing(false)
@@ -305,7 +315,14 @@ export default function StudentPage() {
     <main className="max-w-lg mx-auto p-4">
       <div className="flex items-center gap-3 mb-4">
         <Link href="/students" className="text-gray-400 hover:text-gray-600">←</Link>
-        <h1 className="text-xl font-bold text-gray-800">Карточка ученика</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-xl font-bold text-gray-800">Карточка ученика</h1>
+          {student.status !== 'active' && (
+            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_INFO[student.status]?.color || ''}`}>
+              {STATUS_INFO[student.status]?.label}
+            </span>
+          )}
+        </div>
         <button onClick={() => setEditing(!editing)}
           className="ml-auto text-sm text-gray-500 border border-gray-200 px-3 py-1.5 rounded-xl">
           {editing ? 'Отмена' : 'Изменить'}
@@ -346,6 +363,16 @@ export default function StudentPage() {
               <option value="">Группа</option>
               {GROUPS.map(g => <option key={g} value={g}>{g}</option>)}
             </select>
+            <select value={form.status || 'active'} onChange={e => setForm({...form, status: e.target.value})}
+              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none bg-white">
+              <option value="active">Активен</option>
+              <option value="suspended">Приостановлен</option>
+              <option value="banned">Заблокирован</option>
+              <option value="archived">Архив</option>
+            </select>
+            <textarea value={form.health_notes || ''} onChange={e => setForm({...form, health_notes: e.target.value})}
+              placeholder="Здоровье / противопоказания" rows={2}
+              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none resize-none" />
             <button onClick={saveStudent} disabled={saving}
               className="w-full bg-black text-white py-2.5 rounded-xl text-sm font-medium disabled:opacity-50">
               {saving ? 'Сохранение...' : 'Сохранить'}
@@ -367,6 +394,18 @@ export default function StudentPage() {
             )}
             {student.birth_date && <div className="flex justify-between"><span className="text-gray-400">Дата рождения</span><span>{student.birth_date}</span></div>}
             <div className="flex justify-between"><span className="text-gray-400">Посещений (последние 20)</span><span>{presentCount}</span></div>
+            <div className="flex justify-between items-center">
+              <span className="text-gray-400">Статус</span>
+              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_INFO[student.status]?.color || 'bg-gray-100 text-gray-500'}`}>
+                {STATUS_INFO[student.status]?.label || student.status}
+              </span>
+            </div>
+            {student.health_notes && (
+              <div className="pt-1">
+                <div className="text-gray-400 text-xs mb-1">Здоровье / противопоказания</div>
+                <div className="text-sm text-orange-700 bg-orange-50 rounded-xl px-3 py-2">{student.health_notes}</div>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -724,9 +763,11 @@ export default function StudentPage() {
         </button>
       )}
 
-      <button onClick={archive} className="w-full text-red-400 text-sm py-2">
-        Архивировать ученика
-      </button>
+      {student.status === 'active' && (
+        <button onClick={archive} className="w-full text-gray-400 text-sm py-2">
+          Перевести в архив
+        </button>
+      )}
     </main>
   )
 }
