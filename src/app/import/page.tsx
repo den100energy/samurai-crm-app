@@ -29,10 +29,18 @@ export default function ImportPage() {
     if (!file) return
 
     const reader = new FileReader()
+    const isCsv = file.name.toLowerCase().endsWith('.csv')
+
     reader.onload = (evt) => {
       try {
-        const data = new Uint8Array(evt.target?.result as ArrayBuffer)
-        const workbook = XLSX.read(data, { type: 'array' })
+        let workbook
+        if (isCsv) {
+          const text = evt.target?.result as string
+          workbook = XLSX.read(text, { type: 'string' })
+        } else {
+          const data = new Uint8Array(evt.target?.result as ArrayBuffer)
+          workbook = XLSX.read(data, { type: 'array' })
+        }
         const sheet = workbook.Sheets[workbook.SheetNames[0]]
         const json: any[] = XLSX.utils.sheet_to_json(sheet, { defval: '' })
 
@@ -41,12 +49,19 @@ export default function ImportPage() {
           return
         }
 
-        const parsed: Row[] = json.map((r: any) => ({
-          name: String(r['Имя'] || r['ФИО'] || r['name'] || r['Name'] || '').trim(),
-          phone: String(r['Телефон'] || r['Phone'] || r['phone'] || '').trim(),
-          group_name: String(r['Группа'] || r['Group'] || r['group'] || '').trim(),
-          birth_date: String(r['Дата рождения'] || r['birth_date'] || r['Дата'] || '').trim(),
-        })).filter(r => r.name.length > 0)
+        const parsed: Row[] = json.map((r: any) => {
+          const lastName = String(r['Фамилия'] || r['фамилия'] || '').trim()
+          const firstName = String(r['Имя'] || r['имя'] || '').trim()
+          const fullName = lastName && firstName
+            ? `${lastName} ${firstName}`
+            : String(r['ФИО'] || r['name'] || r['Name'] || r['Имя'] || '').trim()
+          return {
+            name: fullName,
+            phone: String(r['Телефон'] || r['Phone'] || r['phone'] || '').trim(),
+            group_name: String(r['Группа'] || r['Group'] || r['group'] || '').trim(),
+            birth_date: String(r['Дата рождения'] || r['birth_date'] || r['Дата'] || '').trim(),
+          }
+        }).filter(r => r.name.length > 0)
 
         if (parsed.length === 0) {
           setError('Не найдены строки с именами. Убедись что есть колонка "Имя" или "ФИО"')
@@ -57,7 +72,11 @@ export default function ImportPage() {
         setError('Не удалось прочитать файл. Используй .xlsx или .csv формат')
       }
     }
-    reader.readAsArrayBuffer(file)
+    if (isCsv) {
+      reader.readAsText(file, 'windows-1251')
+    } else {
+      reader.readAsArrayBuffer(file)
+    }
   }
 
   async function doImport() {
@@ -97,9 +116,13 @@ export default function ImportPage() {
       {/* Инструкция */}
       <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 mb-4 text-sm text-blue-700">
         <div className="font-semibold mb-2">📋 Как подготовить файл:</div>
-        <div>Создай таблицу Excel или CSV с колонками:</div>
-        <div className="font-mono bg-white rounded-lg px-3 py-2 mt-2 text-xs text-gray-700">
-          Имя | Телефон | Группа | Дата рождения
+        <div>Обязательная колонка:</div>
+        <div className="font-mono bg-white rounded-lg px-3 py-2 mt-1 text-xs text-gray-700">
+          ФИО &nbsp;<span className="text-gray-400">— или отдельно:</span>&nbsp; Фамилия | Имя
+        </div>
+        <div className="mt-2">Дополнительно (если есть):</div>
+        <div className="font-mono bg-white rounded-lg px-3 py-2 mt-1 text-xs text-gray-700">
+          Группа | Телефон | Дата рождения
         </div>
         <div className="mt-2">Группы: <span className="font-medium">{GROUPS.join(', ')}</span></div>
       </div>
