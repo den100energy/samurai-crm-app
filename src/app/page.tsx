@@ -14,6 +14,7 @@ const sections = [
   { href: '/broadcast', emoji: '📣', title: 'Рассылка', desc: 'Сообщения по группам' },
   { href: '/events', emoji: '🎉', title: 'Мероприятия', desc: 'Соревнования, семинары' },
   { href: '/tickets', emoji: '📝', title: 'Обращения', desc: 'Болезни, переносы, вопросы' },
+  { href: '/schedule', emoji: '🗓', title: 'Расписание', desc: 'Группы и тренеры по дням' },
   { href: '/settings', emoji: '⚙️', title: 'Настройки', desc: 'Типы абонементов' },
 ]
 
