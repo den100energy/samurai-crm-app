@@ -15,6 +15,8 @@ type Student = {
   status: string
   parent_token: string | null
   health_notes: string | null
+  invite_token: string | null
+  telegram_chat_id: number | null
 }
 
 const STATUS_INFO: Record<string, { label: string; color: string }> = {
@@ -277,6 +279,14 @@ export default function StudentPage() {
       body: JSON.stringify({ message }),
     })
     alert('Напоминание отправлено в Telegram!')
+  }
+
+  function copyBotInviteLink() {
+    if (!student?.invite_token) return alert('Токен не найден. Обновите страницу.')
+    const botUsername = process.env.NEXT_PUBLIC_TELEGRAM_CLIENT_BOT_USERNAME
+    const link = `https://t.me/${botUsername}?start=${student.invite_token}`
+    navigator.clipboard.writeText(link)
+    alert(`Ссылка скопирована!\n\nОтправьте её родителю:\n${link}`)
   }
 
   function copyParentLink() {
@@ -722,13 +732,38 @@ export default function StudentPage() {
         )}
       </div>
 
+      {/* Telegram bot invite */}
+      <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm mb-4">
+        <div className="flex items-center justify-between mb-2">
+          <div className="font-semibold text-gray-800 text-sm">Telegram-бот для родителя</div>
+          {student.telegram_chat_id ? (
+            <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">✓ Подключён</span>
+          ) : (
+            <span className="text-xs bg-gray-100 text-gray-400 px-2 py-0.5 rounded-full">Не подключён</span>
+          )}
+        </div>
+        <p className="text-xs text-gray-400 mb-3">
+          {student.telegram_chat_id
+            ? 'Родитель получает уведомления об абонементе и программах.'
+            : 'Скопируйте ссылку и отправьте родителю — он нажмёт Start и подключится.'}
+        </p>
+        <div className="flex gap-2">
+          <button onClick={copyBotInviteLink}
+            className="flex-1 border border-blue-200 bg-blue-50 text-blue-700 text-sm py-2.5 rounded-xl">
+            🔗 Скопировать ссылку-приглашение
+          </button>
+          {student.telegram_chat_id && (
+            <button onClick={sendReminder}
+              className="flex-1 border border-gray-200 text-gray-600 text-sm py-2.5 rounded-xl">
+              📨 Написать
+            </button>
+          )}
+        </div>
+      </div>
+
       <button onClick={copyParentLink}
         className="w-full border border-gray-200 text-gray-600 text-sm py-2.5 rounded-xl mb-2">
         🔗 Ссылка для родителя
-      </button>
-      <button onClick={sendReminder}
-        className="w-full border border-gray-200 text-gray-600 text-sm py-2.5 rounded-xl mb-2">
-        📨 Отправить напоминание в Telegram
       </button>
 
       {/* Ticket form */}
