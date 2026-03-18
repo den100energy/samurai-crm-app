@@ -80,6 +80,8 @@ export default function StudentPage() {
   const [editSubForm, setEditSubForm] = useState({ sessions_total: '', sessions_left: '', start_date: '', end_date: '', amount: '', paid: false })
   const [freezeSubId, setFreezeSubId] = useState<string | null>(null)
   const [freezeForm, setFreezeForm] = useState({ freeze_start: '', freeze_end: '' })
+  const [showTicketForm, setShowTicketForm] = useState(false)
+  const [ticketForm, setTicketForm] = useState({ type: '', description: '' })
 
   useEffect(() => {
     async function load() {
@@ -158,6 +160,19 @@ export default function StudentPage() {
     setSubs(prev => prev.map(s => s.id === sub.id ? { ...s, ...payload } : s))
     setFreezeSubId(null)
     setFreezeForm({ freeze_start: '', freeze_end: '' })
+  }
+
+  async function createTicket(e: React.FormEvent) {
+    e.preventDefault()
+    await supabase.from('tickets').insert({
+      student_id: id,
+      type: ticketForm.type,
+      description: ticketForm.description || null,
+      status: 'pending',
+    })
+    setShowTicketForm(false)
+    setTicketForm({ type: '', description: '' })
+    alert('Обращение создано!')
   }
 
   async function unfreezeSubscription(sub: Subscription) {
@@ -676,6 +691,39 @@ export default function StudentPage() {
         className="w-full border border-gray-200 text-gray-600 text-sm py-2.5 rounded-xl mb-2">
         📨 Отправить напоминание в Telegram
       </button>
+
+      {/* Ticket form */}
+      {showTicketForm ? (
+        <form onSubmit={createTicket} className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm mb-2 space-y-2">
+          <div className="font-semibold text-gray-800 text-sm mb-1">Новое обращение</div>
+          <select required value={ticketForm.type} onChange={e => setTicketForm({...ticketForm, type: e.target.value})}
+            className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none bg-white">
+            <option value="">Тип обращения *</option>
+            <option value="болезнь">🤒 Болезнь</option>
+            <option value="перенос">🔄 Перенос занятия</option>
+            <option value="жалоба">⚠️ Жалоба</option>
+            <option value="вопрос">❓ Вопрос</option>
+          </select>
+          <textarea value={ticketForm.description} onChange={e => setTicketForm({...ticketForm, description: e.target.value})}
+            placeholder="Описание (необязательно)" rows={3}
+            className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none resize-none" />
+          <div className="flex gap-2">
+            <button type="submit" className="flex-1 bg-black text-white py-2 rounded-xl text-sm font-medium">
+              Отправить
+            </button>
+            <button type="button" onClick={() => setShowTicketForm(false)}
+              className="px-4 border border-gray-200 text-gray-500 py-2 rounded-xl text-sm">
+              Отмена
+            </button>
+          </div>
+        </form>
+      ) : (
+        <button onClick={() => setShowTicketForm(true)}
+          className="w-full border border-gray-200 text-gray-600 text-sm py-2.5 rounded-xl mb-2">
+          📝 Создать обращение
+        </button>
+      )}
+
       <button onClick={archive} className="w-full text-red-400 text-sm py-2">
         Архивировать ученика
       </button>
