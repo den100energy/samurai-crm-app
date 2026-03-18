@@ -10,15 +10,26 @@ type Event = {
   date: string
   price: number | null
   description: string | null
+  bonus_type: string | null
+  group_restriction: string | null
   participant_count?: number
   paid_count?: number
+}
+
+const BONUS_TYPES = ['тренировка с оружием', 'мастер-класс', 'инд.тренировка']
+const GROUPS = ['Дети 4-9', 'Подростки (нач)', 'Подростки (оп)', 'Цигун', 'Индивидуальные']
+
+const BONUS_COLORS: Record<string, string> = {
+  'тренировка с оружием': 'bg-orange-100 text-orange-700',
+  'мастер-класс':         'bg-purple-100 text-purple-700',
+  'инд.тренировка':       'bg-blue-100 text-blue-700',
 }
 
 export default function EventsPage() {
   const [events, setEvents] = useState<Event[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState({ name: '', date: '', price: '', description: '' })
+  const [form, setForm] = useState({ name: '', date: '', price: '', description: '', bonus_type: '', group_restriction: '' })
   const [saving, setSaving] = useState(false)
 
   async function load() {
@@ -46,8 +57,10 @@ export default function EventsPage() {
       date: form.date,
       price: form.price ? parseFloat(form.price) : null,
       description: form.description || null,
+      bonus_type: form.bonus_type || null,
+      group_restriction: form.group_restriction || null,
     })
-    setForm({ name: '', date: '', price: '', description: '' })
+    setForm({ name: '', date: '', price: '', description: '', bonus_type: '', group_restriction: '' })
     setShowForm(false)
     setSaving(false)
     load()
@@ -59,8 +72,9 @@ export default function EventsPage() {
     setEvents(prev => prev.filter(e => e.id !== id))
   }
 
-  const upcoming = events.filter(e => e.date >= new Date().toISOString().split('T')[0])
-  const past = events.filter(e => e.date < new Date().toISOString().split('T')[0])
+  const today = new Date().toISOString().split('T')[0]
+  const upcoming = events.filter(e => e.date >= today)
+  const past = events.filter(e => e.date < today)
 
   return (
     <main className="max-w-lg mx-auto p-4">
@@ -82,6 +96,16 @@ export default function EventsPage() {
           <input value={form.price} onChange={e => setForm({...form, price: e.target.value})}
             placeholder="Стоимость (₽)" type="number"
             className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none" />
+          <select value={form.bonus_type} onChange={e => setForm({...form, bonus_type: e.target.value})}
+            className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none bg-white">
+            <option value="">Тип бонуса (если применяется)</option>
+            {BONUS_TYPES.map(b => <option key={b} value={b}>{b}</option>)}
+          </select>
+          <select value={form.group_restriction} onChange={e => setForm({...form, group_restriction: e.target.value})}
+            className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none bg-white">
+            <option value="">Все группы</option>
+            {GROUPS.map(g => <option key={g} value={g}>{g}</option>)}
+          </select>
           <textarea value={form.description} onChange={e => setForm({...form, description: e.target.value})}
             placeholder="Описание" rows={2}
             className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none resize-none" />
@@ -102,9 +126,7 @@ export default function EventsPage() {
             <div className="mb-4">
               <div className="text-sm font-medium text-gray-500 mb-2">Предстоящие</div>
               <div className="space-y-2">
-                {upcoming.map(e => (
-                  <EventCard key={e.id} event={e} onDelete={deleteEvent} />
-                ))}
+                {upcoming.map(e => <EventCard key={e.id} event={e} bonusColors={BONUS_COLORS} onDelete={deleteEvent} />)}
               </div>
             </div>
           )}
@@ -112,9 +134,7 @@ export default function EventsPage() {
             <div>
               <div className="text-sm font-medium text-gray-500 mb-2">Прошедшие</div>
               <div className="space-y-2">
-                {past.map(e => (
-                  <EventCard key={e.id} event={e} onDelete={deleteEvent} />
-                ))}
+                {past.map(e => <EventCard key={e.id} event={e} bonusColors={BONUS_COLORS} onDelete={deleteEvent} />)}
               </div>
             </div>
           )}
@@ -124,26 +144,29 @@ export default function EventsPage() {
   )
 }
 
-function EventCard({ event, onDelete }: { event: Event; onDelete: (id: string) => void }) {
+function EventCard({ event, bonusColors, onDelete }: { event: Event; bonusColors: Record<string, string>; onDelete: (id: string) => void }) {
   return (
     <Link href={`/events/${event.id}`}
       className="block bg-white rounded-xl p-4 border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
       <div className="flex items-start justify-between">
         <div className="flex-1">
-          <div className="font-medium text-gray-800">{event.name}</div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="font-medium text-gray-800">{event.name}</div>
+            {event.bonus_type && (
+              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${bonusColors[event.bonus_type] || 'bg-gray-100 text-gray-600'}`}>
+                {event.bonus_type}
+              </span>
+            )}
+            {event.group_restriction && (
+              <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">{event.group_restriction}</span>
+            )}
+          </div>
           <div className="text-sm text-gray-400 mt-0.5">📅 {event.date}</div>
           {event.description && <div className="text-sm text-gray-500 mt-1">{event.description}</div>}
         </div>
         <div className="text-right ml-3">
           {event.price && <div className="font-semibold text-gray-800">{event.price} ₽</div>}
-          <div className="text-xs text-gray-400 mt-1">
-            👥 {event.participant_count} чел.
-          </div>
-          {event.participant_count! > 0 && (
-            <div className="text-xs text-green-600">
-              💰 {event.paid_count}/{event.participant_count} оплатили
-            </div>
-          )}
+          <div className="text-xs text-gray-400 mt-1">👥 {event.participant_count} чел.</div>
         </div>
       </div>
     </Link>
