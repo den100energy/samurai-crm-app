@@ -93,14 +93,16 @@ export default function EventsPage() {
             placeholder="Название *" className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none" />
           <input required value={form.date} onChange={e => setForm({...form, date: e.target.value})}
             type="date" className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none" />
-          <input value={form.price} onChange={e => setForm({...form, price: e.target.value})}
-            placeholder="Стоимость (₽)" type="number"
-            className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none" />
-          <select value={form.bonus_type} onChange={e => setForm({...form, bonus_type: e.target.value})}
+          <select value={form.bonus_type} onChange={e => setForm({...form, bonus_type: e.target.value, price: e.target.value === 'тренировка с оружием' ? '' : form.price})}
             className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none bg-white">
             <option value="">Тип бонуса (если применяется)</option>
             {BONUS_TYPES.map(b => <option key={b} value={b}>{b}</option>)}
           </select>
+          {form.bonus_type !== 'тренировка с оружием' && (
+            <input value={form.price} onChange={e => setForm({...form, price: e.target.value})}
+              placeholder="Стоимость (₽)" type="number"
+              className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none" />
+          )}
           <select value={form.group_restriction} onChange={e => setForm({...form, group_restriction: e.target.value})}
             className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none bg-white">
             <option value="">Все группы</option>
