@@ -182,7 +182,9 @@ export default function ImportPage() {
               <div key={idx} className="bg-white rounded-xl p-3 border border-gray-100 shadow-sm">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs text-gray-400">#{idx + 1}</span>
-                  <button onClick={() => removeRow(idx)} className="text-gray-300 hover:text-red-400 text-lg">×</button>
+                  <button onClick={() => removeRow(idx)} className="flex items-center gap-1 text-xs text-red-500 border border-red-200 bg-red-50 hover:bg-red-100 px-2 py-1 rounded-lg transition-colors">
+                    🗑 Удалить
+                  </button>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <input value={r.name} onChange={e => updateRow(idx, 'name', e.target.value)}
