@@ -1,0 +1,67 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@supabase/supabase-js'
+
+const CLIENT_BOT_TOKEN = process.env.TELEGRAM_CLIENT_BOT_TOKEN!
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+)
+
+async function sendMessage(chat_id: number, text: string) {
+  await fetch(`https://api.telegram.org/bot${CLIENT_BOT_TOKEN}/sendMessage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chat_id, text, parse_mode: 'HTML' }),
+  })
+}
+
+export async function POST(req: NextRequest) {
+  const body = await req.json()
+  const message = body?.message
+  if (!message) return NextResponse.json({ ok: true })
+
+  const chat_id: number = message.chat.id
+  const text: string = message.text || ''
+  const firstName = message.from?.first_name || 'Родитель'
+
+  // /start TOKEN — привязка родителя к карточке
+  if (text.startsWith('/start')) {
+    const token = text.split(' ')[1]?.trim()
+
+    if (!token) {
+      await sendMessage(chat_id, `Привет, ${firstName}! 👋\n\nЭтот бот отправляет уведомления от Школы Самурая.\n\nДля привязки к карточке ученика используй ссылку от тренера.`)
+      return NextResponse.json({ ok: true })
+    }
+
+    // Ищем по токену в leads
+    const { data: lead } = await supabase
+      .from('leads')
+      .select('id, full_name')
+      .eq('invite_token', token)
+      .single()
+
+    if (lead) {
+      await supabase.from('leads').update({ telegram_chat_id: chat_id }).eq('id', lead.id)
+      await sendMessage(chat_id, `Привет, ${firstName}! 👋\n\nВы успешно подключены к карточке <b>${lead.full_name}</b>.\n\nТеперь вы будете получать уведомления о занятиях, абонементе и программах развития.`)
+      return NextResponse.json({ ok: true })
+    }
+
+    // Ищем по токену в students
+    const { data: student } = await supabase
+      .from('students')
+      .select('id, name')
+      .eq('invite_token', token)
+      .single()
+
+    if (student) {
+      await supabase.from('students').update({ telegram_chat_id: chat_id }).eq('id', student.id)
+      await sendMessage(chat_id, `Привет, ${firstName}! 👋\n\nВы успешно подключены к карточке <b>${student.name}</b>.\n\nТеперь вы будете получать уведомления о занятиях, абонементе и программах развития от Школы Самурая. 🥋`)
+      return NextResponse.json({ ok: true })
+    }
+
+    // Токен не найден
+    await sendMessage(chat_id, `Ссылка не распознана или устарела. Попросите тренера отправить новую ссылку-приглашение.`)
+  }
+
+  return NextResponse.json({ ok: true })
+}
