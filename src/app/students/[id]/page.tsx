@@ -27,6 +27,10 @@ type Subscription = {
   amount: number | null
   bonuses: Record<string, number> | null
   bonuses_used: Record<string, number> | null
+  is_frozen: boolean
+  freeze_start: string | null
+  freeze_end: string | null
+  freeze_days_used: number
 }
 
 type Attendance = {
@@ -74,6 +78,8 @@ export default function StudentPage() {
   const [saving, setSaving] = useState(false)
   const [editSubId, setEditSubId] = useState<string | null>(null)
   const [editSubForm, setEditSubForm] = useState({ sessions_total: '', sessions_left: '', start_date: '', end_date: '', amount: '', paid: false })
+  const [freezeSubId, setFreezeSubId] = useState<string | null>(null)
+  const [freezeForm, setFreezeForm] = useState({ freeze_start: '', freeze_end: '' })
 
   useEffect(() => {
     async function load() {
@@ -124,6 +130,40 @@ export default function StudentPage() {
     if (data) setSubs(prev => [data, ...prev])
     setShowSubForm(false)
     setSubForm({ type: '', sessions_total: '', start_date: '', end_date: '', amount: '', paid: false, bonuses: {} })
+  }
+
+  async function freezeSubscription(e: React.FormEvent, sub: Subscription) {
+    e.preventDefault()
+    if (!freezeForm.freeze_start || !freezeForm.freeze_end) return
+    const start = new Date(freezeForm.freeze_start)
+    const end = new Date(freezeForm.freeze_end)
+    const days = Math.round((end.getTime() - start.getTime()) / 86400000)
+    if (days <= 0) return alert('Дата окончания должна быть позже начала')
+    if (days > 30) return alert('Максимум 30 дней заморозки')
+    if ((sub.freeze_days_used || 0) > 0) return alert('Заморозка уже использована для этого абонемента')
+
+    // Extend end_date by freeze days
+    const newEndDate = sub.end_date
+      ? new Date(new Date(sub.end_date).getTime() + days * 86400000).toISOString().split('T')[0]
+      : null
+
+    const payload = {
+      is_frozen: true,
+      freeze_start: freezeForm.freeze_start,
+      freeze_end: freezeForm.freeze_end,
+      freeze_days_used: days,
+      end_date: newEndDate,
+    }
+    await supabase.from('subscriptions').update(payload).eq('id', sub.id)
+    setSubs(prev => prev.map(s => s.id === sub.id ? { ...s, ...payload } : s))
+    setFreezeSubId(null)
+    setFreezeForm({ freeze_start: '', freeze_end: '' })
+  }
+
+  async function unfreezeSubscription(sub: Subscription) {
+    if (!confirm('Снять заморозку? Срок абонемента останется продлённым.')) return
+    await supabase.from('subscriptions').update({ is_frozen: false }).eq('id', sub.id)
+    setSubs(prev => prev.map(s => s.id === sub.id ? { ...s, is_frozen: false } : s))
   }
 
   function calcEndDate(startDate: string, durationMonths: number): string {
@@ -420,12 +460,20 @@ export default function StudentPage() {
                 <div key={s.id} className="p-3 bg-gray-50 rounded-xl">
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium">{s.type.includes('|') ? s.type.split('|').join(' · ') : s.type}</div>
+                      <div className="flex items-center gap-2">
+                        <div className="text-sm font-medium">{s.type.includes('|') ? s.type.split('|').join(' · ') : s.type}</div>
+                        {s.is_frozen && (
+                          <span className="text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full">🧊 Заморожен</span>
+                        )}
+                      </div>
                       <div className="text-xs text-gray-400 mt-0.5">
                         {s.sessions_left != null ? `${s.sessions_left}/${s.sessions_total} занятий` : ''}
                         {s.end_date ? ` · до ${s.end_date}` : ''}
                         {s.amount ? ` · ${s.amount.toLocaleString()} ₽` : ''}
                       </div>
+                      {s.is_frozen && s.freeze_end && (
+                        <div className="text-xs text-blue-500 mt-0.5">Заморозка до {s.freeze_end} · {s.freeze_days_used} дн.</div>
+                      )}
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
                       <button onClick={() => editSubId === s.id ? setEditSubId(null) : startEditSub(s)}
@@ -438,6 +486,53 @@ export default function StudentPage() {
                       </button>
                     </div>
                   </div>
+
+                  {/* Freeze controls */}
+                  {!s.is_frozen && (s.freeze_days_used || 0) === 0 && (
+                    <div className="mt-2">
+                      {freezeSubId === s.id ? (
+                        <form onSubmit={e => freezeSubscription(e, s)} className="space-y-2 pt-2 border-t border-gray-200">
+                          <div className="text-xs font-medium text-blue-600">🧊 Заморозка (макс. 30 дней, 1 раз)</div>
+                          <div className="flex gap-2">
+                            <input required type="date" value={freezeForm.freeze_start}
+                              onChange={e => setFreezeForm({...freezeForm, freeze_start: e.target.value})}
+                              className="flex-1 border border-gray-200 rounded-xl px-3 py-1.5 text-sm outline-none" />
+                            <input required type="date" value={freezeForm.freeze_end}
+                              onChange={e => setFreezeForm({...freezeForm, freeze_end: e.target.value})}
+                              className="flex-1 border border-gray-200 rounded-xl px-3 py-1.5 text-sm outline-none" />
+                          </div>
+                          {freezeForm.freeze_start && freezeForm.freeze_end && (
+                            <div className="text-xs text-gray-500">
+                              Дней: {Math.round((new Date(freezeForm.freeze_end).getTime() - new Date(freezeForm.freeze_start).getTime()) / 86400000)} · срок абонемента продлится на столько же
+                            </div>
+                          )}
+                          <div className="flex gap-2">
+                            <button type="submit" className="flex-1 bg-blue-500 text-white py-1.5 rounded-xl text-sm font-medium">
+                              Заморозить
+                            </button>
+                            <button type="button" onClick={() => setFreezeSubId(null)}
+                              className="px-4 border border-gray-200 text-gray-500 py-1.5 rounded-xl text-sm">
+                              Отмена
+                            </button>
+                          </div>
+                        </form>
+                      ) : (
+                        <button onClick={() => { setFreezeSubId(s.id); setEditSubId(null) }}
+                          className="text-xs text-blue-500 border border-blue-200 px-3 py-1 rounded-lg">
+                          🧊 Заморозить
+                        </button>
+                      )}
+                    </div>
+                  )}
+                  {s.is_frozen && (
+                    <button onClick={() => unfreezeSubscription(s)}
+                      className="mt-2 text-xs text-gray-500 border border-gray-200 px-3 py-1 rounded-lg">
+                      Снять заморозку
+                    </button>
+                  )}
+                  {!s.is_frozen && (s.freeze_days_used || 0) > 0 && (
+                    <div className="mt-2 text-xs text-gray-400">Заморозка использована ({s.freeze_days_used} дн.)</div>
+                  )}
                   {editSubId === s.id && (
                     <form onSubmit={saveEditSub} className="mt-2 pt-2 border-t border-gray-200 space-y-2">
                       <div className="flex gap-2">
