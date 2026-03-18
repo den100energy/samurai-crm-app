@@ -7,17 +7,22 @@ import { supabase } from '@/lib/supabase'
 type SubType = {
   id: string
   name: string
+  group_type: string | null
   sessions_count: number | null
   price: number | null
   description: string | null
+  bonuses: Record<string, number> | null
 }
 
-const emptyForm = { name: '', sessions_count: '', price: '', description: '' }
+type BonusRow = { name: string; count: string }
+
+const emptyForm = { name: '', group_type: 'Старт', sessions_count: '', price: '', description: '' }
 
 export default function SettingsPage() {
   const [types, setTypes] = useState<SubType[]>([])
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState(emptyForm)
+  const [bonusRows, setBonusRows] = useState<BonusRow[]>([])
   const [editId, setEditId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
@@ -32,27 +37,53 @@ export default function SettingsPage() {
     setEditId(t.id)
     setForm({
       name: t.name,
+      group_type: t.group_type || 'Старт',
       sessions_count: t.sessions_count?.toString() || '',
       price: t.price?.toString() || '',
       description: t.description || '',
     })
+    const rows: BonusRow[] = Object.entries(t.bonuses || {}).map(([name, count]) => ({
+      name,
+      count: count.toString(),
+    }))
+    setBonusRows(rows)
     setShowForm(true)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   function cancelForm() {
     setShowForm(false)
     setEditId(null)
     setForm(emptyForm)
+    setBonusRows([])
+  }
+
+  function addBonusRow() {
+    setBonusRows(prev => [...prev, { name: '', count: '1' }])
+  }
+
+  function updateBonusRow(i: number, field: keyof BonusRow, value: string) {
+    setBonusRows(prev => prev.map((r, idx) => idx === i ? { ...r, [field]: value } : r))
+  }
+
+  function removeBonusRow(i: number) {
+    setBonusRows(prev => prev.filter((_, idx) => idx !== i))
   }
 
   async function save(e: React.FormEvent) {
     e.preventDefault()
     setSaving(true)
+    const bonuses: Record<string, number> = {}
+    bonusRows.forEach(r => {
+      if (r.name.trim()) bonuses[r.name.trim()] = parseInt(r.count) || 1
+    })
     const payload = {
       name: form.name,
+      group_type: form.group_type || null,
       sessions_count: form.sessions_count ? parseInt(form.sessions_count) : null,
       price: form.price ? parseFloat(form.price) : null,
       description: form.description || null,
+      bonuses,
     }
     if (editId) {
       await supabase.from('subscription_types').update(payload).eq('id', editId)
@@ -70,6 +101,9 @@ export default function SettingsPage() {
     load()
   }
 
+  const groups = ['Старт', 'Комбат', ...Array.from(new Set(types.map(t => t.group_type).filter(Boolean))).filter(g => g !== 'Старт' && g !== 'Комбат')] as string[]
+  const otherTypes = types.filter(t => !t.group_type || !['Старт', 'Комбат'].includes(t.group_type))
+
   return (
     <main className="max-w-lg mx-auto p-4">
       <div className="flex items-center gap-3 mb-6">
@@ -77,11 +111,11 @@ export default function SettingsPage() {
         <h1 className="text-xl font-bold text-gray-800">Настройки</h1>
       </div>
 
-      <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
+      <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm mb-4">
         <div className="flex items-center justify-between mb-4">
           <div className="font-semibold text-gray-800">Типы абонементов</div>
           <button
-            onClick={() => { setEditId(null); setForm(emptyForm); setShowForm(!showForm) }}
+            onClick={() => { cancelForm(); setShowForm(true) }}
             className="text-sm text-gray-500 border border-gray-200 px-3 py-1.5 rounded-xl"
           >
             + Добавить
@@ -90,39 +124,63 @@ export default function SettingsPage() {
 
         {showForm && (
           <form onSubmit={save} className="space-y-2 mb-4 p-3 bg-gray-50 rounded-xl">
-            <div className="text-xs font-medium text-gray-500 mb-2">
+            <div className="text-xs font-medium text-gray-500 mb-1">
               {editId ? 'Редактировать абонемент' : 'Новый тип абонемента'}
             </div>
-            <input
-              required
-              value={form.name}
-              onChange={e => setForm({ ...form, name: e.target.value })}
+
+            <select value={form.group_type} onChange={e => setForm({ ...form, group_type: e.target.value })}
+              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none bg-white">
+              <option value="Старт">Старт</option>
+              <option value="Комбат">Комбат</option>
+              <option value="Другое">Другое</option>
+            </select>
+
+            <input required value={form.name} onChange={e => setForm({ ...form, name: e.target.value })}
               placeholder="Название *"
-              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none"
-            />
+              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none" />
+
             <div className="flex gap-2">
-              <input
-                type="number"
-                value={form.sessions_count}
+              <input type="number" value={form.sessions_count}
                 onChange={e => setForm({ ...form, sessions_count: e.target.value })}
                 placeholder="Кол-во занятий"
-                className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none"
-              />
-              <input
-                type="number"
-                value={form.price}
+                className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none" />
+              <input type="number" value={form.price}
                 onChange={e => setForm({ ...form, price: e.target.value })}
                 placeholder="Цена (₽)"
-                className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none"
-              />
+                className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none" />
             </div>
-            <input
-              value={form.description}
-              onChange={e => setForm({ ...form, description: e.target.value })}
+
+            <input value={form.description} onChange={e => setForm({ ...form, description: e.target.value })}
               placeholder="Описание (необязательно)"
-              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none"
-            />
-            <div className="flex gap-2">
+              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none" />
+
+            {/* Bonus editor */}
+            <div className="pt-1">
+              <div className="flex items-center justify-between mb-1.5">
+                <div className="text-xs font-medium text-gray-500">Бонусы</div>
+                <button type="button" onClick={addBonusRow}
+                  className="text-xs text-blue-500 border border-blue-200 px-2 py-0.5 rounded-lg">
+                  + Добавить бонус
+                </button>
+              </div>
+              {bonusRows.length === 0 && (
+                <div className="text-xs text-gray-400 text-center py-1">Бонусов нет</div>
+              )}
+              {bonusRows.map((row, i) => (
+                <div key={i} className="flex gap-2 mb-1.5 items-center">
+                  <input value={row.name} onChange={e => updateBonusRow(i, 'name', e.target.value)}
+                    placeholder="Название бонуса"
+                    className="flex-1 border border-gray-200 rounded-xl px-3 py-1.5 text-sm outline-none" />
+                  <input type="number" min="1" value={row.count}
+                    onChange={e => updateBonusRow(i, 'count', e.target.value)}
+                    className="w-14 border border-gray-200 rounded-xl px-2 py-1.5 text-sm outline-none text-center" />
+                  <button type="button" onClick={() => removeBonusRow(i)}
+                    className="text-red-400 text-sm px-1">✕</button>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex gap-2 pt-1">
               <button type="submit" disabled={saving}
                 className="flex-1 bg-black text-white py-2 rounded-xl text-sm font-medium disabled:opacity-50">
                 {saving ? 'Сохранение...' : 'Сохранить'}
@@ -141,53 +199,23 @@ export default function SettingsPage() {
           </div>
         ) : (
           <div className="space-y-4">
-            {(['Старт', 'Комбат'] as const).map(group => {
-              const items = types.filter(t => t.name.startsWith(group))
-              if (items.length === 0) return null
+            {['Старт', 'Комбат'].map(group => {
+              const items = types.filter(t => t.group_type === group)
+              if (!items.length) return null
               return (
                 <div key={group}>
                   <div className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">{group}</div>
                   <div className="space-y-2">
-                    {items.map(t => (
-                      <div key={t.id} className="flex items-start justify-between p-3 bg-gray-50 rounded-xl gap-2">
-                        <div className="flex-1 min-w-0">
-                          <div className="font-medium text-gray-800 text-sm">{t.name}</div>
-                          <div className="text-xs text-gray-400 mt-0.5">
-                            {t.sessions_count ? `${t.sessions_count} зан.` : 'Безлимит'}
-                            {t.price ? ` · ${t.price.toLocaleString('ru-RU')} ₽` : ''}
-                          </div>
-                          {t.description && <div className="text-xs text-gray-400 mt-0.5">{t.description}</div>}
-                        </div>
-                        <div className="flex gap-2 shrink-0">
-                          <button onClick={() => startEdit(t)} className="text-xs text-gray-400 hover:text-gray-600">✏️</button>
-                          <button onClick={() => remove(t.id)} className="text-xs text-red-400 hover:text-red-600">✕</button>
-                        </div>
-                      </div>
-                    ))}
+                    {items.map(t => <TypeCard key={t.id} t={t} onEdit={startEdit} onRemove={remove} />)}
                   </div>
                 </div>
               )
             })}
-            {types.filter(t => !t.name.startsWith('Старт') && !t.name.startsWith('Комбат')).length > 0 && (
+            {otherTypes.length > 0 && (
               <div>
                 <div className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Другие</div>
                 <div className="space-y-2">
-                  {types.filter(t => !t.name.startsWith('Старт') && !t.name.startsWith('Комбат')).map(t => (
-                    <div key={t.id} className="flex items-start justify-between p-3 bg-gray-50 rounded-xl gap-2">
-                      <div className="flex-1 min-w-0">
-                        <div className="font-medium text-gray-800 text-sm">{t.name}</div>
-                        <div className="text-xs text-gray-400 mt-0.5">
-                          {t.sessions_count ? `${t.sessions_count} зан.` : 'Безлимит'}
-                          {t.price ? ` · ${t.price.toLocaleString('ru-RU')} ₽` : ''}
-                        </div>
-                        {t.description && <div className="text-xs text-gray-400 mt-0.5">{t.description}</div>}
-                      </div>
-                      <div className="flex gap-2 shrink-0">
-                        <button onClick={() => startEdit(t)} className="text-xs text-gray-400 hover:text-gray-600">✏️</button>
-                        <button onClick={() => remove(t.id)} className="text-xs text-red-400 hover:text-red-600">✕</button>
-                      </div>
-                    </div>
-                  ))}
+                  {otherTypes.map(t => <TypeCard key={t.id} t={t} onEdit={startEdit} onRemove={remove} />)}
                 </div>
               </div>
             )}
@@ -195,5 +223,30 @@ export default function SettingsPage() {
         )}
       </div>
     </main>
+  )
+}
+
+function TypeCard({ t, onEdit, onRemove }: { t: SubType; onEdit: (t: SubType) => void; onRemove: (id: string) => void }) {
+  const bonusKeys = Object.keys(t.bonuses || {})
+  return (
+    <div className="flex items-start justify-between p-3 bg-gray-50 rounded-xl gap-2">
+      <div className="flex-1 min-w-0">
+        <div className="font-medium text-gray-800 text-sm">{t.name}</div>
+        <div className="text-xs text-gray-400 mt-0.5">
+          {t.sessions_count ? `${t.sessions_count} зан.` : 'Безлимит'}
+          {t.price ? ` · ${t.price.toLocaleString('ru-RU')} ₽` : ''}
+        </div>
+        {bonusKeys.length > 0 && (
+          <div className="text-xs text-blue-500 mt-0.5">
+            {bonusKeys.map(b => `${b} ×${t.bonuses![b]}`).join(' · ')}
+          </div>
+        )}
+        {t.description && <div className="text-xs text-gray-400 mt-0.5">{t.description}</div>}
+      </div>
+      <div className="flex gap-2 shrink-0">
+        <button onClick={() => onEdit(t)} className="text-xs text-gray-400 hover:text-gray-600">✏️</button>
+        <button onClick={() => onRemove(t.id)} className="text-xs text-red-400 hover:text-red-600">✕</button>
+      </div>
+    </div>
   )
 }
