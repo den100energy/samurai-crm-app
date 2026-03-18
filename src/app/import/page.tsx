@@ -14,6 +14,21 @@ type Row = {
 
 const GROUPS = ['Дети 4-9', 'Подростки (нач)', 'Подростки (оп)', 'Цигун', 'Индивидуальные']
 
+function downloadTemplate() {
+  const ws = XLSX.utils.aoa_to_sheet([
+    ['Фамилия', 'Имя', 'Группа', 'Телефон', 'Дата рождения'],
+    ['Иванов', 'Артём', 'Дети 4-9', '', ''],
+    ['Петрова', 'Мария', 'Подростки (нач)', '', ''],
+    ['Сидоров', 'Кирилл', 'Подростки (оп)', '', ''],
+    ['', '', 'Цигун', '', ''],
+    ['', '', 'Индивидуальные', '', ''],
+  ])
+  ws['!cols'] = [{ wch: 20 }, { wch: 15 }, { wch: 20 }, { wch: 16 }, { wch: 16 }]
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, 'Ученики')
+  XLSX.writeFile(wb, 'шаблон_импорта_учеников.xlsx')
+}
+
 export default function ImportPage() {
   const [rows, setRows] = useState<Row[]>([])
   const [importing, setImporting] = useState(false)
@@ -115,14 +130,20 @@ export default function ImportPage() {
 
       {/* Инструкция */}
       <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 mb-4 text-sm text-blue-700">
-        <div className="font-semibold mb-2">📋 Как подготовить файл:</div>
-        <div>Обязательная колонка:</div>
-        <div className="font-mono bg-white rounded-lg px-3 py-2 mt-1 text-xs text-gray-700">
-          ФИО &nbsp;<span className="text-gray-400">— или отдельно:</span>&nbsp; Фамилия | Имя
+        <div className="flex items-center justify-between mb-2">
+          <div className="font-semibold">📋 Как подготовить файл:</div>
+          <button
+            onClick={downloadTemplate}
+            className="flex items-center gap-1.5 bg-blue-600 text-white text-xs px-3 py-1.5 rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            ⬇ Скачать шаблон
+          </button>
         </div>
-        <div className="mt-2">Дополнительно (если есть):</div>
-        <div className="font-mono bg-white rounded-lg px-3 py-2 mt-1 text-xs text-gray-700">
-          Группа | Телефон | Дата рождения
+        <div className="text-blue-600">
+          Скачай шаблон, вставь своих учеников и загрузи обратно.
+        </div>
+        <div className="font-mono bg-white rounded-lg px-3 py-2 mt-2 text-xs text-gray-700">
+          Фамилия | Имя | Группа | Телефон | Дата рождения
         </div>
         <div className="mt-2">Группы: <span className="font-medium">{GROUPS.join(', ')}</span></div>
       </div>
