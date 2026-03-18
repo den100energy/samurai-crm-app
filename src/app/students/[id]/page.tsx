@@ -69,7 +69,7 @@ export default function StudentPage() {
   const [subForm, setSubForm] = useState({ type: '', sessions_total: '', start_date: '', end_date: '', amount: '', paid: false, bonuses: {} as Record<string, number> })
   const [showBeltForm, setShowBeltForm] = useState(false)
   const [beltForm, setBeltForm] = useState({ belt_name: '', date: new Date().toISOString().split('T')[0], notes: '' })
-  const [subTypes, setSubTypes] = useState<{ id: string; name: string; group_type: string | null; sessions_count: number | null; price: number | null; bonuses: Record<string, number> | null }[]>([])
+  const [subTypes, setSubTypes] = useState<{ id: string; name: string; group_type: string | null; sessions_count: number | null; price: number | null; bonuses: Record<string, number> | null; duration_months: number | null }[]>([])
   const [showQR, setShowQR] = useState(false)
   const [saving, setSaving] = useState(false)
   const [editSubId, setEditSubId] = useState<string | null>(null)
@@ -82,7 +82,7 @@ export default function StudentPage() {
         supabase.from('subscriptions').select('*').eq('student_id', id).order('created_at', { ascending: false }),
         supabase.from('attendance').select('*').eq('student_id', id).order('date', { ascending: false }).limit(20),
         supabase.from('belts').select('*').eq('student_id', id).order('date', { ascending: false }),
-        supabase.from('subscription_types').select('id, name, group_type, sessions_count, price, bonuses').order('created_at'),
+        supabase.from('subscription_types').select('id, name, group_type, sessions_count, price, bonuses, duration_months').order('created_at'),
       ])
       if (s) { setStudent(s); setForm(s) }
       setSubs(sb || [])
@@ -124,6 +124,15 @@ export default function StudentPage() {
     if (data) setSubs(prev => [data, ...prev])
     setShowSubForm(false)
     setSubForm({ type: '', sessions_total: '', start_date: '', end_date: '', amount: '', paid: false, bonuses: {} })
+  }
+
+  function calcEndDate(startDate: string, durationMonths: number): string {
+    const d = new Date(startDate)
+    const fullMonths = Math.floor(durationMonths)
+    const extraDays = Math.round((durationMonths - fullMonths) * 30)
+    d.setMonth(d.getMonth() + fullMonths)
+    d.setDate(d.getDate() + extraDays)
+    return d.toISOString().split('T')[0]
   }
 
   function startEditSub(s: Subscription) {
@@ -344,12 +353,16 @@ export default function StudentPage() {
           <form onSubmit={addSubscription} className="space-y-2 mb-4 p-3 bg-gray-50 rounded-xl">
             <select required value={subForm.type} onChange={e => {
                 const selected = subTypes.find(t => `${t.group_type}|${t.name}` === e.target.value)
+                const newEndDate = selected?.duration_months && subForm.start_date
+                  ? calcEndDate(subForm.start_date, selected.duration_months)
+                  : subForm.end_date
                 setSubForm({
                   ...subForm,
                   type: e.target.value,
                   sessions_total: selected?.sessions_count?.toString() || subForm.sessions_total,
                   amount: selected?.price?.toString() || subForm.amount,
                   bonuses: selected?.bonuses || {},
+                  end_date: newEndDate,
                 })
               }}
               className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none bg-white">
@@ -370,7 +383,14 @@ export default function StudentPage() {
               placeholder="Количество занятий" type="number"
               className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none" />
             <div className="flex gap-2">
-              <input value={subForm.start_date} onChange={e => setSubForm({...subForm, start_date: e.target.value})}
+              <input value={subForm.start_date} onChange={e => {
+                  const start = e.target.value
+                  const selected = subTypes.find(t => `${t.group_type}|${t.name}` === subForm.type)
+                  const end = selected?.duration_months && start
+                    ? calcEndDate(start, selected.duration_months)
+                    : subForm.end_date
+                  setSubForm({...subForm, start_date: start, end_date: end})
+                }}
                 type="date" className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none" />
               <input value={subForm.end_date} onChange={e => setSubForm({...subForm, end_date: e.target.value})}
                 type="date" className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none" />

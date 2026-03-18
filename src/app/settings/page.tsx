@@ -16,7 +16,7 @@ type SubType = {
 
 type BonusRow = { name: string; count: string }
 
-const emptyForm = { name: '', group_type: 'Старт', sessions_count: '', price: '', description: '' }
+const emptyForm = { name: '', group_type: 'Старт', sessions_count: '', price: '', description: '', duration_months: '' }
 
 export default function SettingsPage() {
   const [types, setTypes] = useState<SubType[]>([])
@@ -41,6 +41,7 @@ export default function SettingsPage() {
       sessions_count: t.sessions_count?.toString() || '',
       price: t.price?.toString() || '',
       description: t.description || '',
+      duration_months: (t as any).duration_months?.toString() || '',
     })
     const rows: BonusRow[] = Object.entries(t.bonuses || {}).map(([name, count]) => ({
       name,
@@ -83,6 +84,7 @@ export default function SettingsPage() {
       sessions_count: form.sessions_count ? parseInt(form.sessions_count) : null,
       price: form.price ? parseFloat(form.price) : null,
       description: form.description || null,
+      duration_months: form.duration_months ? parseFloat(form.duration_months) : null,
       bonuses,
     }
     if (editId) {
@@ -149,6 +151,10 @@ export default function SettingsPage() {
                 placeholder="Цена (₽)"
                 className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none" />
             </div>
+            <input type="number" step="0.5" value={form.duration_months}
+              onChange={e => setForm({ ...form, duration_months: e.target.value })}
+              placeholder="Срок действия (мес), например 1.5"
+              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none" />
 
             <input value={form.description} onChange={e => setForm({ ...form, description: e.target.value })}
               placeholder="Описание (необязательно)"
