@@ -72,6 +72,8 @@ export default function StudentPage() {
   const [subTypes, setSubTypes] = useState<{ id: string; name: string; group_type: string | null; sessions_count: number | null; price: number | null; bonuses: Record<string, number> | null }[]>([])
   const [showQR, setShowQR] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [editSubId, setEditSubId] = useState<string | null>(null)
+  const [editSubForm, setEditSubForm] = useState({ sessions_total: '', sessions_left: '', start_date: '', end_date: '', amount: '', paid: false })
 
   useEffect(() => {
     async function load() {
@@ -122,6 +124,34 @@ export default function StudentPage() {
     if (data) setSubs(prev => [data, ...prev])
     setShowSubForm(false)
     setSubForm({ type: '', sessions_total: '', start_date: '', end_date: '', amount: '', paid: false, bonuses: {} })
+  }
+
+  function startEditSub(s: Subscription) {
+    setEditSubId(s.id)
+    setEditSubForm({
+      sessions_total: s.sessions_total?.toString() || '',
+      sessions_left: s.sessions_left?.toString() || '',
+      start_date: s.start_date || '',
+      end_date: s.end_date || '',
+      amount: s.amount?.toString() || '',
+      paid: s.paid,
+    })
+  }
+
+  async function saveEditSub(e: React.FormEvent) {
+    e.preventDefault()
+    if (!editSubId) return
+    const payload = {
+      sessions_total: editSubForm.sessions_total ? parseInt(editSubForm.sessions_total) : null,
+      sessions_left: editSubForm.sessions_left ? parseInt(editSubForm.sessions_left) : null,
+      start_date: editSubForm.start_date || null,
+      end_date: editSubForm.end_date || null,
+      amount: editSubForm.amount ? parseFloat(editSubForm.amount) : null,
+      paid: editSubForm.paid,
+    }
+    await supabase.from('subscriptions').update(payload).eq('id', editSubId)
+    setSubs(prev => prev.map(s => s.id === editSubId ? { ...s, ...payload } : s))
+    setEditSubId(null)
   }
 
   async function useBonus(subId: string, bonusName: string, bonuses: Record<string, number>, bonusesUsed: Record<string, number>) {
@@ -369,7 +399,7 @@ export default function StudentPage() {
               return (
                 <div key={s.id} className="p-3 bg-gray-50 rounded-xl">
                   <div className="flex items-start justify-between gap-2">
-                    <div>
+                    <div className="flex-1 min-w-0">
                       <div className="text-sm font-medium">{s.type.includes('|') ? s.type.split('|').join(' · ') : s.type}</div>
                       <div className="text-xs text-gray-400 mt-0.5">
                         {s.sessions_left != null ? `${s.sessions_left}/${s.sessions_total} занятий` : ''}
@@ -377,11 +407,45 @@ export default function StudentPage() {
                         {s.amount ? ` · ${s.amount.toLocaleString()} ₽` : ''}
                       </div>
                     </div>
-                    <button onClick={() => togglePaid(s.id, s.paid)}
-                      className={`shrink-0 text-xs px-2 py-1 rounded-full ${s.paid ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                      {s.paid ? 'Оплачен' : 'Не оплачен'}
-                    </button>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button onClick={() => editSubId === s.id ? setEditSubId(null) : startEditSub(s)}
+                        className="text-xs text-gray-400 border border-gray-200 px-2 py-1 rounded-lg">
+                        {editSubId === s.id ? 'Отмена' : '✎'}
+                      </button>
+                      <button onClick={() => togglePaid(s.id, s.paid)}
+                        className={`text-xs px-2 py-1 rounded-full ${s.paid ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                        {s.paid ? 'Оплачен' : 'Не оплачен'}
+                      </button>
+                    </div>
                   </div>
+                  {editSubId === s.id && (
+                    <form onSubmit={saveEditSub} className="mt-2 pt-2 border-t border-gray-200 space-y-2">
+                      <div className="flex gap-2">
+                        <input value={editSubForm.sessions_total} onChange={e => setEditSubForm({...editSubForm, sessions_total: e.target.value})}
+                          type="number" placeholder="Всего занятий"
+                          className="flex-1 border border-gray-200 rounded-xl px-3 py-1.5 text-sm outline-none" />
+                        <input value={editSubForm.sessions_left} onChange={e => setEditSubForm({...editSubForm, sessions_left: e.target.value})}
+                          type="number" placeholder="Осталось"
+                          className="flex-1 border border-gray-200 rounded-xl px-3 py-1.5 text-sm outline-none" />
+                      </div>
+                      <div className="flex gap-2">
+                        <input value={editSubForm.start_date} onChange={e => setEditSubForm({...editSubForm, start_date: e.target.value})}
+                          type="date" className="flex-1 border border-gray-200 rounded-xl px-3 py-1.5 text-sm outline-none" />
+                        <input value={editSubForm.end_date} onChange={e => setEditSubForm({...editSubForm, end_date: e.target.value})}
+                          type="date" className="flex-1 border border-gray-200 rounded-xl px-3 py-1.5 text-sm outline-none" />
+                      </div>
+                      <input value={editSubForm.amount} onChange={e => setEditSubForm({...editSubForm, amount: e.target.value})}
+                        type="number" placeholder="Сумма (₽)"
+                        className="w-full border border-gray-200 rounded-xl px-3 py-1.5 text-sm outline-none" />
+                      <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+                        <input type="checkbox" checked={editSubForm.paid} onChange={e => setEditSubForm({...editSubForm, paid: e.target.checked})} />
+                        Оплачен
+                      </label>
+                      <button type="submit" className="w-full bg-black text-white py-2 rounded-xl text-sm font-medium">
+                        Сохранить
+                      </button>
+                    </form>
+                  )}
                   {bonusKeys.length > 0 && (
                     <div className="mt-2 pt-2 border-t border-gray-200 space-y-1.5">
                       <div className="text-xs font-medium text-gray-500">Бонусы:</div>
