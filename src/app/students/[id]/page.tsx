@@ -106,16 +106,19 @@ export default function StudentPage() {
   const [contacts, setContacts] = useState<Contact[]>([])
   const [showAddContact, setShowAddContact] = useState(false)
   const [contactForm, setContactForm] = useState({ name: '', role: 'мама', phone: '' })
+  const [survey, setSurvey] = useState<any>(null)
+  const [showSurvey, setShowSurvey] = useState(false)
 
   useEffect(() => {
     async function load() {
-      const [{ data: s }, { data: sb }, { data: at }, { data: bl }, { data: st }, { data: ct }] = await Promise.all([
+      const [{ data: s }, { data: sb }, { data: at }, { data: bl }, { data: st }, { data: ct }, { data: sv }] = await Promise.all([
         supabase.from('students').select('*').eq('id', id).single(),
         supabase.from('subscriptions').select('*').eq('student_id', id).order('created_at', { ascending: false }),
         supabase.from('attendance').select('*').eq('student_id', id).order('date', { ascending: false }).limit(20),
         supabase.from('belts').select('*').eq('student_id', id).order('date', { ascending: false }),
         supabase.from('subscription_types').select('id, name, group_type, sessions_count, price, bonuses, duration_months').order('created_at'),
         supabase.from('student_contacts').select('*').eq('student_id', id).order('created_at'),
+        supabase.from('diagnostic_surveys').select('*').eq('student_id', id).maybeSingle(),
       ])
       if (s) { setStudent(s); setForm(s) }
       setSubs(sb || [])
@@ -123,6 +126,7 @@ export default function StudentPage() {
       setBelts(bl || [])
       setSubTypes(st || [])
       setContacts(ct || [])
+      setSurvey(sv || null)
     }
     load()
   }, [id])
@@ -930,13 +934,53 @@ export default function StudentPage() {
       <div className="flex gap-2 mb-2">
         <button onClick={copySurveyLink}
           className="flex-1 border border-blue-200 bg-blue-50 text-blue-700 text-sm py-2.5 rounded-xl">
-          📋 Анкета новичка
+          📋 {survey?.filled_at ? 'Анкета заполнена ✓' : 'Анкета новичка'}
         </button>
         <button onClick={copyParentLink}
           className="flex-1 border border-gray-200 text-gray-600 text-sm py-2.5 rounded-xl">
           🔗 Кабинет родителя
         </button>
       </div>
+
+      {survey?.filled_at && (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm mb-2">
+          <button onClick={() => setShowSurvey(v => !v)}
+            className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-gray-800">
+            <span>📋 Данные анкеты — {survey.student_name || '—'}</span>
+            <span className="text-gray-400">{showSurvey ? '▲' : '▼'}</span>
+          </button>
+          {showSurvey && (
+            <div className="px-4 pb-4 text-xs space-y-2 border-t border-gray-50 pt-3">
+              {survey.student_age && <div><span className="text-gray-500">Возраст:</span> {survey.student_age}</div>}
+              {survey.injuries_text && <div><span className="text-gray-500">Травмы:</span> {survey.injuries_text}</div>}
+              {survey.contraindications_text && <div><span className="text-gray-500">Противопоказания:</span> {survey.contraindications_text}</div>}
+              {survey.other_activities_text && <div><span className="text-gray-500">Другие секции:</span> {survey.other_activities_text}</div>}
+              {survey.prev_sport_text && <div><span className="text-gray-500">Спорт ранее:</span> {survey.prev_sport_text}</div>}
+              {survey.character_notes_text && <div><span className="text-gray-500">Характер:</span> {survey.character_notes_text}</div>}
+              {survey.how_can_help_text && <div><span className="text-gray-500">Ожидания:</span> {survey.how_can_help_text}</div>}
+              {survey.parent_name && <div><span className="text-gray-500">Родитель:</span> {survey.parent_name}{survey.parent_phone ? ` · ${survey.parent_phone}` : ''}</div>}
+              <div className="pt-2 border-t border-gray-100">
+                <div className="text-gray-500 mb-1.5 font-medium">15 качеств самурая (1–10):</div>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                  {[
+                    ['q_strength','Сила'],['q_speed','Быстрота'],['q_endurance','Выносливость'],
+                    ['q_agility','Ловкость'],['q_coordination','Координация'],['q_posture','Осанка'],
+                    ['q_flexibility','Гибкость'],['q_discipline','Дисциплина'],['q_sociability','Общительность'],
+                    ['q_confidence','Уверенность'],['q_learnability','Обучаемость'],['q_attentiveness','Внимательность'],
+                    ['q_emotional_balance','Уравновешенность'],['q_goal_orientation','Целеустремлённость'],
+                    ['q_activity','Активность'],['q_self_defense','Самозащита'],
+                  ].filter(([k]) => survey[k] !== null && survey[k] !== undefined).map(([k, lbl]) => (
+                    <div key={k} className="flex justify-between">
+                      <span className="text-gray-500">{lbl}</span>
+                      <span className="font-semibold text-gray-800">{survey[k]}/10</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Ticket form */}
       {showTicketForm ? (
