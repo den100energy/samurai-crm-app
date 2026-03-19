@@ -92,6 +92,8 @@ export default function StudentPage() {
   const [freezeForm, setFreezeForm] = useState({ freeze_start: '', freeze_end: '' })
   const [showTicketForm, setShowTicketForm] = useState(false)
   const [ticketForm, setTicketForm] = useState({ type: '', description: '' })
+  const [showAddAttendance, setShowAddAttendance] = useState(false)
+  const [addAttDate, setAddAttDate] = useState(new Date().toISOString().split('T')[0])
 
   useEffect(() => {
     async function load() {
@@ -185,6 +187,36 @@ export default function StudentPage() {
     setShowTicketForm(false)
     setTicketForm({ type: '', description: '' })
     alert('Обращение создано!')
+  }
+
+  async function addAttendance(present: boolean) {
+    const { data, error } = await supabase.from('attendance').upsert(
+      { student_id: id, date: addAttDate, group_name: student?.group_name, present },
+      { onConflict: 'student_id,date' }
+    ).select().maybeSingle()
+    if (error) { alert('Ошибка: ' + error.message); return }
+
+    // Deduct session from active subscription if present
+    if (present) {
+      const activeSub = subs.find(s => s.sessions_left !== null && s.sessions_left > 0)
+      if (activeSub) {
+        await supabase.from('subscriptions')
+          .update({ sessions_left: activeSub.sessions_left! - 1 })
+          .eq('id', activeSub.id)
+        setSubs(prev => prev.map(s => s.id === activeSub.id
+          ? { ...s, sessions_left: s.sessions_left! - 1 }
+          : s))
+      }
+    }
+
+    // Refresh attendance list
+    const newRecord = { id: data?.id ?? Date.now().toString(), date: addAttDate, present }
+    setAttendance(prev => {
+      const filtered = prev.filter(a => a.date !== addAttDate)
+      return [newRecord, ...filtered].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 20)
+    })
+    setShowAddAttendance(false)
+    setAddAttDate(new Date().toISOString().split('T')[0])
   }
 
   async function unfreezeSubscription(sub: Subscription) {
@@ -717,7 +749,31 @@ export default function StudentPage() {
 
       {/* Attendance */}
       <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm mb-4">
-        <div className="font-semibold text-gray-800 mb-3">История посещений</div>
+        <div className="flex items-center justify-between mb-3">
+          <div className="font-semibold text-gray-800">История посещений</div>
+          <button onClick={() => setShowAddAttendance(v => !v)}
+            className="text-sm text-black border border-gray-200 px-3 py-1 rounded-lg hover:bg-gray-50">
+            {showAddAttendance ? 'Отмена' : '+ Занятие'}
+          </button>
+        </div>
+
+        {showAddAttendance && (
+          <div className="mb-3 p-3 bg-gray-50 rounded-xl border border-gray-200">
+            <input type="date" value={addAttDate} onChange={e => setAddAttDate(e.target.value)}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none mb-2 bg-white" />
+            <div className="flex gap-2">
+              <button onClick={() => addAttendance(true)}
+                className="flex-1 bg-green-600 text-white text-sm py-2 rounded-lg font-medium hover:bg-green-700">
+                ✅ Присутствовал
+              </button>
+              <button onClick={() => addAttendance(false)}
+                className="flex-1 bg-gray-200 text-gray-700 text-sm py-2 rounded-lg font-medium hover:bg-gray-300">
+                ❌ Не пришёл
+              </button>
+            </div>
+          </div>
+        )}
+
         {attendance.length === 0 ? (
           <div className="text-sm text-gray-400 text-center py-2">Нет данных</div>
         ) : (
