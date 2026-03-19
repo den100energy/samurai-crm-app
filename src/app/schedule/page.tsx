@@ -45,7 +45,7 @@ export default function SchedulePage() {
   const [form, setForm] = useState(emptyForm)
   const [saving, setSaving] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
-  const [editForm, setEditForm] = useState({ group_name: '', trainer_id: '', day_of_week: 1, start_time: '', end_time: '' })
+  const [editForm, setEditForm] = useState({ group_name: '', trainer_id: '', days: [] as number[], start_time: '', end_time: '' })
 
   useEffect(() => { load() }, [])
 
@@ -82,21 +82,33 @@ export default function SchedulePage() {
     setEditForm({
       group_name: entry.group_name,
       trainer_id: entry.trainer_id || '',
-      day_of_week: entry.day_of_week,
+      days: [entry.day_of_week],
       start_time: entry.start_time || '',
       end_time: entry.end_time || '',
     })
   }
 
+  function toggleEditDay(num: number) {
+    setEditForm(prev => ({
+      ...prev,
+      days: prev.days.includes(num) ? prev.days.filter(d => d !== num) : [...prev.days, num]
+    }))
+  }
+
   async function saveEdit(e: React.FormEvent) {
     e.preventDefault()
-    await supabase.from('schedule').update({
-      group_name: editForm.group_name,
-      trainer_id: editForm.trainer_id || null,
-      day_of_week: editForm.day_of_week,
-      start_time: editForm.start_time || null,
-      end_time: editForm.end_time || null,
-    }).eq('id', editId!)
+    if (editForm.days.length === 0) { alert('Выберите хотя бы один день'); return }
+    // Delete the old entry, insert new ones for each selected day
+    await supabase.from('schedule').delete().eq('id', editId!)
+    await supabase.from('schedule').insert(
+      editForm.days.map(day => ({
+        group_name: editForm.group_name,
+        trainer_id: editForm.trainer_id || null,
+        day_of_week: day,
+        start_time: editForm.start_time || null,
+        end_time: editForm.end_time || null,
+      }))
+    )
     setEditId(null)
     load()
   }
@@ -210,12 +222,12 @@ export default function SchedulePage() {
                           {GROUPS.map(g => <option key={g} value={g}>{g}</option>)}
                         </select>
                         <div>
-                          <div className="text-xs text-gray-500 mb-1">День недели</div>
+                          <div className="text-xs text-gray-500 mb-1">Дни недели</div>
                           <div className="flex gap-1 flex-wrap">
                             {DAYS.map(d => (
-                              <button key={d.num} type="button" onClick={() => setEditForm({...editForm, day_of_week: d.num})}
+                              <button key={d.num} type="button" onClick={() => toggleEditDay(d.num)}
                                 className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors
-                                  ${editForm.day_of_week === d.num
+                                  ${editForm.days.includes(d.num)
                                     ? 'bg-black text-white border-black'
                                     : 'bg-white text-gray-600 border-gray-200'}`}>
                                 {d.short}
