@@ -597,6 +597,13 @@ export default function StudentPage() {
                         className="text-xs text-gray-400 border border-gray-200 px-2 py-1 rounded-lg">
                         {editSubId === s.id ? 'Отмена' : '✎'}
                       </button>
+                      <button onClick={async () => {
+                        if (!confirm('Удалить абонемент?')) return
+                        await supabase.from('subscriptions').delete().eq('id', s.id)
+                        setSubs(prev => prev.filter(sub => sub.id !== s.id))
+                      }} className="text-xs text-red-400 border border-red-200 px-2 py-1 rounded-lg hover:bg-red-50">
+                        🗑
+                      </button>
                       <button onClick={() => togglePaid(s.id, s.paid)}
                         className={`text-xs px-2 py-1 rounded-full ${s.paid ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                         {s.paid ? 'Оплачен' : 'Не оплачен'}
