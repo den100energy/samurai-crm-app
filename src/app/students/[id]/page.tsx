@@ -108,6 +108,8 @@ export default function StudentPage() {
   const [contactForm, setContactForm] = useState({ name: '', role: 'мама', phone: '' })
   const [survey, setSurvey] = useState<any>(null)
   const [showSurvey, setShowSurvey] = useState(false)
+  const [editingSurvey, setEditingSurvey] = useState(false)
+  const [surveyForm, setSurveyForm] = useState<any>({})
 
   useEffect(() => {
     async function load() {
@@ -392,6 +394,31 @@ export default function StudentPage() {
     const url = `${window.location.origin}/survey/${existing.survey_token}`
     navigator.clipboard.writeText(url)
     alert(`Ссылка скопирована!\n\nОтправьте родителю:\n${url}`)
+  }
+
+  function startEditSurvey() {
+    setSurveyForm({ ...survey })
+    setEditingSurvey(true)
+    setShowSurvey(true)
+  }
+
+  async function saveSurvey() {
+    const { data } = await supabase
+      .from('diagnostic_surveys')
+      .update(surveyForm)
+      .eq('id', survey.id)
+      .select()
+      .single()
+    if (data) setSurvey(data)
+    setEditingSurvey(false)
+  }
+
+  async function deleteSurvey() {
+    if (!confirm('Удалить анкету? Все данные будут потеряны.')) return
+    await supabase.from('diagnostic_surveys').delete().eq('id', survey.id)
+    setSurvey(null)
+    setShowSurvey(false)
+    setEditingSurvey(false)
   }
 
   function copyParentLink() {
@@ -944,13 +971,26 @@ export default function StudentPage() {
 
       {survey?.filled_at && (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm mb-2">
-          <button onClick={() => setShowSurvey(v => !v)}
-            className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-gray-800">
-            <span>📋 Данные анкеты — {survey.student_name || '—'}</span>
-            <span className="text-gray-400">{showSurvey ? '▲' : '▼'}</span>
-          </button>
-          {showSurvey && (
-            <div className="px-4 pb-4 text-xs space-y-2 border-t border-gray-50 pt-3">
+          <div className="flex items-center px-4 py-3 border-b border-gray-50">
+            <button onClick={() => setShowSurvey(v => !v)}
+              className="flex-1 flex items-center gap-2 text-sm font-medium text-gray-800 text-left">
+              <span>📋 Данные анкеты — {survey.student_name || '—'}</span>
+              <span className="text-gray-400">{showSurvey ? '▲' : '▼'}</span>
+            </button>
+            <div className="flex gap-2 ml-2">
+              <button onClick={startEditSurvey}
+                className="text-xs border border-gray-200 px-2 py-1 rounded-lg text-gray-500 hover:bg-gray-50">
+                ✎ Изменить
+              </button>
+              <button onClick={deleteSurvey}
+                className="text-xs border border-red-200 px-2 py-1 rounded-lg text-red-400 hover:bg-red-50">
+                🗑
+              </button>
+            </div>
+          </div>
+
+          {showSurvey && !editingSurvey && (
+            <div className="px-4 pb-4 text-xs space-y-2 pt-3">
               {survey.student_age && <div><span className="text-gray-500">Возраст:</span> {survey.student_age}</div>}
               {survey.injuries_text && <div><span className="text-gray-500">Травмы:</span> {survey.injuries_text}</div>}
               {survey.contraindications_text && <div><span className="text-gray-500">Противопоказания:</span> {survey.contraindications_text}</div>}
@@ -960,7 +1000,7 @@ export default function StudentPage() {
               {survey.how_can_help_text && <div><span className="text-gray-500">Ожидания:</span> {survey.how_can_help_text}</div>}
               {survey.parent_name && <div><span className="text-gray-500">Родитель:</span> {survey.parent_name}{survey.parent_phone ? ` · ${survey.parent_phone}` : ''}</div>}
               <div className="pt-2 border-t border-gray-100">
-                <div className="text-gray-500 mb-1.5 font-medium">15 качеств самурая (1–10):</div>
+                <div className="text-gray-500 mb-1.5 font-medium">15 качеств (1–10):</div>
                 <div className="grid grid-cols-2 gap-x-4 gap-y-1">
                   {[
                     ['q_strength','Сила'],['q_speed','Быстрота'],['q_endurance','Выносливость'],
@@ -976,6 +1016,49 @@ export default function StudentPage() {
                     </div>
                   ))}
                 </div>
+              </div>
+            </div>
+          )}
+
+          {showSurvey && editingSurvey && (
+            <div className="px-4 pb-4 pt-3 space-y-3">
+              {[
+                ['student_name','Имя ученика'],['student_age','Возраст'],
+                ['injuries_text','Травмы'],['contraindications_text','Противопоказания'],
+                ['other_activities_text','Другие секции'],['prev_sport_text','Спорт ранее'],
+                ['character_notes_text','Характер'],['how_can_help_text','Ожидания'],
+                ['parent_name','Имя родителя'],['parent_phone','Телефон родителя'],
+              ].map(([k, lbl]) => (
+                <div key={k}>
+                  <label className="text-xs text-gray-500 block mb-1">{lbl}</label>
+                  <input value={surveyForm[k] || ''} onChange={e => setSurveyForm((p: any) => ({...p, [k]: e.target.value}))}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none" />
+                </div>
+              ))}
+              <div className="border-t border-gray-100 pt-3">
+                <div className="text-xs text-gray-500 mb-2 font-medium">15 качеств (1–10):</div>
+                <div className="space-y-2">
+                  {[
+                    ['q_strength','Сила'],['q_speed','Быстрота'],['q_endurance','Выносливость'],
+                    ['q_agility','Ловкость'],['q_coordination','Координация'],['q_posture','Осанка'],
+                    ['q_flexibility','Гибкость'],['q_discipline','Дисциплина'],['q_sociability','Общительность'],
+                    ['q_confidence','Уверенность'],['q_learnability','Обучаемость'],['q_attentiveness','Внимательность'],
+                    ['q_emotional_balance','Уравновешенность'],['q_goal_orientation','Целеустремлённость'],
+                    ['q_activity','Активность'],['q_self_defense','Самозащита'],
+                  ].map(([k, lbl]) => (
+                    <div key={k} className="flex items-center gap-3">
+                      <span className="text-xs text-gray-500 w-32 shrink-0">{lbl}</span>
+                      <input type="range" min={1} max={10} value={surveyForm[k] ?? 5}
+                        onChange={e => setSurveyForm((p: any) => ({...p, [k]: parseInt(e.target.value)}))}
+                        className="flex-1 accent-black" />
+                      <span className="text-xs font-semibold text-gray-800 w-4">{surveyForm[k] ?? 5}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="flex gap-2 pt-1">
+                <button onClick={saveSurvey} className="flex-1 bg-black text-white py-2 rounded-xl text-sm font-medium">Сохранить</button>
+                <button onClick={() => setEditingSurvey(false)} className="px-4 border border-gray-200 text-gray-500 py-2 rounded-xl text-sm">Отмена</button>
               </div>
             </div>
           )}
