@@ -29,14 +29,37 @@ export default function Home() {
       const today = new Date().toISOString().split('T')[0]
       const in7days = new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0]
 
-      const [{ data: exp }, { data: noSess }, { data: students }] = await Promise.all([
-        supabase.from('subscriptions').select('id, students(name)').gte('end_date', today).lte('end_date', in7days),
-        supabase.from('subscriptions').select('id, students(name)').eq('sessions_left', 0),
-        supabase.from('students').select('id').eq('status', 'active'),
+      const [{ data: students }, { data: allSubs }] = await Promise.all([
+        supabase.from('students').select('id, name').eq('status', 'active'),
+        supabase.from('subscriptions').select('student_id, sessions_left, end_date').order('created_at', { ascending: false }),
       ])
-      setExpiring(exp || [])
-      setNoSessions(noSess || [])
-      setTotalStudents(students?.length || 0)
+
+      if (!students) return
+
+      // Build map: student_id -> latest subscription
+      const subMap = new Map<string, { sessions_left: number | null; end_date: string | null }>()
+      for (const s of (allSubs || [])) {
+        if (!subMap.has(s.student_id)) subMap.set(s.student_id, s)
+      }
+
+      const noSessArr: any[] = []
+      const expiringArr: any[] = []
+
+      for (const student of students) {
+        const sub = subMap.get(student.id)
+        // No subscription at all, or sessions ran out
+        if (!sub || sub.sessions_left === 0) {
+          noSessArr.push({ id: student.id, students: { name: student.name } })
+        }
+        // Subscription expires within 7 days
+        if (sub?.end_date && sub.end_date >= today && sub.end_date <= in7days) {
+          expiringArr.push({ id: student.id, students: { name: student.name } })
+        }
+      }
+
+      setTotalStudents(students.length)
+      setNoSessions(noSessArr)
+      setExpiring(expiringArr)
     }
     load()
   }, [])
