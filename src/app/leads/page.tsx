@@ -12,6 +12,7 @@ type Lead = {
   status: string
   notes: string | null
   created_at: string
+  telegram_chat_id: string | null
 }
 
 const STAGES = [
@@ -231,6 +232,9 @@ function LeadCard({ lead, expanded, onToggle, onStatusChange, onDelete }: {
   const [showTrainer, setShowTrainer] = useState(false)
   const [editingTrainer, setEditingTrainer] = useState(false)
   const [trainerForm, setTrainerForm] = useState<Record<string,any>>({})
+  const [program, setProgram] = useState('')
+  const [generating, setGenerating] = useState(false)
+  const [programSaved, setProgramSaved] = useState(false)
 
   useEffect(() => {
     if (!expanded || surveyLoaded) return
@@ -242,6 +246,7 @@ function LeadCard({ lead, expanded, onToggle, onStatusChange, onDelete }: {
           const init: Record<string,any> = { trainer_notes: data.trainer_notes || '' }
           QUALITIES.forEach(([k]) => { init[`trainer_${k}`] = data[`trainer_${k}`] ?? 5 })
           setTrainerForm(init)
+          if (data.ai_program) setProgram(data.ai_program)
         }
       })
   }, [expanded, surveyLoaded, lead.id])
@@ -259,6 +264,40 @@ function LeadCard({ lead, expanded, onToggle, onStatusChange, onDelete }: {
     const url = `${window.location.origin}/survey/${s.survey_token}`
     navigator.clipboard.writeText(url)
     alert(`Ссылка скопирована!\n\nОтправьте родителю:\n${url}`)
+  }
+
+  async function generateProgram() {
+    if (!survey) return
+    setGenerating(true)
+    const res = await fetch('/api/generate-program', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ survey }),
+    })
+    const data = await res.json()
+    if (data.error) { alert('Ошибка: ' + data.error); setGenerating(false); return }
+    setProgram(data.program)
+    // Save to DB
+    await supabase.from('diagnostic_surveys').update({ ai_program: data.program }).eq('id', survey.id)
+    setGenerating(false)
+  }
+
+  async function saveProgram() {
+    await supabase.from('diagnostic_surveys').update({ ai_program: program }).eq('id', survey.id)
+    setProgramSaved(true)
+    setTimeout(() => setProgramSaved(false), 2000)
+  }
+
+  async function sendProgram() {
+    if (!lead.telegram_chat_id) { alert('У лида нет Telegram. Подключите через ссылку-приглашение.'); return }
+    const message = `📋 <b>Индивидуальная программа — ${survey?.student_name || lead.name}</b>\n\n${program}`
+    await fetch('/api/notify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: lead.telegram_chat_id, message }),
+    })
+    await supabase.from('diagnostic_surveys').update({ ai_program_sent_at: new Date().toISOString() }).eq('id', survey.id)
+    alert('Программа отправлена в Telegram!')
   }
 
   async function saveTrainer() {
@@ -419,6 +458,51 @@ function LeadCard({ lead, expanded, onToggle, onStatusChange, onDelete }: {
               </div>
             )}
           </div>
+
+          {/* AI Program */}
+          {surveyLoaded && (
+            <div className="mt-2 border border-gray-100 rounded-xl overflow-hidden">
+              <div className="flex items-center px-3 py-2 bg-gray-50">
+                <span className="text-xs font-medium text-gray-700 flex-1">
+                  ✨ Программа развития
+                  {survey?.ai_program_sent_at && <span className="ml-2 text-blue-600">✓ Отправлена</span>}
+                </span>
+              </div>
+              <div className="px-3 py-3 space-y-2">
+                <button
+                  onClick={generateProgram}
+                  disabled={generating || !survey}
+                  className="w-full bg-black text-white py-2 rounded-lg text-xs font-medium disabled:opacity-40">
+                  {generating ? '⏳ Генерация...' : program ? '🔄 Перегенерировать' : '✨ Сгенерировать программу'}
+                </button>
+                {!survey && (
+                  <div className="text-xs text-gray-400 text-center">Сначала заполните анкету</div>
+                )}
+                {program && (
+                  <>
+                    <textarea
+                      value={program}
+                      onChange={e => setProgram(e.target.value)}
+                      rows={10}
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs outline-none resize-none font-mono"
+                    />
+                    <div className="flex gap-2">
+                      <button onClick={saveProgram}
+                        className="flex-1 border border-gray-200 bg-white text-gray-700 py-2 rounded-lg text-xs font-medium">
+                        {programSaved ? '✓ Сохранено' : '💾 Сохранить'}
+                      </button>
+                      <button onClick={sendProgram}
+                        disabled={!lead.telegram_chat_id}
+                        title={!lead.telegram_chat_id ? 'Нет Telegram у лида' : ''}
+                        className="flex-1 bg-blue-600 text-white py-2 rounded-lg text-xs font-medium disabled:opacity-40">
+                        📨 Отправить родителю
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
 
           <div className="flex gap-1 mt-3 flex-wrap">
             {STAGES.map(s => (
