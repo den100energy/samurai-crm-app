@@ -44,6 +44,8 @@ export default function SchedulePage() {
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState(emptyForm)
   const [saving, setSaving] = useState(false)
+  const [editId, setEditId] = useState<string | null>(null)
+  const [editForm, setEditForm] = useState({ group_name: '', trainer_id: '', day_of_week: 1, start_time: '', end_time: '' })
 
   useEffect(() => { load() }, [])
 
@@ -72,6 +74,30 @@ export default function SchedulePage() {
     setForm(emptyForm)
     setShowForm(false)
     setSaving(false)
+    load()
+  }
+
+  function startEdit(entry: ScheduleEntry) {
+    setEditId(entry.id)
+    setEditForm({
+      group_name: entry.group_name,
+      trainer_id: entry.trainer_id || '',
+      day_of_week: entry.day_of_week,
+      start_time: entry.start_time || '',
+      end_time: entry.end_time || '',
+    })
+  }
+
+  async function saveEdit(e: React.FormEvent) {
+    e.preventDefault()
+    await supabase.from('schedule').update({
+      group_name: editForm.group_name,
+      trainer_id: editForm.trainer_id || null,
+      day_of_week: editForm.day_of_week,
+      start_time: editForm.start_time || null,
+      end_time: editForm.end_time || null,
+    }).eq('id', editId!)
+    setEditId(null)
     load()
   }
 
@@ -176,6 +202,45 @@ export default function SchedulePage() {
                 <div className="p-3 space-y-2">
                   {dayEntries.map(entry => {
                     const colorClass = GROUP_COLORS[entry.group_name] || 'bg-gray-50 border-gray-200 text-gray-700'
+
+                    if (editId === entry.id) return (
+                      <form key={entry.id} onSubmit={saveEdit} className="p-3 rounded-xl border border-gray-300 bg-white space-y-2">
+                        <select value={editForm.group_name} onChange={e => setEditForm({...editForm, group_name: e.target.value})}
+                          className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm outline-none bg-white">
+                          {GROUPS.map(g => <option key={g} value={g}>{g}</option>)}
+                        </select>
+                        <div>
+                          <div className="text-xs text-gray-500 mb-1">День недели</div>
+                          <div className="flex gap-1 flex-wrap">
+                            {DAYS.map(d => (
+                              <button key={d.num} type="button" onClick={() => setEditForm({...editForm, day_of_week: d.num})}
+                                className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors
+                                  ${editForm.day_of_week === d.num
+                                    ? 'bg-black text-white border-black'
+                                    : 'bg-white text-gray-600 border-gray-200'}`}>
+                                {d.short}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <input type="time" value={editForm.start_time} onChange={e => setEditForm({...editForm, start_time: e.target.value})}
+                            className="flex-1 border border-gray-200 rounded-lg px-2 py-1.5 text-sm outline-none" />
+                          <input type="time" value={editForm.end_time} onChange={e => setEditForm({...editForm, end_time: e.target.value})}
+                            className="flex-1 border border-gray-200 rounded-lg px-2 py-1.5 text-sm outline-none" />
+                        </div>
+                        <select value={editForm.trainer_id} onChange={e => setEditForm({...editForm, trainer_id: e.target.value})}
+                          className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm outline-none bg-white">
+                          <option value="">Тренер (необязательно)</option>
+                          {trainers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                        </select>
+                        <div className="flex gap-2">
+                          <button type="submit" className="flex-1 bg-black text-white py-1.5 rounded-lg text-sm font-medium">Сохранить</button>
+                          <button type="button" onClick={() => setEditId(null)} className="px-3 border border-gray-200 text-gray-500 py-1.5 rounded-lg text-sm">Отмена</button>
+                        </div>
+                      </form>
+                    )
+
                     return (
                       <div key={entry.id} className={`flex items-center justify-between p-3 rounded-xl border ${colorClass}`}>
                         <div>
@@ -189,8 +254,10 @@ export default function SchedulePage() {
                             )}
                           </div>
                         </div>
-                        <button onClick={() => remove(entry.id)}
-                          className="text-sm opacity-40 hover:opacity-70 ml-3">✕</button>
+                        <div className="flex items-center gap-2 ml-3">
+                          <button onClick={() => startEdit(entry)} className="text-sm opacity-40 hover:opacity-70">✎</button>
+                          <button onClick={() => remove(entry.id)} className="text-sm opacity-40 hover:opacity-70">✕</button>
+                        </div>
                       </div>
                     )
                   })}
