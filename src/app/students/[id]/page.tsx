@@ -471,8 +471,8 @@ export default function StudentPage() {
               }}
               className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none bg-white">
               <option value="">Тип абонемента *</option>
-              {['Старт', 'Комбат'].map(group => {
-                const items = subTypes.filter(t => t.group_type === group)
+              {Array.from(new Set(subTypes.map(t => t.group_type || 'Другие'))).map(group => {
+                const items = subTypes.filter(t => (t.group_type || 'Другие') === group)
                 if (!items.length) return null
                 return <optgroup key={group} label={group}>
                   {items.map(t => (
