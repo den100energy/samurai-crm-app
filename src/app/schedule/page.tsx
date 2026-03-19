@@ -36,7 +36,7 @@ const GROUP_COLORS: Record<string, string> = {
   'Индивидуальные':  'bg-orange-50 border-orange-200 text-orange-800',
 }
 
-const emptyForm = { group_name: '', trainer_id: '', day_of_week: '', start_time: '', end_time: '' }
+const emptyForm = { group_name: '', trainer_id: '', days: [] as number[], start_time: '', end_time: '' }
 
 export default function SchedulePage() {
   const [entries, setEntries] = useState<ScheduleEntry[]>([])
@@ -58,18 +58,28 @@ export default function SchedulePage() {
 
   async function save(e: React.FormEvent) {
     e.preventDefault()
+    if (form.days.length === 0) { alert('Выберите хотя бы один день'); return }
     setSaving(true)
-    await supabase.from('schedule').insert({
-      group_name: form.group_name,
-      trainer_id: form.trainer_id || null,
-      day_of_week: parseInt(form.day_of_week),
-      start_time: form.start_time || null,
-      end_time: form.end_time || null,
-    })
+    await supabase.from('schedule').insert(
+      form.days.map(day => ({
+        group_name: form.group_name,
+        trainer_id: form.trainer_id || null,
+        day_of_week: day,
+        start_time: form.start_time || null,
+        end_time: form.end_time || null,
+      }))
+    )
     setForm(emptyForm)
     setShowForm(false)
     setSaving(false)
     load()
+  }
+
+  function toggleDay(num: number) {
+    setForm(prev => ({
+      ...prev,
+      days: prev.days.includes(num) ? prev.days.filter(d => d !== num) : [...prev.days, num]
+    }))
   }
 
   async function remove(id: string) {
@@ -101,11 +111,20 @@ export default function SchedulePage() {
             <option value="">Группа *</option>
             {GROUPS.map(g => <option key={g} value={g}>{g}</option>)}
           </select>
-          <select required value={form.day_of_week} onChange={e => setForm({...form, day_of_week: e.target.value})}
-            className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none bg-white">
-            <option value="">День недели *</option>
-            {DAYS.map(d => <option key={d.num} value={d.num}>{d.full}</option>)}
-          </select>
+          <div>
+            <div className="text-xs text-gray-500 mb-1.5">Дни недели *</div>
+            <div className="flex gap-1.5 flex-wrap">
+              {DAYS.map(d => (
+                <button key={d.num} type="button" onClick={() => toggleDay(d.num)}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors
+                    ${form.days.includes(d.num)
+                      ? 'bg-black text-white border-black'
+                      : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'}`}>
+                  {d.short}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="flex gap-2">
             <input type="time" value={form.start_time} onChange={e => setForm({...form, start_time: e.target.value})}
               className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none"
