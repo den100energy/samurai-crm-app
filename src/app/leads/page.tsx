@@ -206,6 +206,15 @@ export default function LeadsPage() {
   )
 }
 
+const QUALITIES = [
+  ['strength','Сила'],['speed','Быстрота'],['endurance','Выносливость'],
+  ['agility','Ловкость'],['coordination','Координация'],['posture','Осанка'],
+  ['flexibility','Гибкость'],['discipline','Дисциплина'],['sociability','Общительность'],
+  ['confidence','Уверенность'],['learnability','Обучаемость'],['attentiveness','Внимательность'],
+  ['emotional_balance','Уравновешенность'],['goal_orientation','Целеустремлённость'],
+  ['activity','Активность'],['self_defense','Самозащита'],
+]
+
 function LeadCard({ lead, expanded, onToggle, onStatusChange, onDelete }: {
   lead: Lead
   expanded: boolean
@@ -219,11 +228,22 @@ function LeadCard({ lead, expanded, onToggle, onStatusChange, onDelete }: {
   const [survey, setSurvey] = useState<any>(null)
   const [surveyLoaded, setSurveyLoaded] = useState(false)
   const [showSurvey, setShowSurvey] = useState(false)
+  const [showTrainer, setShowTrainer] = useState(false)
+  const [editingTrainer, setEditingTrainer] = useState(false)
+  const [trainerForm, setTrainerForm] = useState<Record<string,any>>({})
 
   useEffect(() => {
     if (!expanded || surveyLoaded) return
     supabase.from('diagnostic_surveys').select('*').eq('lead_id', lead.id).maybeSingle()
-      .then(({ data }) => { setSurvey(data); setSurveyLoaded(true) })
+      .then(({ data }) => {
+        setSurvey(data)
+        setSurveyLoaded(true)
+        if (data) {
+          const init: Record<string,any> = { trainer_notes: data.trainer_notes || '' }
+          QUALITIES.forEach(([k]) => { init[`trainer_${k}`] = data[`trainer_${k}`] ?? 5 })
+          setTrainerForm(init)
+        }
+      })
   }, [expanded, surveyLoaded, lead.id])
 
   async function copySurveyLink() {
@@ -232,10 +252,25 @@ function LeadCard({ lead, expanded, onToggle, onStatusChange, onDelete }: {
       const { data } = await supabase.from('diagnostic_surveys').insert({ lead_id: lead.id }).select().single()
       s = data
       setSurvey(s)
+      const init: Record<string,any> = { trainer_notes: '' }
+      QUALITIES.forEach(([k]) => { init[`trainer_${k}`] = 5 })
+      setTrainerForm(init)
     }
     const url = `${window.location.origin}/survey/${s.survey_token}`
     navigator.clipboard.writeText(url)
     alert(`Ссылка скопирована!\n\nОтправьте родителю:\n${url}`)
+  }
+
+  async function saveTrainer() {
+    let s = survey
+    if (!s) {
+      const { data } = await supabase.from('diagnostic_surveys').insert({ lead_id: lead.id }).select().single()
+      s = data
+    }
+    const payload = { ...trainerForm, trainer_filled_at: new Date().toISOString() }
+    const { data } = await supabase.from('diagnostic_surveys').update(payload).eq('id', s.id).select().single()
+    if (data) setSurvey(data)
+    setEditingTrainer(false)
   }
 
   return (
@@ -301,6 +336,89 @@ function LeadCard({ lead, expanded, onToggle, onStatusChange, onDelete }: {
               </div>
             </div>
           )}
+
+          {/* Trainer assessment */}
+          <div className="mt-2 border border-gray-100 rounded-xl overflow-hidden">
+            <div className="flex items-center px-3 py-2 bg-gray-50">
+              <span className="text-xs font-medium text-gray-700 flex-1">
+                🥋 Оценки тренера с пробного
+                {survey?.trainer_filled_at && <span className="ml-2 text-green-600">✓ Заполнено</span>}
+              </span>
+              <div className="flex gap-1">
+                {!editingTrainer && (
+                  <button onClick={() => { setEditingTrainer(true); setShowTrainer(true) }}
+                    className="text-xs border border-gray-200 bg-white px-2 py-0.5 rounded-lg text-gray-600">
+                    {survey?.trainer_filled_at ? '✎ Изменить' : '+ Заполнить'}
+                  </button>
+                )}
+                {survey?.trainer_filled_at && !editingTrainer && (
+                  <button onClick={() => setShowTrainer(v => !v)}
+                    className="text-xs border border-gray-200 bg-white px-2 py-0.5 rounded-lg text-gray-500">
+                    {showTrainer ? '▲' : '▼'}
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {showTrainer && !editingTrainer && survey?.trainer_filled_at && (
+              <div className="px-3 py-2 text-xs space-y-1">
+                {survey.trainer_notes && (
+                  <div className="mb-2 text-gray-600 italic">"{survey.trainer_notes}"</div>
+                )}
+                <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
+                  {QUALITIES.map(([k, lbl]) => {
+                    const tVal = survey[`trainer_${k}`]
+                    const pVal = survey[`q_${k}`]
+                    return tVal != null ? (
+                      <div key={k} className="flex justify-between items-center">
+                        <span className="text-gray-500">{lbl}</span>
+                        <span className="font-medium text-gray-800">
+                          {tVal}
+                          {pVal != null && <span className="text-gray-400 ml-1">/ р:{pVal}</span>}
+                        </span>
+                      </div>
+                    ) : null
+                  })}
+                </div>
+              </div>
+            )}
+
+            {editingTrainer && (
+              <div className="px-3 py-3 space-y-3">
+                <textarea value={trainerForm.trainer_notes || ''}
+                  onChange={e => setTrainerForm(p => ({...p, trainer_notes: e.target.value}))}
+                  placeholder="Заметки тренера после пробного занятия..." rows={3}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs outline-none resize-none" />
+                <div className="space-y-2">
+                  {QUALITIES.map(([k, lbl]) => (
+                    <div key={k} className="flex items-center gap-2">
+                      <span className="text-xs text-gray-500 w-28 shrink-0">{lbl}</span>
+                      <input type="range" min={1} max={10}
+                        value={trainerForm[`trainer_${k}`] ?? 5}
+                        onChange={e => setTrainerForm(p => ({...p, [`trainer_${k}`]: parseInt(e.target.value)}))}
+                        className="flex-1 accent-black" />
+                      <span className="text-xs font-semibold text-gray-800 w-4">
+                        {trainerForm[`trainer_${k}`] ?? 5}
+                      </span>
+                      {survey?.[`q_${k}`] != null && (
+                        <span className="text-xs text-gray-400 w-8">р:{survey[`q_${k}`]}</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <div className="flex gap-2 pt-1">
+                  <button onClick={saveTrainer}
+                    className="flex-1 bg-black text-white py-2 rounded-lg text-xs font-medium">
+                    Сохранить оценки
+                  </button>
+                  <button onClick={() => setEditingTrainer(false)}
+                    className="px-3 border border-gray-200 text-gray-500 py-2 rounded-lg text-xs">
+                    Отмена
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
 
           <div className="flex gap-1 mt-3 flex-wrap">
             {STAGES.map(s => (
