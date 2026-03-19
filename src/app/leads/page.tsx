@@ -216,12 +216,36 @@ function LeadCard({ lead, expanded, onToggle, onStatusChange, onDelete }: {
   const stage = STAGES.find(s => s.key === lead.status)
   const hoursAgo = Math.floor((Date.now() - new Date(lead.created_at).getTime()) / 3600000)
   const timeLabel = hoursAgo < 24 ? `${hoursAgo}ч назад` : `${Math.floor(hoursAgo/24)}д назад`
+  const [survey, setSurvey] = useState<any>(null)
+  const [surveyLoaded, setSurveyLoaded] = useState(false)
+  const [showSurvey, setShowSurvey] = useState(false)
+
+  useEffect(() => {
+    if (!expanded || surveyLoaded) return
+    supabase.from('diagnostic_surveys').select('*').eq('lead_id', lead.id).maybeSingle()
+      .then(({ data }) => { setSurvey(data); setSurveyLoaded(true) })
+  }, [expanded, surveyLoaded, lead.id])
+
+  async function copySurveyLink() {
+    let s = survey
+    if (!s) {
+      const { data } = await supabase.from('diagnostic_surveys').insert({ lead_id: lead.id }).select().single()
+      s = data
+      setSurvey(s)
+    }
+    const url = `${window.location.origin}/survey/${s.survey_token}`
+    navigator.clipboard.writeText(url)
+    alert(`Ссылка скопирована!\n\nОтправьте родителю:\n${url}`)
+  }
 
   return (
     <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
       <button onClick={onToggle} className="w-full flex items-center px-3 py-2.5 text-left">
         <div className="flex-1 min-w-0">
-          <div className="font-medium text-gray-800">{lead.name}</div>
+          <div className="font-medium text-gray-800 flex items-center gap-2">
+            {lead.name}
+            {survey?.filled_at && <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full">📋 Анкета</span>}
+          </div>
           <div className="text-xs text-gray-400">{lead.phone || '—'} · {timeLabel}</div>
         </div>
         <div className="text-xs bg-gray-100 px-2 py-1 rounded-full text-gray-600 ml-2 shrink-0">
@@ -232,6 +256,52 @@ function LeadCard({ lead, expanded, onToggle, onStatusChange, onDelete }: {
         <div className="px-3 pb-3 border-t border-gray-50">
           {lead.source && <div className="text-xs text-gray-500 mt-2">📍 {lead.source}</div>}
           {lead.notes && <div className="text-sm text-gray-600 mt-1">{lead.notes}</div>}
+
+          {/* Survey block */}
+          <div className="mt-3 flex items-center gap-2">
+            <button onClick={copySurveyLink}
+              className="flex-1 border border-blue-200 bg-blue-50 text-blue-700 text-xs py-2 rounded-lg">
+              📋 Скопировать ссылку анкеты
+            </button>
+            {survey?.filled_at && (
+              <button onClick={() => setShowSurvey(v => !v)}
+                className="border border-green-200 bg-green-50 text-green-700 text-xs py-2 px-3 rounded-lg">
+                {showSurvey ? 'Свернуть' : 'Смотреть'}
+              </button>
+            )}
+          </div>
+
+          {showSurvey && survey?.filled_at && (
+            <div className="mt-3 bg-gray-50 rounded-xl p-3 text-xs space-y-2">
+              <div className="font-semibold text-gray-700">📋 Анкета: {survey.student_name}{survey.student_age ? `, ${survey.student_age}` : ''}</div>
+              {survey.injuries_text && <div><span className="text-gray-500">Травмы:</span> {survey.injuries_text}</div>}
+              {survey.contraindications_text && <div><span className="text-gray-500">Противопоказания:</span> {survey.contraindications_text}</div>}
+              {survey.other_activities_text && <div><span className="text-gray-500">Секции:</span> {survey.other_activities_text}</div>}
+              {survey.prev_sport_text && <div><span className="text-gray-500">Спорт ранее:</span> {survey.prev_sport_text}</div>}
+              {survey.character_notes_text && <div><span className="text-gray-500">Характер:</span> {survey.character_notes_text}</div>}
+              {survey.how_can_help_text && <div><span className="text-gray-500">Ожидания:</span> {survey.how_can_help_text}</div>}
+              {survey.parent_name && <div><span className="text-gray-500">Родитель:</span> {survey.parent_name} {survey.parent_phone}</div>}
+              <div className="pt-1 border-t border-gray-200">
+                <div className="text-gray-500 mb-1">15 качеств (1-10):</div>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
+                  {[
+                    ['q_strength','Сила'],['q_speed','Быстрота'],['q_endurance','Выносливость'],
+                    ['q_agility','Ловкость'],['q_coordination','Координация'],['q_posture','Осанка'],
+                    ['q_flexibility','Гибкость'],['q_discipline','Дисциплина'],['q_sociability','Общительность'],
+                    ['q_confidence','Уверенность'],['q_learnability','Обучаемость'],['q_attentiveness','Внимательность'],
+                    ['q_emotional_balance','Уравновешенность'],['q_goal_orientation','Целеустремлённость'],
+                    ['q_activity','Активность'],['q_self_defense','Самозащита'],
+                  ].filter(([k]) => survey[k] !== null).map(([k, lbl]) => (
+                    <div key={k} className="flex justify-between">
+                      <span className="text-gray-500">{lbl}</span>
+                      <span className="font-medium text-gray-700">{survey[k]}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="flex gap-1 mt-3 flex-wrap">
             {STAGES.map(s => (
               <button key={s.key} onClick={() => onStatusChange(lead.id, s.key)}
