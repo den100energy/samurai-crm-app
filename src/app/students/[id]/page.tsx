@@ -324,7 +324,7 @@ export default function StudentPage() {
   return (
     <main className="max-w-lg mx-auto p-4">
       <div className="flex items-center gap-3 mb-4">
-        <Link href="/students" className="text-gray-400 hover:text-gray-600">←</Link>
+        <Link href="/students" className="text-gray-500 hover:text-black text-xl font-bold leading-none">←</Link>
         <div className="flex items-center gap-2">
           <h1 className="text-xl font-bold text-gray-800">Карточка ученика</h1>
           {student.status !== 'active' && (

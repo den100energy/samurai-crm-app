@@ -109,7 +109,7 @@ export default function SettingsPage() {
   return (
     <main className="max-w-lg mx-auto p-4">
       <div className="flex items-center gap-3 mb-6">
-        <Link href="/" className="text-gray-400 hover:text-gray-600">←</Link>
+        <Link href="/" className="text-gray-500 hover:text-black text-xl font-bold leading-none">←</Link>
         <h1 className="text-xl font-bold text-gray-800">Настройки</h1>
       </div>
 
