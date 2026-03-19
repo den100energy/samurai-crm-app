@@ -131,11 +131,26 @@ export default function StudentPage() {
   async function addSubscription(e: React.FormEvent) {
     e.preventDefault()
     const sessions = subForm.sessions_total ? parseInt(subForm.sessions_total) : null
+
+    // Count attended classes from start_date to deduct automatically
+    let attended = 0
+    if (sessions !== null && subForm.start_date) {
+      const { data: attData } = await supabase
+        .from('attendance')
+        .select('id')
+        .eq('student_id', id)
+        .eq('present', true)
+        .gte('date', subForm.start_date)
+      attended = attData?.length ?? 0
+    }
+
+    const sessionsLeft = sessions !== null ? Math.max(0, sessions - attended) : null
+
     const { data } = await supabase.from('subscriptions').insert({
       student_id: id,
       type: subForm.type,
       sessions_total: sessions,
-      sessions_left: sessions,
+      sessions_left: sessionsLeft,
       start_date: subForm.start_date || null,
       end_date: subForm.end_date || null,
       amount: subForm.amount ? parseFloat(subForm.amount) : null,
@@ -143,7 +158,13 @@ export default function StudentPage() {
       bonuses: subForm.bonuses,
       bonuses_used: {},
     }).select().single()
-    if (data) setSubs(prev => [data, ...prev])
+
+    if (data) {
+      setSubs(prev => [data, ...prev])
+      if (attended > 0) {
+        alert(`✅ Абонемент добавлен.\n\nАвтоматически списано ${attended} занят. (с ${subForm.start_date}).\nОсталось: ${sessionsLeft} из ${sessions}.`)
+      }
+    }
     setShowSubForm(false)
     setSubForm({ type: '', sessions_total: '', start_date: '', end_date: '', amount: '', paid: false, bonuses: {} })
   }

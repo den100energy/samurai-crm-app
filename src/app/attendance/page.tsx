@@ -131,6 +131,12 @@ export default function AttendancePage() {
         ? { ...g, sessions_left: g.sessions_left - 1 }
         : g
     ))
+
+    // Warn about present students with no subscription
+    const noSubPresent = [...students, ...guests].filter(s => present.has(s.id) && s.sub_id === null)
+    if (noSubPresent.length > 0) {
+      alert(`⚠️ Не забудь внести абонемент!\n\nПрисутствовали без абонемента:\n${noSubPresent.map(s => `• ${s.name}`).join('\n')}`)
+    }
   }
 
   function sessionsColor(s: Student) {
@@ -173,7 +179,9 @@ export default function AttendancePage() {
                   ${present.has(s.id) ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200'}`}>
                 <span className="text-xl mr-3">{present.has(s.id) ? '✅' : '⬜'}</span>
                 <span className="font-medium text-gray-800 flex-1 text-left">{s.name}</span>
-                {s.sessions_left !== null && (
+                {s.sub_id === null ? (
+                  <span className="text-xs bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full ml-2">Нет абонемента</span>
+                ) : s.sessions_left !== null && (
                   <span className={`text-sm ml-2 ${sessionsColor(s)}`}>
                     {s.sessions_left === 0 ? '❗ 0 занятий' : `${s.sessions_left} зан.`}
                   </span>
