@@ -19,6 +19,15 @@ type Student = {
   telegram_chat_id: number | null
 }
 
+type Contact = {
+  id: string
+  name: string
+  role: string
+  phone: string | null
+  telegram_chat_id: number | null
+  invite_token: string
+}
+
 const STATUS_INFO: Record<string, { label: string; color: string }> = {
   active:    { label: 'Активен',       color: 'bg-green-100 text-green-700' },
   suspended: { label: 'Приостановлен', color: 'bg-yellow-100 text-yellow-700' },
@@ -94,21 +103,26 @@ export default function StudentPage() {
   const [ticketForm, setTicketForm] = useState({ type: '', description: '' })
   const [showAddAttendance, setShowAddAttendance] = useState(false)
   const [addAttDate, setAddAttDate] = useState(new Date().toISOString().split('T')[0])
+  const [contacts, setContacts] = useState<Contact[]>([])
+  const [showAddContact, setShowAddContact] = useState(false)
+  const [contactForm, setContactForm] = useState({ name: '', role: 'мама', phone: '' })
 
   useEffect(() => {
     async function load() {
-      const [{ data: s }, { data: sb }, { data: at }, { data: bl }, { data: st }] = await Promise.all([
+      const [{ data: s }, { data: sb }, { data: at }, { data: bl }, { data: st }, { data: ct }] = await Promise.all([
         supabase.from('students').select('*').eq('id', id).single(),
         supabase.from('subscriptions').select('*').eq('student_id', id).order('created_at', { ascending: false }),
         supabase.from('attendance').select('*').eq('student_id', id).order('date', { ascending: false }).limit(20),
         supabase.from('belts').select('*').eq('student_id', id).order('date', { ascending: false }),
         supabase.from('subscription_types').select('id, name, group_type, sessions_count, price, bonuses, duration_months').order('created_at'),
+        supabase.from('student_contacts').select('*').eq('student_id', id).order('created_at'),
       ])
       if (s) { setStudent(s); setForm(s) }
       setSubs(sb || [])
       setAttendance(at || [])
       setBelts(bl || [])
       setSubTypes(st || [])
+      setContacts(ct || [])
     }
     load()
   }, [id])
@@ -315,31 +329,45 @@ export default function StudentPage() {
     setBelts(prev => prev.filter(b => b.id !== beltId))
   }
 
-  async function sendReminder() {
+  async function addContact(e: React.FormEvent) {
+    e.preventDefault()
+    const { data } = await supabase.from('student_contacts').insert({
+      student_id: id,
+      name: contactForm.name,
+      role: contactForm.role,
+      phone: contactForm.phone || null,
+    }).select().single()
+    if (data) setContacts(prev => [...prev, data])
+    setShowAddContact(false)
+    setContactForm({ name: '', role: 'мама', phone: '' })
+  }
+
+  async function deleteContact(contactId: string) {
+    if (!confirm('Удалить контакт?')) return
+    await supabase.from('student_contacts').delete().eq('id', contactId)
+    setContacts(prev => prev.filter(c => c.id !== contactId))
+  }
+
+  function copyContactInviteLink(contact: Contact) {
+    const botUsername = process.env.NEXT_PUBLIC_TELEGRAM_CLIENT_BOT_USERNAME
+    const link = `https://t.me/${botUsername}?start=${contact.invite_token}`
+    navigator.clipboard.writeText(link)
+    alert(`Ссылка для ${contact.name} скопирована!\n\n${link}`)
+  }
+
+  async function sendContactReminder(contact: Contact) {
     if (!student) return
     const activeSub = subs[0]
-    const subInfo = activeSub
-      ? activeSub.sessions_left != null
-        ? `Осталось занятий: ${activeSub.sessions_left}`
-        : activeSub.end_date
-        ? `Абонемент до: ${activeSub.end_date}`
-        : ''
-      : 'Абонемент не найден'
-    const message = `👋 Напоминание для тренера:\n\nУченик: <b>${student.name}</b>\nГруппа: ${student.group_name || '—'}\n${subInfo}\n\nТелефон: ${student.phone || '—'}`
+    const subInfo = activeSub?.sessions_left != null
+      ? `Осталось занятий: ${activeSub.sessions_left}`
+      : activeSub?.end_date ? `Абонемент до: ${activeSub.end_date}` : 'Абонемент не найден'
+    const message = `👋 Школа Самурая\n\nУченик: <b>${student.name}</b>\nГруппа: ${student.group_name || '—'}\n${subInfo}`
     await fetch('/api/notify', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message }),
+      body: JSON.stringify({ chat_id: contact.telegram_chat_id, message }),
     })
-    alert('Напоминание отправлено в Telegram!')
-  }
-
-  function copyBotInviteLink() {
-    if (!student?.invite_token) return alert('Токен не найден. Обновите страницу.')
-    const botUsername = process.env.NEXT_PUBLIC_TELEGRAM_CLIENT_BOT_USERNAME
-    const link = `https://t.me/${botUsername}?start=${student.invite_token}`
-    navigator.clipboard.writeText(link)
-    alert(`Ссылка скопирована!\n\nОтправьте её родителю:\n${link}`)
+    alert(`Сообщение отправлено ${contact.name}!`)
   }
 
   function copyParentLink() {
@@ -816,33 +844,67 @@ export default function StudentPage() {
         )}
       </div>
 
-      {/* Telegram bot invite */}
+      {/* Contacts */}
       <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm mb-4">
-        <div className="flex items-center justify-between mb-2">
-          <div className="font-semibold text-gray-800 text-sm">Telegram-бот для родителя</div>
-          {student.telegram_chat_id ? (
-            <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">✓ Подключён</span>
-          ) : (
-            <span className="text-xs bg-gray-100 text-gray-400 px-2 py-0.5 rounded-full">Не подключён</span>
-          )}
-        </div>
-        <p className="text-xs text-gray-400 mb-3">
-          {student.telegram_chat_id
-            ? 'Родитель получает уведомления об абонементе и программах.'
-            : 'Скопируйте ссылку и отправьте родителю — он нажмёт Start и подключится.'}
-        </p>
-        <div className="flex gap-2">
-          <button onClick={copyBotInviteLink}
-            className="flex-1 border border-blue-200 bg-blue-50 text-blue-700 text-sm py-2.5 rounded-xl">
-            🔗 Скопировать ссылку-приглашение
+        <div className="flex items-center justify-between mb-3">
+          <div className="font-semibold text-gray-800 text-sm">Контакты и Telegram</div>
+          <button onClick={() => setShowAddContact(v => !v)}
+            className="text-xs border border-gray-200 px-3 py-1 rounded-lg hover:bg-gray-50">
+            {showAddContact ? 'Отмена' : '+ Добавить'}
           </button>
-          {student.telegram_chat_id && (
-            <button onClick={sendReminder}
-              className="flex-1 border border-gray-200 text-gray-600 text-sm py-2.5 rounded-xl">
-              📨 Написать
-            </button>
-          )}
         </div>
+
+        {showAddContact && (
+          <form onSubmit={addContact} className="mb-3 p-3 bg-gray-50 rounded-xl space-y-2">
+            <input required value={contactForm.name} onChange={e => setContactForm({...contactForm, name: e.target.value})}
+              placeholder="Имя *" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none bg-white" />
+            <select value={contactForm.role} onChange={e => setContactForm({...contactForm, role: e.target.value})}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none bg-white">
+              <option value="мама">Мама</option>
+              <option value="папа">Папа</option>
+              <option value="ученик">Ученик</option>
+              <option value="другой">Другой</option>
+            </select>
+            <input value={contactForm.phone} onChange={e => setContactForm({...contactForm, phone: e.target.value})}
+              placeholder="Телефон" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none bg-white" />
+            <button type="submit" className="w-full bg-black text-white py-2 rounded-lg text-sm font-medium">Сохранить</button>
+          </form>
+        )}
+
+        {contacts.length === 0 ? (
+          <p className="text-xs text-gray-400 text-center py-2">Контакты не добавлены</p>
+        ) : (
+          <div className="space-y-2">
+            {contacts.map(c => (
+              <div key={c.id} className="border border-gray-100 rounded-xl p-3">
+                <div className="flex items-center justify-between mb-1.5">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-sm text-gray-800">{c.name}</span>
+                    <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">{c.role}</span>
+                    {c.telegram_chat_id
+                      ? <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">✓ Telegram</span>
+                      : <span className="text-xs bg-gray-100 text-gray-400 px-2 py-0.5 rounded-full">Нет Telegram</span>
+                    }
+                  </div>
+                  <button onClick={() => deleteContact(c.id)} className="text-gray-300 hover:text-red-400 text-sm">✕</button>
+                </div>
+                {c.phone && <div className="text-xs text-gray-400 mb-2">{c.phone}</div>}
+                <div className="flex gap-2">
+                  <button onClick={() => copyContactInviteLink(c)}
+                    className="flex-1 border border-blue-200 bg-blue-50 text-blue-700 text-xs py-1.5 rounded-lg">
+                    🔗 Ссылка
+                  </button>
+                  {c.telegram_chat_id && (
+                    <button onClick={() => sendContactReminder(c)}
+                      className="flex-1 border border-gray-200 text-gray-600 text-xs py-1.5 rounded-lg">
+                      📨 Написать
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <button onClick={copyParentLink}

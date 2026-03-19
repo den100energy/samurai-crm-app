@@ -59,6 +59,20 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true })
     }
 
+    // Ищем по токену в student_contacts
+    const { data: contact } = await supabase
+      .from('student_contacts')
+      .select('id, name, student_id, students(name)')
+      .eq('invite_token', token)
+      .single()
+
+    if (contact) {
+      await supabase.from('student_contacts').update({ telegram_chat_id: chat_id }).eq('id', contact.id)
+      const studentName = (contact.students as any)?.name || 'ученика'
+      await sendMessage(chat_id, `Привет, ${firstName}! 👋\n\nВы успешно подключены как контакт ученика <b>${studentName}</b>.\n\nТеперь вы будете получать уведомления об абонементе и занятиях от Школы Самурая. 🥋`)
+      return NextResponse.json({ ok: true })
+    }
+
     // Токен не найден
     await sendMessage(chat_id, `Ссылка не распознана или устарела. Попросите тренера отправить новую ссылку-приглашение.`)
   }
