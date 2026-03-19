@@ -370,6 +370,26 @@ export default function StudentPage() {
     alert(`Сообщение отправлено ${contact.name}!`)
   }
 
+  async function copySurveyLink() {
+    let { data: existing } = await supabase
+      .from('diagnostic_surveys')
+      .select('survey_token')
+      .eq('student_id', id)
+      .maybeSingle()
+    if (!existing) {
+      const { data } = await supabase
+        .from('diagnostic_surveys')
+        .insert({ student_id: id })
+        .select('survey_token')
+        .single()
+      existing = data
+    }
+    if (!existing) return alert('Ошибка создания анкеты')
+    const url = `${window.location.origin}/survey/${existing.survey_token}`
+    navigator.clipboard.writeText(url)
+    alert(`Ссылка скопирована!\n\nОтправьте родителю:\n${url}`)
+  }
+
   function copyParentLink() {
     if (!student?.parent_token) return alert('Токен не найден')
     const url = `${window.location.origin}/parent/${student.parent_token}`
@@ -907,10 +927,16 @@ export default function StudentPage() {
         )}
       </div>
 
-      <button onClick={copyParentLink}
-        className="w-full border border-gray-200 text-gray-600 text-sm py-2.5 rounded-xl mb-2">
-        🔗 Ссылка для родителя
-      </button>
+      <div className="flex gap-2 mb-2">
+        <button onClick={copySurveyLink}
+          className="flex-1 border border-blue-200 bg-blue-50 text-blue-700 text-sm py-2.5 rounded-xl">
+          📋 Анкета новичка
+        </button>
+        <button onClick={copyParentLink}
+          className="flex-1 border border-gray-200 text-gray-600 text-sm py-2.5 rounded-xl">
+          🔗 Кабинет родителя
+        </button>
+      </div>
 
       {/* Ticket form */}
       {showTicketForm ? (
