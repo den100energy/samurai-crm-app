@@ -1,10 +1,12 @@
 'use client'
 
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { useEffect, useState } from 'react'
+import { useAuth } from '@/components/AuthProvider'
 
-const sections = [
+const ALL_SECTIONS = [
   { href: '/students', emoji: '🥋', title: 'Ученики', desc: 'Список, группы, абонементы' },
   { href: '/attendance', emoji: '✅', title: 'Посещаемость', desc: 'Отметить занятие' },
   { href: '/finance', emoji: '💰', title: 'Финансы', desc: 'Платежи за месяц' },
@@ -15,10 +17,16 @@ const sections = [
   { href: '/events', emoji: '🎉', title: 'Мероприятия', desc: 'Соревнования, семинары' },
   { href: '/tickets', emoji: '📝', title: 'Обращения', desc: 'Болезни, переносы, вопросы' },
   { href: '/schedule', emoji: '🗓', title: 'Расписание', desc: 'Группы и тренеры по дням' },
-  { href: '/settings', emoji: '⚙️', title: 'Настройки', desc: 'Типы абонементов' },
+  { href: '/settings', emoji: '⚙️', title: 'Настройки', desc: 'Типы абонементов', roles: ['founder'] },
+  { href: '/admin-users', emoji: '👤', title: 'Сотрудники', desc: 'Управление доступом', roles: ['founder'] },
 ]
 
+// Маршруты скрытые от admin
+const ADMIN_HIDDEN = ['/finance', '/salary', '/analytics', '/settings', '/import', '/admin-users']
+
 export default function Home() {
+  const { role, userName } = useAuth()
+  const router = useRouter()
   const [expiring, setExpiring] = useState<any[]>([])
   const [noSessions, setNoSessions] = useState<any[]>([])
   const [totalStudents, setTotalStudents] = useState(0)
@@ -71,11 +79,29 @@ export default function Home() {
     alert('Отчёт отправлен в Telegram!')
   }
 
+  async function signOut() {
+    await supabase.auth.signOut()
+    router.push('/login')
+  }
+
+  const sections = ALL_SECTIONS.filter(s => {
+    if (role === 'admin') return !ADMIN_HIDDEN.includes(s.href)
+    return true
+  })
+
   return (
     <main className="max-w-lg mx-auto p-4">
-      <div className="text-center py-6">
-        <h1 className="text-2xl font-bold text-gray-800">⚔️ Школа Самурая</h1>
-        <p className="text-gray-500 mt-1">Центр физического развития и самозащиты</p>
+      <div className="flex items-center justify-between pt-4 pb-2 mb-2">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-800">⚔️ Школа Самурая</h1>
+          <p className="text-gray-500 text-sm mt-0.5">Центр физического развития и самозащиты</p>
+        </div>
+        {userName && (
+          <button onClick={signOut}
+            className="text-xs text-gray-400 border border-gray-200 px-3 py-1.5 rounded-xl shrink-0 ml-3">
+            Выйти
+          </button>
+        )}
       </div>
 
       {noSessions.length > 0 && (
@@ -137,6 +163,14 @@ export default function Home() {
             <div className="text-sm text-gray-500 mt-1">{s.desc}</div>
           </Link>
         ))}
+        {role === 'founder' && (
+          <Link href="/admin-users"
+            className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 hover:shadow-md transition-shadow active:scale-95">
+            <div className="text-4xl mb-2">👤</div>
+            <div className="font-semibold text-gray-800">Сотрудники</div>
+            <div className="text-sm text-gray-500 mt-1">Управление доступом</div>
+          </Link>
+        )}
       </div>
     </main>
   )

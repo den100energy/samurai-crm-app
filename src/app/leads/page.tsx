@@ -235,6 +235,10 @@ function LeadCard({ lead, expanded, onToggle, onStatusChange, onDelete }: {
   const [program, setProgram] = useState('')
   const [generating, setGenerating] = useState(false)
   const [programSaved, setProgramSaved] = useState(false)
+  const [showConvert, setShowConvert] = useState(false)
+  const [convertGroup, setConvertGroup] = useState('')
+  const [converting, setConverting] = useState(false)
+  const [convertedStudentId, setConvertedStudentId] = useState<string | null>(null)
 
   useEffect(() => {
     if (!expanded || surveyLoaded) return
@@ -298,6 +302,24 @@ function LeadCard({ lead, expanded, onToggle, onStatusChange, onDelete }: {
     })
     await supabase.from('diagnostic_surveys').update({ ai_program_sent_at: new Date().toISOString() }).eq('id', survey.id)
     alert('Программа отправлена в Telegram!')
+  }
+
+  async function convertToStudent() {
+    setConverting(true)
+    const { data } = await supabase.from('students').insert({
+      name: lead.name,
+      phone: lead.phone || null,
+      group_name: convertGroup || null,
+      telegram_chat_id: lead.telegram_chat_id ? Number(lead.telegram_chat_id) : null,
+    }).select().single()
+    if (data) {
+      await supabase.from('leads').update({ status: 'converted' }).eq('id', lead.id)
+      await supabase.from('diagnostic_surveys').update({ student_id: data.id }).eq('lead_id', lead.id)
+      onStatusChange(lead.id, 'converted')
+      setConvertedStudentId(data.id)
+    }
+    setConverting(false)
+    setShowConvert(false)
   }
 
   async function saveTrainer() {
@@ -504,8 +526,46 @@ function LeadCard({ lead, expanded, onToggle, onStatusChange, onDelete }: {
             </div>
           )}
 
+          {convertedStudentId && (
+            <div className="mt-3 bg-green-50 border border-green-200 rounded-xl p-3 text-sm text-green-700">
+              ✅ Ученик создан!{' '}
+              <a href={`/students/${convertedStudentId}`} className="underline font-medium">Открыть карточку</a>
+            </div>
+          )}
+
+          {showConvert && (
+            <div className="mt-3 bg-green-50 border border-green-200 rounded-xl p-3 space-y-2">
+              <div className="text-sm font-medium text-green-800">Создать ученика из лида</div>
+              <div className="text-xs text-green-700">Имя: {lead.name}{lead.phone ? `, тел: ${lead.phone}` : ''}</div>
+              <select value={convertGroup} onChange={e => setConvertGroup(e.target.value)}
+                className="w-full border border-green-200 rounded-lg px-3 py-2 text-sm outline-none bg-white">
+                <option value="">Выберите группу (необязательно)</option>
+                {['Дети 4-9','Подростки (нач)','Подростки (оп)','Цигун','Индивидуальные'].map(g =>
+                  <option key={g} value={g}>{g}</option>
+                )}
+              </select>
+              <div className="flex gap-2">
+                <button onClick={convertToStudent} disabled={converting}
+                  className="flex-1 bg-green-600 text-white py-2 rounded-lg text-xs font-medium disabled:opacity-50">
+                  {converting ? 'Создаю...' : '✅ Создать ученика'}
+                </button>
+                <button onClick={() => setShowConvert(false)}
+                  className="px-3 border border-gray-200 text-gray-500 py-2 rounded-lg text-xs">
+                  Отмена
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="flex gap-1 mt-3 flex-wrap">
-            {STAGES.map(s => (
+            {STAGES.map(s => s.key === 'converted' ? (
+              <button key={s.key}
+                onClick={() => lead.status !== 'converted' ? setShowConvert(true) : undefined}
+                className={`text-xs px-2 py-1 rounded-full transition-colors
+                  ${lead.status === s.key ? 'bg-black text-white' : 'bg-gray-100 text-gray-600'}`}>
+                {s.label}
+              </button>
+            ) : (
               <button key={s.key} onClick={() => onStatusChange(lead.id, s.key)}
                 className={`text-xs px-2 py-1 rounded-full transition-colors
                   ${lead.status === s.key ? 'bg-black text-white' : 'bg-gray-100 text-gray-600'}`}>
