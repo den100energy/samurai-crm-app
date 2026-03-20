@@ -77,5 +77,42 @@ export async function POST(req: NextRequest) {
     await sendMessage(chat_id, `Ссылка не распознана или устарела. Попросите тренера отправить новую ссылку-приглашение.`)
   }
 
+  // /cabinet или "мой кабинет" — отправить ссылку на личный кабинет
+  if (text === '/cabinet' || text.toLowerCase().includes('кабинет')) {
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://samurai-crm-app.vercel.app'
+
+    // Ищем ученика по telegram_chat_id
+    const { data: student } = await supabase
+      .from('students')
+      .select('name, cabinet_token')
+      .eq('telegram_chat_id', chat_id)
+      .single()
+
+    if (student?.cabinet_token) {
+      const url = `${appUrl}/cabinet/${student.cabinet_token}`
+      await sendMessage(chat_id, `🎒 <b>Личный кабинет — ${student.name}</b>\n\n${url}\n\nЗдесь вы найдёте:\n• Абонемент и посещаемость\n• Прогресс по качествам\n• Задания от тренера\n• Достижения и аттестации`)
+      return NextResponse.json({ ok: true })
+    }
+
+    // Ищем по student_contacts
+    const { data: contact } = await supabase
+      .from('student_contacts')
+      .select('name, students(name, cabinet_token)')
+      .eq('telegram_chat_id', chat_id)
+      .single()
+
+    if (contact) {
+      const s = contact.students as any
+      if (s?.cabinet_token) {
+        const url = `${appUrl}/cabinet/${s.cabinet_token}`
+        await sendMessage(chat_id, `🎒 <b>Личный кабинет — ${s.name}</b>\n\n${url}\n\nЗдесь вы найдёте прогресс, задания и информацию об абонементе.`)
+        return NextResponse.json({ ok: true })
+      }
+    }
+
+    await sendMessage(chat_id, `Не удалось найти ваш кабинет. Попросите тренера привязать ваш Telegram к карточке ученика.`)
+    return NextResponse.json({ ok: true })
+  }
+
   return NextResponse.json({ ok: true })
 }

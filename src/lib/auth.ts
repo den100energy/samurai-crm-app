@@ -21,6 +21,7 @@ export const PUBLIC_ROUTES = [
   '/survey2',
   '/survey3',
   '/print',
+  '/cabinet',
   '/api',
 ]
 

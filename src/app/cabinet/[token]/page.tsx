@@ -1,0 +1,584 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+import { useParams } from 'next/navigation'
+import { createBrowserClient } from '@supabase/ssr'
+
+const supabase = createBrowserClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+)
+
+// 16 качеств
+const QUALITIES = ['strength','speed','endurance','agility','coordination','posture','flexibility','discipline','sociability','confidence','learnability','attentiveness','emotional_balance','goal_orientation','activity','self_defense']
+const QUALITY_LABELS: Record<string,string> = {
+  strength:'Сила', speed:'Быстрота', endurance:'Выносливость', agility:'Ловкость',
+  coordination:'Координация', posture:'Осанка', flexibility:'Гибкость', discipline:'Дисциплина',
+  sociability:'Общительность', confidence:'Уверенность', learnability:'Обучаемость',
+  attentiveness:'Внимательность', emotional_balance:'Уравновешенность',
+  goal_orientation:'Целеустремлённость', activity:'Активность', self_defense:'Самозащита',
+}
+
+type Student = { id: string; name: string; group_name: string | null; birth_date: string | null }
+type Subscription = { sessions_left: number | null; sessions_total: number | null; end_date: string | null; type: string }
+type Survey = { id: string; filled_at: string | null; created_at: string } & Record<string, number | null | string>
+type Task = { id: string; title: string; description: string | null; due_date: string | null; completed: boolean }
+type Cert = { id: string; type: string; title: string; date: string | null; notes: string | null }
+
+const CERT_ICONS: Record<string,string> = {
+  belt: '🥋', seminar: '📚', masterclass: '🎯', competition: '🏆', other: '⭐'
+}
+const CERT_LABELS: Record<string,string> = {
+  belt: 'Пояс', seminar: 'Семинар', masterclass: 'Мастер-класс', competition: 'Соревнование', other: 'Другое'
+}
+
+// SVG радарная диаграмма
+function RadarChart({ surveys }: { surveys: Survey[] }) {
+  if (surveys.length === 0) return (
+    <div className="text-center text-gray-400 text-sm py-8">Данных пока нет — заполните анкету прогресса</div>
+  )
+
+  const size = 280
+  const cx = size / 2
+  const cy = size / 2
+  const r = 100
+  const n = QUALITIES.length
+  const colors = ['#3B82F6', '#10B981', '#F59E0B']
+
+  function getPoint(i: number, val: number) {
+    const angle = (Math.PI * 2 * i) / n - Math.PI / 2
+    const rv = (val / 10) * r
+    return { x: cx + rv * Math.cos(angle), y: cy + rv * Math.sin(angle) }
+  }
+
+  function getLabelPoint(i: number) {
+    const angle = (Math.PI * 2 * i) / n - Math.PI / 2
+    const rv = r + 22
+    return { x: cx + rv * Math.cos(angle), y: cy + rv * Math.sin(angle) }
+  }
+
+  // Сетка
+  const gridLevels = [2, 4, 6, 8, 10]
+
+  return (
+    <div className="flex flex-col items-center">
+      <svg width={size + 80} height={size + 60} viewBox={`-40 -30 ${size + 80} ${size + 60}`}>
+        {/* Сетка */}
+        {gridLevels.map(level => {
+          const pts = QUALITIES.map((_, i) => getPoint(i, level))
+          const d = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ') + 'Z'
+          return <path key={level} d={d} fill="none" stroke="#E5E7EB" strokeWidth="1" />
+        })}
+        {/* Оси */}
+        {QUALITIES.map((_, i) => {
+          const p = getPoint(i, 10)
+          return <line key={i} x1={cx} y1={cy} x2={p.x} y2={p.y} stroke="#E5E7EB" strokeWidth="1" />
+        })}
+        {/* Данные по каждому срезу */}
+        {surveys.slice(0, 3).map((survey, si) => {
+          const pts = QUALITIES.map((k, i) => getPoint(i, (survey[`trainer_${k}`] as number) || 0))
+          const d = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ') + 'Z'
+          return (
+            <path key={si} d={d}
+              fill={colors[si]} fillOpacity="0.15"
+              stroke={colors[si]} strokeWidth="2" />
+          )
+        })}
+        {/* Подписи */}
+        {QUALITIES.map((k, i) => {
+          const lp = getLabelPoint(i)
+          const short = QUALITY_LABELS[k].split('').slice(0, 6).join('') + (QUALITY_LABELS[k].length > 6 ? '.' : '')
+          return (
+            <text key={k} x={lp.x} y={lp.y}
+              textAnchor="middle" dominantBaseline="middle"
+              fontSize="9" fill="#6B7280">
+              {QUALITY_LABELS[k].length <= 7 ? QUALITY_LABELS[k] : short}
+            </text>
+          )
+        })}
+      </svg>
+      {/* Легенда */}
+      {surveys.length > 0 && (
+        <div className="flex gap-4 flex-wrap justify-center mt-1">
+          {surveys.slice(0, 3).map((s, i) => (
+            <div key={i} className="flex items-center gap-1.5">
+              <div className="w-3 h-3 rounded-full" style={{ background: colors[i] }} />
+              <span className="text-xs text-gray-500">
+                {i === 0 ? 'Старт' : `Срез ${i}`}
+                {s.filled_at ? ` (${new Date(s.filled_at).toLocaleDateString('ru-RU', { month: 'short', year: '2-digit' })})` : ''}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Прогресс-бар качества
+function QualityBar({ label, values, colors }: { label: string; values: number[]; colors: string[] }) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-xs text-gray-500 w-28 shrink-0">{label}</span>
+      <div className="flex-1 flex gap-1">
+        {values.map((v, i) => (
+          <div key={i} className="flex-1 bg-gray-100 rounded-full h-2 overflow-hidden">
+            <div className="h-full rounded-full transition-all"
+              style={{ width: `${v * 10}%`, background: colors[i] }} />
+          </div>
+        ))}
+      </div>
+      <span className="text-xs font-medium text-gray-700 w-5 text-right">
+        {values[values.length - 1]}
+      </span>
+    </div>
+  )
+}
+
+export default function CabinetPage() {
+  const { token } = useParams<{ token: string }>()
+  const [student, setStudent] = useState<Student | null>(null)
+  const [subscription, setSubscription] = useState<Subscription | null>(null)
+  const [surveys, setSurveys] = useState<Survey[]>([])
+  const [tasks, setTasks] = useState<Task[]>([])
+  const [certs, setCerts] = useState<Cert[]>([])
+  const [attendance, setAttendance] = useState<{ date: string; present: boolean }[]>([])
+  const [aiProgram, setAiProgram] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [tab, setTab] = useState<'home' | 'progress' | 'tasks' | 'achievements'>('home')
+  const [togglingTask, setTogglingTask] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (token) loadAll()
+  }, [token])
+
+  async function loadAll() {
+    // Найти ученика по токену
+    const { data: studentData } = await supabase
+      .from('students')
+      .select('id, name, group_name, birth_date')
+      .eq('cabinet_token', token)
+      .single()
+
+    if (!studentData) { setLoading(false); return }
+    setStudent(studentData)
+
+    const sid = studentData.id
+
+    const [subRes, surveysRes, tasksRes, certsRes, attRes, diagRes] = await Promise.all([
+      supabase.from('subscriptions').select('sessions_left, sessions_total, end_date, type')
+        .eq('student_id', sid).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+      supabase.from('progress_surveys').select('*').eq('student_id', sid).order('created_at'),
+      supabase.from('trainer_tasks').select('id, title, description, due_date, completed')
+        .eq('student_id', sid).order('created_at', { ascending: false }),
+      supabase.from('certifications').select('id, type, title, date, notes')
+        .eq('student_id', sid).order('date', { ascending: false }),
+      supabase.from('attendance').select('date, present').eq('student_id', sid)
+        .order('date', { ascending: false }).limit(60),
+      supabase.from('diagnostic_surveys').select('ai_program').eq('student_id', sid)
+        .order('created_at', { ascending: false }).limit(1).maybeSingle(),
+    ])
+
+    setSubscription(subRes.data)
+    setSurveys(surveysRes.data || [])
+    setTasks(tasksRes.data || [])
+    setCerts(certsRes.data || [])
+    setAttendance(attRes.data || [])
+    setAiProgram(diagRes.data?.ai_program || null)
+    setLoading(false)
+  }
+
+  async function toggleTask(taskId: string, current: boolean) {
+    setTogglingTask(taskId)
+    await supabase.from('trainer_tasks').update({
+      completed: !current,
+      completed_at: !current ? new Date().toISOString() : null,
+    }).eq('id', taskId)
+    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, completed: !current } : t))
+    setTogglingTask(null)
+  }
+
+  // Streak — дней подряд с посещением
+  function calcStreak() {
+    const presentDates = attendance.filter(a => a.present).map(a => a.date).sort().reverse()
+    if (presentDates.length === 0) return 0
+    let streak = 0
+    let prev: Date | null = null
+    for (const d of presentDates) {
+      const curr = new Date(d)
+      if (!prev) { streak = 1; prev = curr; continue }
+      const diff = (prev.getTime() - curr.getTime()) / 86400000
+      if (diff <= 7) { streak++; prev = curr } else break
+    }
+    return streak
+  }
+
+  // Общий балл прогресса (последний срез)
+  function calcScore(survey: Survey) {
+    const vals = QUALITIES.map(k => (survey[`trainer_${k}`] as number) || 0)
+    return Math.round(vals.reduce((a, b) => a + b, 0) / vals.length * 10)
+  }
+
+  if (loading) return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="text-gray-400">Загрузка...</div>
+    </div>
+  )
+
+  if (!student) return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+      <div className="text-center">
+        <div className="text-4xl mb-3">🥋</div>
+        <div className="text-gray-600 font-medium">Кабинет не найден</div>
+        <div className="text-gray-400 text-sm mt-1">Ссылка недействительна</div>
+      </div>
+    </div>
+  )
+
+  const streak = calcStreak()
+  const latestScore = surveys.length > 0 ? calcScore(surveys[surveys.length - 1]) : null
+  const firstScore = surveys.length > 1 ? calcScore(surveys[0]) : null
+  const scoreDiff = latestScore !== null && firstScore !== null ? latestScore - firstScore : null
+  const daysLeft = subscription?.end_date
+    ? Math.max(0, Math.ceil((new Date(subscription.end_date).getTime() - Date.now()) / 86400000))
+    : null
+  const totalAttendance = attendance.filter(a => a.present).length
+  const pendingTasks = tasks.filter(t => !t.completed).length
+
+  const colors = ['#3B82F6', '#10B981', '#F59E0B']
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {/* Шапка */}
+      <div className="bg-black text-white px-4 pt-8 pb-6">
+        <div className="max-w-lg mx-auto">
+          <div className="text-xs text-gray-400 mb-1">Личный кабинет</div>
+          <h1 className="text-2xl font-bold">{student.name}</h1>
+          {student.group_name && (
+            <div className="text-sm text-gray-400 mt-0.5">{student.group_name}</div>
+          )}
+          {/* Быстрые показатели */}
+          <div className="grid grid-cols-3 gap-3 mt-5">
+            <div className="bg-white/10 rounded-2xl p-3 text-center">
+              <div className="text-xl font-bold">{totalAttendance}</div>
+              <div className="text-xs text-gray-400 mt-0.5">тренировок</div>
+            </div>
+            <div className="bg-white/10 rounded-2xl p-3 text-center">
+              <div className="text-xl font-bold">{streak}</div>
+              <div className="text-xs text-gray-400 mt-0.5">серия 🔥</div>
+            </div>
+            <div className="bg-white/10 rounded-2xl p-3 text-center">
+              <div className="text-xl font-bold">{latestScore ?? '—'}</div>
+              <div className="text-xs text-gray-400 mt-0.5">балл {scoreDiff !== null && scoreDiff > 0 ? `↑${scoreDiff}` : ''}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Навигация */}
+      <div className="bg-white border-b border-gray-100 sticky top-0 z-10">
+        <div className="max-w-lg mx-auto flex">
+          {([
+            { key: 'home',         label: 'Главная',     icon: '🏠' },
+            { key: 'progress',     label: 'Прогресс',    icon: '📊' },
+            { key: 'tasks',        label: 'Задания',     icon: '📋' },
+            { key: 'achievements', label: 'Достижения',  icon: '🏆' },
+          ] as const).map(t => (
+            <button key={t.key} onClick={() => setTab(t.key)}
+              className={`flex-1 py-3 text-xs font-medium transition-colors border-b-2 ${
+                tab === t.key
+                  ? 'border-black text-black'
+                  : 'border-transparent text-gray-400'
+              }`}>
+              <div>{t.icon}</div>
+              <div>{t.label}</div>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="max-w-lg mx-auto p-4 space-y-4">
+
+        {/* ── ГЛАВНАЯ ── */}
+        {tab === 'home' && (
+          <>
+            {/* Абонемент */}
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="font-semibold text-gray-800">🎫 Абонемент</h2>
+                {subscription && (
+                  <span className="text-xs text-gray-400">{subscription.type}</span>
+                )}
+              </div>
+              {subscription ? (
+                <>
+                  <div className="flex justify-between items-center mb-3">
+                    <div className="text-center">
+                      <div className={`text-3xl font-bold ${
+                        (subscription.sessions_left ?? 0) <= 2 ? 'text-red-500' :
+                        (subscription.sessions_left ?? 0) <= 5 ? 'text-yellow-500' : 'text-green-600'
+                      }`}>
+                        {subscription.sessions_left ?? 0}
+                      </div>
+                      <div className="text-xs text-gray-400">осталось занятий</div>
+                    </div>
+                    <div className="text-center">
+                      <div className={`text-3xl font-bold ${daysLeft !== null && daysLeft <= 7 ? 'text-red-500' : 'text-gray-800'}`}>
+                        {daysLeft ?? '—'}
+                      </div>
+                      <div className="text-xs text-gray-400">дней до конца</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-3xl font-bold text-gray-800">{subscription.sessions_total ?? '—'}</div>
+                      <div className="text-xs text-gray-400">всего в абоне</div>
+                    </div>
+                  </div>
+                  {subscription.sessions_total && subscription.sessions_left !== null && (
+                    <div className="bg-gray-100 rounded-full h-2 overflow-hidden">
+                      <div className="h-full bg-black rounded-full transition-all"
+                        style={{ width: `${Math.round((subscription.sessions_left / subscription.sessions_total) * 100)}%` }} />
+                    </div>
+                  )}
+                  {subscription.end_date && (
+                    <div className="text-xs text-gray-400 text-right mt-2">
+                      до {new Date(subscription.end_date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}
+                    </div>
+                  )}
+                  {(subscription.sessions_left ?? 0) <= 2 && (
+                    <div className="mt-3 bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-600">
+                      ⚠️ Заканчиваются занятия — обратитесь к администратору для продления
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="text-sm text-gray-400 text-center py-4">Абонемент не найден</div>
+              )}
+            </div>
+
+            {/* Последние посещения */}
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+              <h2 className="font-semibold text-gray-800 mb-3">📅 Последние занятия</h2>
+              {attendance.length === 0 ? (
+                <div className="text-sm text-gray-400 text-center py-2">Нет данных</div>
+              ) : (
+                <div className="flex flex-wrap gap-1.5">
+                  {attendance.slice(0, 20).map(a => (
+                    <div key={a.date}
+                      className={`text-xs px-2.5 py-1.5 rounded-lg font-medium ${
+                        a.present ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'
+                      }`}>
+                      {new Date(a.date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}
+                      {a.present ? ' ✓' : ''}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Задания — плашка если есть */}
+            {pendingTasks > 0 && (
+              <button onClick={() => setTab('tasks')}
+                className="w-full bg-yellow-50 border border-yellow-200 rounded-2xl p-4 flex items-center gap-3 text-left">
+                <span className="text-2xl">📋</span>
+                <div>
+                  <div className="font-semibold text-yellow-800">Есть задания от тренера</div>
+                  <div className="text-sm text-yellow-600">{pendingTasks} не выполнено</div>
+                </div>
+                <span className="ml-auto text-yellow-500">→</span>
+              </button>
+            )}
+
+            {/* Программа развития */}
+            {aiProgram && (
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+                <h2 className="font-semibold text-gray-800 mb-3">🗺 Программа развития</h2>
+                <div className="text-sm text-gray-600 whitespace-pre-line leading-relaxed">
+                  {aiProgram}
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* ── ПРОГРЕСС ── */}
+        {tab === 'progress' && (
+          <>
+            {surveys.length === 0 ? (
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8 text-center">
+                <div className="text-4xl mb-3">📊</div>
+                <div className="font-medium text-gray-700">Пока нет данных</div>
+                <div className="text-sm text-gray-400 mt-1">Прогресс появится после первого среза</div>
+              </div>
+            ) : (
+              <>
+                {/* Общий балл */}
+                {latestScore !== null && (
+                  <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex items-center gap-4">
+                    <div className="w-16 h-16 rounded-full bg-black text-white flex items-center justify-center shrink-0">
+                      <div className="text-center">
+                        <div className="text-xl font-bold leading-none">{latestScore}</div>
+                        <div className="text-xs">балл</div>
+                      </div>
+                    </div>
+                    <div>
+                      <div className="font-semibold text-gray-800">Общий прогресс</div>
+                      {scoreDiff !== null && (
+                        <div className={`text-sm mt-0.5 font-medium ${scoreDiff > 0 ? 'text-green-600' : scoreDiff < 0 ? 'text-red-500' : 'text-gray-400'}`}>
+                          {scoreDiff > 0 ? `↑ +${scoreDiff}` : scoreDiff < 0 ? `↓ ${scoreDiff}` : '= без изменений'} с начала
+                        </div>
+                      )}
+                      <div className="text-xs text-gray-400 mt-0.5">{surveys.length} {surveys.length === 1 ? 'срез' : surveys.length < 5 ? 'среза' : 'срезов'}</div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Радарная диаграмма */}
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+                  <h2 className="font-semibold text-gray-800 mb-3">Профиль качеств</h2>
+                  <RadarChart surveys={surveys} />
+                </div>
+
+                {/* Подробно по качествам */}
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+                  <h2 className="font-semibold text-gray-800 mb-4">Динамика по качествам</h2>
+                  <div className="space-y-3">
+                    {QUALITIES.map(k => {
+                      const vals = surveys.slice(0, 3).map(s => (s[`trainer_${k}`] as number) || 0)
+                      return <QualityBar key={k} label={QUALITY_LABELS[k]} values={vals} colors={colors} />
+                    })}
+                  </div>
+                  <div className="flex gap-3 mt-4 flex-wrap">
+                    {surveys.slice(0, 3).map((s, i) => (
+                      <div key={i} className="flex items-center gap-1.5">
+                        <div className="w-2.5 h-2.5 rounded-full" style={{ background: colors[i] }} />
+                        <span className="text-xs text-gray-400">
+                          {i === 0 ? 'Старт' : `Срез ${i}`}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+          </>
+        )}
+
+        {/* ── ЗАДАНИЯ ── */}
+        {tab === 'tasks' && (
+          <>
+            {tasks.length === 0 ? (
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8 text-center">
+                <div className="text-4xl mb-3">📋</div>
+                <div className="font-medium text-gray-700">Заданий нет</div>
+                <div className="text-sm text-gray-400 mt-1">Тренер пока не назначил задания</div>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {tasks.map(task => (
+                  <div key={task.id}
+                    className={`bg-white rounded-2xl border shadow-sm p-4 transition-opacity ${
+                      task.completed ? 'border-green-100 opacity-70' : 'border-gray-100'
+                    }`}>
+                    <div className="flex items-start gap-3">
+                      <button
+                        onClick={() => toggleTask(task.id, task.completed)}
+                        disabled={togglingTask === task.id}
+                        className={`w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5 transition-colors ${
+                          task.completed
+                            ? 'bg-green-500 border-green-500 text-white'
+                            : 'border-gray-300 hover:border-black'
+                        }`}>
+                        {task.completed && <span className="text-xs font-bold">✓</span>}
+                      </button>
+                      <div className="flex-1">
+                        <div className={`font-medium text-sm ${task.completed ? 'line-through text-gray-400' : 'text-gray-800'}`}>
+                          {task.title}
+                        </div>
+                        {task.description && (
+                          <div className="text-sm text-gray-500 mt-1">{task.description}</div>
+                        )}
+                        {task.due_date && !task.completed && (
+                          <div className={`text-xs mt-1.5 ${
+                            new Date(task.due_date) < new Date() ? 'text-red-500' : 'text-gray-400'
+                          }`}>
+                            до {new Date(task.due_date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+
+        {/* ── ДОСТИЖЕНИЯ ── */}
+        {tab === 'achievements' && (
+          <>
+            {certs.length === 0 ? (
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8 text-center">
+                <div className="text-4xl mb-3">🏆</div>
+                <div className="font-medium text-gray-700">Достижений пока нет</div>
+                <div className="text-sm text-gray-400 mt-1">Здесь будут аттестации, семинары и соревнования</div>
+              </div>
+            ) : (
+              <>
+                {/* Сгруппировать по типу */}
+                {(['belt','competition','seminar','masterclass','other'] as const).map(type => {
+                  const list = certs.filter(c => c.type === type)
+                  if (list.length === 0) return null
+                  return (
+                    <div key={type} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+                      <h2 className="font-semibold text-gray-800 mb-3">
+                        {CERT_ICONS[type]} {CERT_LABELS[type]}
+                      </h2>
+                      <div className="space-y-2">
+                        {list.map(c => (
+                          <div key={c.id} className="flex items-start gap-3 py-2 border-b border-gray-50 last:border-0">
+                            <div className="flex-1">
+                              <div className="font-medium text-sm text-gray-800">{c.title}</div>
+                              {c.notes && <div className="text-xs text-gray-500 mt-0.5">{c.notes}</div>}
+                            </div>
+                            {c.date && (
+                              <div className="text-xs text-gray-400 shrink-0">
+                                {new Date(c.date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: '2-digit' })}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })}
+              </>
+            )}
+
+            {/* Статистика */}
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+              <h2 className="font-semibold text-gray-800 mb-3">📈 Статистика</h2>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-gray-50 rounded-xl p-3 text-center">
+                  <div className="text-2xl font-bold text-gray-800">{totalAttendance}</div>
+                  <div className="text-xs text-gray-500 mt-0.5">тренировок всего</div>
+                </div>
+                <div className="bg-gray-50 rounded-xl p-3 text-center">
+                  <div className="text-2xl font-bold text-gray-800">{certs.length}</div>
+                  <div className="text-xs text-gray-500 mt-0.5">достижений</div>
+                </div>
+                <div className="bg-gray-50 rounded-xl p-3 text-center">
+                  <div className="text-2xl font-bold text-gray-800">{streak}</div>
+                  <div className="text-xs text-gray-500 mt-0.5">серия занятий 🔥</div>
+                </div>
+                <div className="bg-gray-50 rounded-xl p-3 text-center">
+                  <div className="text-2xl font-bold text-gray-800">{tasks.filter(t => t.completed).length}</div>
+                  <div className="text-xs text-gray-500 mt-0.5">заданий выполнено</div>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
