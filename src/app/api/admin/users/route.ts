@@ -73,14 +73,32 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ ok: true, id: data.user.id })
 }
 
-// PATCH — обновить права доступа
+// PATCH — обновить права, имя, email, пароль
 export async function PATCH(req: NextRequest) {
   if (!(await checkFounder())) {
     return NextResponse.json({ error: 'Нет доступа' }, { status: 403 })
   }
-  const { id, permissions } = await req.json()
+  const { id, permissions, name, email, password } = await req.json()
+  const admin = getAdminClient()
   const supabase = await createSupabaseServerClient()
-  await supabase.from('user_profiles').update({ permissions }).eq('id', id)
+
+  // Обновляем профиль (permissions и/или name)
+  if (permissions !== undefined || name !== undefined) {
+    const update: Record<string, unknown> = {}
+    if (permissions !== undefined) update.permissions = permissions
+    if (name !== undefined) update.name = name
+    await supabase.from('user_profiles').update(update).eq('id', id)
+  }
+
+  // Обновляем email и/или пароль через admin API
+  if (email || password) {
+    const authUpdate: Record<string, string> = {}
+    if (email) authUpdate.email = email
+    if (password) authUpdate.password = password
+    const { error } = await admin.auth.admin.updateUserById(id, authUpdate)
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+
   return NextResponse.json({ ok: true })
 }
 
