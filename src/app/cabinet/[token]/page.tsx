@@ -32,6 +32,105 @@ const CERT_LABELS: Record<string,string> = {
   belt: 'Пояс', seminar: 'Семинар', masterclass: 'Мастер-класс', competition: 'Соревнование', other: 'Другое'
 }
 
+// Календарь посещений по месяцам
+function AttendanceCalendar({ attendance }: { attendance: { date: string; present: boolean }[] }) {
+  const DAYS_SHORT = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
+
+  if (attendance.length === 0) return (
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+      <h2 className="font-semibold text-gray-800 mb-2">📅 Посещения</h2>
+      <div className="text-sm text-gray-400 text-center py-4">Нет данных о посещениях</div>
+    </div>
+  )
+
+  // Группируем по месяцам
+  const byMonth: Record<string, Record<string, boolean>> = {}
+  attendance.forEach(a => {
+    const d = new Date(a.date)
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+    if (!byMonth[key]) byMonth[key] = {}
+    byMonth[key][a.date] = a.present
+  })
+
+  const months = Object.keys(byMonth).sort().reverse().slice(0, 3)
+  const presentTotal = attendance.filter(a => a.present).length
+
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="font-semibold text-gray-800">📅 Посещения</h2>
+        <span className="text-sm font-medium text-green-600">{presentTotal} занятий</span>
+      </div>
+
+      <div className="space-y-5">
+        {months.map(monthKey => {
+          const [year, month] = monthKey.split('-').map(Number)
+          const daysInMonth = new Date(year, month, 0).getDate()
+          const firstDayOfMonth = new Date(year, month - 1, 1).getDay()
+          // JS: 0=вс, преобразуем в пн=0
+          const startOffset = firstDayOfMonth === 0 ? 6 : firstDayOfMonth - 1
+          const monthData = byMonth[monthKey]
+          const monthPresent = Object.values(monthData).filter(Boolean).length
+
+          const monthName = new Date(year, month - 1, 1)
+            .toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' })
+
+          return (
+            <div key={monthKey}>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium text-gray-700 capitalize">{monthName}</span>
+                <span className="text-xs text-gray-400">{monthPresent} из {Object.keys(monthData).length}</span>
+              </div>
+
+              {/* Дни недели */}
+              <div className="grid grid-cols-7 gap-1 mb-1">
+                {DAYS_SHORT.map(d => (
+                  <div key={d} className="text-center text-xs text-gray-300 font-medium">{d}</div>
+                ))}
+              </div>
+
+              {/* Дни месяца */}
+              <div className="grid grid-cols-7 gap-1">
+                {Array.from({ length: startOffset }).map((_, i) => (
+                  <div key={`empty-${i}`} />
+                ))}
+                {Array.from({ length: daysInMonth }).map((_, i) => {
+                  const day = i + 1
+                  const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+                  const hasRecord = dateStr in monthData
+                  const present = monthData[dateStr]
+
+                  return (
+                    <div key={day}
+                      className={`aspect-square rounded-lg flex items-center justify-center text-xs font-medium transition-colors
+                        ${!hasRecord ? 'text-gray-300' :
+                          present ? 'bg-green-500 text-white' : 'bg-red-100 text-red-400'
+                        }`}>
+                      {day}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Легенда */}
+      <div className="flex gap-4 mt-4 pt-3 border-t border-gray-50">
+        <div className="flex items-center gap-1.5">
+          <div className="w-3 h-3 rounded bg-green-500" />
+          <span className="text-xs text-gray-500">Был на занятии</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <div className="w-3 h-3 rounded bg-red-100" />
+          <span className="text-xs text-gray-500">Пропустил</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // SVG радарная диаграмма
 function RadarChart({ surveys }: { surveys: Survey[] }) {
   if (surveys.length === 0) return (
@@ -174,7 +273,7 @@ export default function CabinetPage() {
       supabase.from('certifications').select('id, type, title, date, notes')
         .eq('student_id', sid).order('date', { ascending: false }),
       supabase.from('attendance').select('date, present').eq('student_id', sid)
-        .order('date', { ascending: false }).limit(60),
+        .order('date', { ascending: false }).limit(180),
       supabase.from('diagnostic_surveys').select('ai_program').eq('student_id', sid)
         .order('created_at', { ascending: false }).limit(1).maybeSingle(),
     ])
@@ -355,25 +454,8 @@ export default function CabinetPage() {
               )}
             </div>
 
-            {/* Последние посещения */}
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-              <h2 className="font-semibold text-gray-800 mb-3">📅 Последние занятия</h2>
-              {attendance.length === 0 ? (
-                <div className="text-sm text-gray-400 text-center py-2">Нет данных</div>
-              ) : (
-                <div className="flex flex-wrap gap-1.5">
-                  {attendance.slice(0, 20).map(a => (
-                    <div key={a.date}
-                      className={`text-xs px-2.5 py-1.5 rounded-lg font-medium ${
-                        a.present ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'
-                      }`}>
-                      {new Date(a.date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}
-                      {a.present ? ' ✓' : ''}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+            {/* Календарь посещений */}
+            <AttendanceCalendar attendance={attendance} />
 
             {/* Задания — плашка если есть */}
             {pendingTasks > 0 && (
