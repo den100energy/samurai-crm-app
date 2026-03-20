@@ -1,6 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
-import { BLOCKED_ROUTES, PUBLIC_ROUTES, ROLE_HOME, UserRole } from '@/lib/auth'
+import { PUBLIC_ROUTES, ROLE_HOME, UserRole, canAccessRoute } from '@/lib/auth'
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
@@ -37,16 +37,17 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  // Получаем роль из user_profiles
+  // Получаем роль и permissions
   const { data: profile } = await supabase
     .from('user_profiles')
-    .select('role')
+    .select('role, permissions')
     .eq('id', session.user.id)
     .single()
 
   const role = profile?.role as UserRole | undefined
+  const permissions: string[] = profile?.permissions || []
 
-  // Нет профиля → на логин (аккаунт не настроен)
+  // Нет профиля → на логин
   if (!role) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
@@ -56,10 +57,8 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL('/trainer', request.url))
   }
 
-  // Проверяем заблокированные маршруты для роли
-  const blocked = BLOCKED_ROUTES[role] || []
-  const isBlocked = blocked.some(route => pathname.startsWith(route))
-  if (isBlocked) {
+  // Проверяем доступ к маршруту
+  if (!canAccessRoute(role, permissions, pathname)) {
     return NextResponse.redirect(new URL(ROLE_HOME[role], request.url))
   }
 

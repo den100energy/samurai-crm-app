@@ -29,7 +29,7 @@ export async function GET() {
   const supabase = await createSupabaseServerClient()
 
   const { data: { users } } = await admin.auth.admin.listUsers()
-  const { data: profiles } = await supabase.from('user_profiles').select('id, role, name, trainer_id')
+  const { data: profiles } = await supabase.from('user_profiles').select('id, role, name, trainer_id, permissions')
 
   const profileMap = new Map((profiles || []).map(p => [p.id, p]))
   const result = (users || []).map(u => ({
@@ -71,6 +71,17 @@ export async function POST(req: NextRequest) {
   })
 
   return NextResponse.json({ ok: true, id: data.user.id })
+}
+
+// PATCH — обновить права доступа
+export async function PATCH(req: NextRequest) {
+  if (!(await checkFounder())) {
+    return NextResponse.json({ error: 'Нет доступа' }, { status: 403 })
+  }
+  const { id, permissions } = await req.json()
+  const supabase = await createSupabaseServerClient()
+  await supabase.from('user_profiles').update({ permissions }).eq('id', id)
+  return NextResponse.json({ ok: true })
 }
 
 // DELETE — удалить пользователя

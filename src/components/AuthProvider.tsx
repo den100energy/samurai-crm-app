@@ -10,6 +10,7 @@ type AuthContextType = {
   role: UserRole | null
   userName: string | null
   trainerId: string | null
+  permissions: string[]
   loading: boolean
 }
 
@@ -18,6 +19,7 @@ const AuthContext = createContext<AuthContextType>({
   role: null,
   userName: null,
   trainerId: null,
+  permissions: [],
   loading: true,
 })
 
@@ -26,18 +28,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [role, setRole] = useState<UserRole | null>(null)
   const [userName, setUserName] = useState<string | null>(null)
   const [trainerId, setTrainerId] = useState<string | null>(null)
+  const [permissions, setPermissions] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
 
   async function loadProfile(userId: string) {
     const { data } = await supabase
       .from('user_profiles')
-      .select('role, name, trainer_id')
+      .select('role, name, trainer_id, permissions')
       .eq('id', userId)
       .single()
     if (data) {
       setRole(data.role as UserRole)
       setUserName(data.name)
       setTrainerId(data.trainer_id)
+      setPermissions(data.permissions || [])
     }
   }
 
@@ -59,6 +63,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setRole(null)
         setUserName(null)
         setTrainerId(null)
+        setPermissions([])
       }
     })
 
@@ -66,7 +71,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   return (
-    <AuthContext.Provider value={{ user, role, userName, trainerId, loading }}>
+    <AuthContext.Provider value={{ user, role, userName, trainerId, permissions, loading }}>
       {children}
     </AuthContext.Provider>
   )

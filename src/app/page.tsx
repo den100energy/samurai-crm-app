@@ -5,27 +5,10 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { useEffect, useState } from 'react'
 import { useAuth } from '@/components/AuthProvider'
-
-const ALL_SECTIONS = [
-  { href: '/students', emoji: '🥋', title: 'Ученики', desc: 'Список, группы, абонементы' },
-  { href: '/attendance', emoji: '✅', title: 'Посещаемость', desc: 'Отметить занятие' },
-  { href: '/finance', emoji: '💰', title: 'Финансы', desc: 'Платежи за месяц' },
-  { href: '/salary', emoji: '💵', title: 'Зарплата', desc: 'Расчёт для тренеров' },
-  { href: '/leads', emoji: '📋', title: 'Лиды', desc: 'Новые заявки' },
-  { href: '/analytics', emoji: '📊', title: 'Аналитика', desc: 'Посещаемость, зона риска' },
-  { href: '/broadcast', emoji: '📣', title: 'Рассылка', desc: 'Сообщения по группам' },
-  { href: '/events', emoji: '🎉', title: 'Мероприятия', desc: 'Соревнования, семинары' },
-  { href: '/tickets', emoji: '📝', title: 'Обращения', desc: 'Болезни, переносы, вопросы' },
-  { href: '/schedule', emoji: '🗓', title: 'Расписание', desc: 'Группы и тренеры по дням' },
-  { href: '/settings', emoji: '⚙️', title: 'Настройки', desc: 'Типы абонементов', roles: ['founder'] },
-  { href: '/admin-users', emoji: '👤', title: 'Сотрудники', desc: 'Управление доступом', roles: ['founder'] },
-]
-
-// Маршруты скрытые от admin
-const ADMIN_HIDDEN = ['/finance', '/salary', '/analytics', '/settings', '/import', '/admin-users']
+import { SECTIONS, hasAccess } from '@/lib/auth'
 
 export default function Home() {
-  const { role, userName } = useAuth()
+  const { role, userName, permissions } = useAuth()
   const router = useRouter()
   const [expiring, setExpiring] = useState<any[]>([])
   const [noSessions, setNoSessions] = useState<any[]>([])
@@ -84,10 +67,9 @@ export default function Home() {
     router.push('/login')
   }
 
-  const sections = ALL_SECTIONS.filter(s => {
-    if (role === 'admin') return !ADMIN_HIDDEN.includes(s.href)
-    return true
-  })
+  const sections = role
+    ? SECTIONS.filter(s => hasAccess(role, permissions, s.key))
+    : []
 
   return (
     <main className="max-w-lg mx-auto p-4">
@@ -156,11 +138,10 @@ export default function Home() {
 
       <div className="grid grid-cols-2 gap-4">
         {sections.map((s) => (
-          <Link key={s.href} href={s.href}
+          <Link key={s.route} href={s.route}
             className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 hover:shadow-md transition-shadow active:scale-95">
             <div className="text-4xl mb-2">{s.emoji}</div>
-            <div className="font-semibold text-gray-800">{s.title}</div>
-            <div className="text-sm text-gray-500 mt-1">{s.desc}</div>
+            <div className="font-semibold text-gray-800">{s.label}</div>
           </Link>
         ))}
         {role === 'founder' && (
@@ -168,7 +149,6 @@ export default function Home() {
             className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 hover:shadow-md transition-shadow active:scale-95">
             <div className="text-4xl mb-2">👤</div>
             <div className="font-semibold text-gray-800">Сотрудники</div>
-            <div className="text-sm text-gray-500 mt-1">Управление доступом</div>
           </Link>
         )}
       </div>
