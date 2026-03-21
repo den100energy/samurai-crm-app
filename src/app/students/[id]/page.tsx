@@ -116,6 +116,8 @@ export default function StudentPage() {
   const [progressTrainerForm, setProgressTrainerForm] = useState<Record<string, any>>({})
   const [savingProgressTrainer, setSavingProgressTrainer] = useState(false)
   const [studentProfile, setStudentProfile] = useState<any>(null)
+  const [compareProgram, setCompareProgram] = useState('')
+  const [generatingCompare, setGeneratingCompare] = useState(false)
 
   useEffect(() => {
     async function load() {
@@ -1332,6 +1334,41 @@ export default function StudentPage() {
           </div>
         )
       })()}
+
+      {/* AI: Сравнение Анкеты 1 и Анкеты 2 */}
+      {survey?.filled_at && progressSurvey?.filled_at && (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm mb-2 overflow-hidden">
+          <div className="flex items-center px-4 py-3 bg-gray-50 border-b border-gray-100">
+            <span className="flex-1 text-sm font-medium text-gray-800">✨ Анализ прогресса (ИИ)</span>
+          </div>
+          <div className="px-4 py-3 space-y-3">
+            <button
+              onClick={async () => {
+                setGeneratingCompare(true)
+                const res = await fetch('/api/compare-surveys', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ survey1: survey, survey2: progressSurvey, studentName: student?.name }),
+                })
+                const data = await res.json()
+                if (data.program) setCompareProgram(data.program)
+                setGeneratingCompare(false)
+              }}
+              disabled={generatingCompare}
+              className="w-full bg-black text-white py-2.5 rounded-xl text-sm font-medium disabled:opacity-50">
+              {generatingCompare ? '⏳ Генерация...' : compareProgram ? '🔄 Обновить анализ' : '✨ Сравнить анкеты и сгенерировать программу'}
+            </button>
+            {compareProgram && (
+              <textarea
+                value={compareProgram}
+                onChange={e => setCompareProgram(e.target.value)}
+                rows={16}
+                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-xs outline-none resize-none leading-relaxed"
+              />
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Профиль ученика (Анкета 3) + Договор */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm mb-2 overflow-hidden">
