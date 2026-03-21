@@ -7,6 +7,32 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '@/components/AuthProvider'
 import { SECTIONS, hasAccess } from '@/lib/auth'
 
+// Mountain silhouette SVG
+function MountainDivider() {
+  return (
+    <svg viewBox="0 0 400 48" className="w-full" preserveAspectRatio="none" aria-hidden>
+      <path
+        d="M0 48 L0 36 L40 18 L80 30 L130 8 L180 26 L220 4 L270 22 L310 12 L360 28 L400 16 L400 48 Z"
+        fill="#2C2C2E"
+      />
+      <path
+        d="M0 48 L0 40 L50 28 L100 38 L150 20 L200 34 L250 16 L300 30 L350 22 L400 32 L400 48 Z"
+        fill="#1C1C1E"
+        opacity="0.7"
+      />
+    </svg>
+  )
+}
+
+// Red sun
+function RedSun() {
+  return (
+    <div className="sun-pulse flex items-center justify-center w-10 h-10 rounded-full"
+      style={{ background: 'radial-gradient(circle, #FF2A2A 0%, #E8121E 60%, #8B0000 100%)' }}>
+    </div>
+  )
+}
+
 export default function Home() {
   const { role, userName, permissions } = useAuth()
   const router = useRouter()
@@ -16,6 +42,7 @@ export default function Home() {
   const [totalStudents, setTotalStudents] = useState(0)
   const [notifying, setNotifying] = useState(false)
   const [modal, setModal] = useState<'noSessions' | 'expiring' | 'churn' | null>(null)
+  const [loaded, setLoaded] = useState(false)
 
   useEffect(() => {
     async function load() {
@@ -62,6 +89,7 @@ export default function Home() {
       setNoSessions(noSessArr)
       setExpiring(expiringArr)
       setChurn(churnArr)
+      setLoaded(true)
     }
     load()
   }, [])
@@ -85,22 +113,20 @@ export default function Home() {
       value: totalStudents,
       label: 'Учеников',
       kanji: '侍',
-      sub: 'всего активных',
-      color: 'from-zinc-800 to-zinc-900',
-      ring: 'ring-zinc-600',
-      text: 'text-white',
-      accent: 'text-amber-400',
-      onClick: null,
+      sub: 'активных',
+      glow: '',
+      border: 'border-[#3A3A3C]',
+      numColor: 'text-white',
+      onClick: null as (() => void) | null,
     },
     {
       value: noSessions.length,
       label: 'Без занятий',
       kanji: '空',
       sub: 'нет абонемента',
-      color: noSessions.length > 0 ? 'from-red-950 to-zinc-900' : 'from-zinc-800 to-zinc-900',
-      ring: noSessions.length > 0 ? 'ring-red-700' : 'ring-zinc-600',
-      text: noSessions.length > 0 ? 'text-red-400' : 'text-zinc-500',
-      accent: noSessions.length > 0 ? 'text-red-300' : 'text-zinc-600',
+      glow: noSessions.length > 0 ? 'glow-red' : '',
+      border: noSessions.length > 0 ? 'border-[#E8121E]/40' : 'border-[#3A3A3C]',
+      numColor: noSessions.length > 0 ? 'text-[#E8121E]' : 'text-[#48484A]',
       onClick: noSessions.length > 0 ? () => setModal('noSessions') : null,
     },
     {
@@ -108,10 +134,9 @@ export default function Home() {
       label: 'Истекает',
       kanji: '期',
       sub: 'абонемент в 7 дней',
-      color: expiring.length > 0 ? 'from-amber-950 to-zinc-900' : 'from-zinc-800 to-zinc-900',
-      ring: expiring.length > 0 ? 'ring-amber-600' : 'ring-zinc-600',
-      text: expiring.length > 0 ? 'text-amber-400' : 'text-zinc-500',
-      accent: expiring.length > 0 ? 'text-amber-300' : 'text-zinc-600',
+      glow: expiring.length > 0 ? 'glow-amber' : '',
+      border: expiring.length > 0 ? 'border-amber-500/40' : 'border-[#3A3A3C]',
+      numColor: expiring.length > 0 ? 'text-amber-400' : 'text-[#48484A]',
       onClick: expiring.length > 0 ? () => setModal('expiring') : null,
     },
     {
@@ -119,102 +144,122 @@ export default function Home() {
       label: 'Не приходят',
       kanji: '眠',
       sub: '7+ дней без визита',
-      color: churn.length > 0 ? 'from-orange-950 to-zinc-900' : 'from-zinc-800 to-zinc-900',
-      ring: churn.length > 0 ? 'ring-orange-700' : 'ring-zinc-600',
-      text: churn.length > 0 ? 'text-orange-400' : 'text-zinc-500',
-      accent: churn.length > 0 ? 'text-orange-300' : 'text-zinc-600',
+      glow: churn.length > 0 ? 'glow-orange' : '',
+      border: churn.length > 0 ? 'border-orange-500/40' : 'border-[#3A3A3C]',
+      numColor: churn.length > 0 ? 'text-orange-400' : 'text-[#48484A]',
       onClick: churn.length > 0 ? () => setModal('churn') : null,
     },
   ]
 
   return (
-    <main className="min-h-screen bg-zinc-950">
-      {/* Header */}
-      <div className="px-5 pt-8 pb-4 flex items-start justify-between">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-amber-400 text-2xl">⚔</span>
-            <h1 className="text-white text-xl font-bold tracking-wide">Школа Самурая</h1>
-          </div>
-          <p className="text-zinc-500 text-xs tracking-widest uppercase">武道 · Путь воина</p>
-        </div>
-        <div className="flex flex-col items-end gap-2">
-          {userName && (
-            <button onClick={signOut}
-              className="text-xs text-zinc-500 border border-zinc-800 px-3 py-1.5 rounded-lg hover:border-zinc-600 transition-colors">
-              Выйти
-            </button>
-          )}
-          <div className="relative group">
-            <button onClick={sendReport} disabled={notifying}
-              className="text-xs text-zinc-400 border border-zinc-700 px-3 py-1.5 rounded-lg
-                hover:border-amber-700 hover:text-amber-400 disabled:opacity-40 transition-colors flex items-center gap-1.5">
-              <span>📨</span>
-              <span>{notifying ? 'Отправка...' : 'Отчёт'}</span>
-            </button>
-            <div className="absolute right-0 top-full mt-2 w-48 bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2
-              text-xs text-zinc-300 leading-relaxed
-              opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-10">
-              Отправить сводку по ученикам (без занятий, истекающие абонементы) в Telegram
+    <main className="min-h-screen bg-[#1C1C1E] overflow-x-hidden">
+
+      {/* Hero header с красным солнцем */}
+      <div className="relative px-5 pt-10 pb-0"
+        style={{ background: 'linear-gradient(180deg, #0A0A0A 0%, #1C1C1E 100%)' }}>
+
+        {/* Верхняя строка */}
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <RedSun />
+            <div>
+              <h1 className="text-white text-xl font-bold leading-tight tracking-wide">
+                Школа Самурая
+              </h1>
+              <p className="text-[#8E8E93] text-[10px] tracking-[0.2em] uppercase mt-0.5">
+                武道 · Путь воина
+              </p>
             </div>
           </div>
+          <div className="flex items-center gap-2">
+            <div className="relative group">
+              <button onClick={sendReport} disabled={notifying}
+                className="flex items-center gap-1.5 text-xs text-[#8E8E93] border border-[#3A3A3C]
+                  px-3 py-1.5 rounded-lg hover:border-[#E8121E]/50 hover:text-[#E8121E]
+                  disabled:opacity-40 transition-all duration-200">
+                <span>📨</span>
+                <span>{notifying ? 'Отправка...' : 'Отчёт'}</span>
+              </button>
+              <div className="absolute right-0 top-full mt-2 w-52 bg-[#2C2C2E] border border-[#3A3A3C]
+                rounded-xl px-3 py-2 text-xs text-[#8E8E93] leading-relaxed
+                opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-10 shadow-xl">
+                Отправить сводку (без занятий, истекающие абонементы) в Telegram
+              </div>
+            </div>
+            {userName && (
+              <button onClick={signOut}
+                className="text-xs text-[#8E8E93] border border-[#3A3A3C] px-3 py-1.5 rounded-lg
+                  hover:border-[#3A3A3C] hover:text-white transition-all duration-200">
+                Выйти
+              </button>
+            )}
+          </div>
         </div>
+
+        {/* Горный силуэт */}
+        <MountainDivider />
       </div>
 
-      {/* Разделитель */}
-      <div className="mx-5 h-px bg-gradient-to-r from-transparent via-amber-900/50 to-transparent mb-6" />
-
-      {/* Метрики — приборная панель */}
-      <div className="px-4 grid grid-cols-2 gap-3 mb-6">
+      {/* Метрики */}
+      <div className="px-4 pt-4 grid grid-cols-2 gap-3 mb-5">
         {metrics.map((m, i) => (
           <button
             key={i}
             onClick={m.onClick ?? undefined}
             disabled={!m.onClick}
             className={`
-              relative bg-gradient-to-br ${m.color}
-              ring-1 ${m.ring}
-              rounded-2xl p-4 text-left
-              transition-all duration-200
-              ${m.onClick ? 'active:scale-95 hover:ring-2' : 'cursor-default'}
-              overflow-hidden
+              relative bg-[#2C2C2E] border ${m.border} ${m.glow}
+              rounded-2xl p-4 text-left overflow-hidden
+              transition-all duration-300
+              ${m.onClick ? 'active:scale-95 cursor-pointer' : 'cursor-default'}
             `}
           >
             {/* Иероглиф-фон */}
-            <span className={`absolute right-3 top-1 text-5xl font-bold opacity-10 select-none ${m.accent}`}>
+            <span className="absolute right-2 top-0 text-[52px] font-bold select-none leading-none"
+              style={{ color: 'rgba(255,255,255,0.04)' }}>
               {m.kanji}
             </span>
-            {/* Значение */}
-            <div className={`text-3xl font-bold mb-0.5 ${m.text}`}>{m.value}</div>
+            {/* Число */}
+            <div className={`text-4xl font-bold mb-1 leading-none ${m.numColor} ${loaded ? 'opacity-100' : 'opacity-0'} transition-opacity duration-500`}>
+              {m.value}
+            </div>
             <div className="text-white text-sm font-medium">{m.label}</div>
-            <div className="text-zinc-500 text-xs mt-0.5">{m.sub}</div>
-            {/* Стрелка если кликабельно */}
+            <div className="text-[#8E8E93] text-xs mt-0.5">{m.sub}</div>
             {m.onClick && (
-              <div className={`absolute bottom-3 right-3 text-xs ${m.accent} opacity-60`}>›</div>
+              <div className="absolute bottom-3 right-3 text-[#E8121E] text-sm opacity-70">›</div>
             )}
           </button>
         ))}
       </div>
 
       {/* Разделитель */}
-      <div className="mx-5 h-px bg-gradient-to-r from-transparent via-zinc-800 to-transparent mb-5" />
+      <div className="mx-4 mb-5">
+        <div className="flex items-center gap-3">
+          <div className="flex-1 h-px bg-[#3A3A3C]" />
+          <span className="text-[#48484A] text-xs tracking-widest">道</span>
+          <div className="flex-1 h-px bg-[#3A3A3C]" />
+        </div>
+      </div>
 
       {/* Навигация */}
-      <div className="px-4 grid grid-cols-2 gap-3 mb-6">
+      <div className="px-4 grid grid-cols-2 gap-3 mb-8">
         {sections.map((s) => (
           <Link key={s.route} href={s.route}
-            className="group bg-zinc-900 ring-1 ring-zinc-800 rounded-2xl p-4
-              hover:ring-amber-900 hover:bg-zinc-800
-              active:scale-95 transition-all duration-200">
+            className="group relative bg-[#2C2C2E] border border-[#3A3A3C] rounded-2xl p-4
+              hover:border-[#E8121E]/30 hover:bg-[#2C2C2E]
+              active:scale-95 transition-all duration-200 overflow-hidden">
+            {/* Красная линия сверху при ховере */}
+            <div className="absolute top-0 left-0 right-0 h-0.5 bg-[#E8121E] scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-left rounded-t-2xl" />
             <div className="text-3xl mb-2">{s.emoji}</div>
             <div className="text-white text-sm font-medium">{s.label}</div>
           </Link>
         ))}
         {role === 'founder' && (
           <Link href="/admin-users"
-            className="group bg-zinc-900 ring-1 ring-zinc-800 rounded-2xl p-4
-              hover:ring-amber-900 hover:bg-zinc-800
-              active:scale-95 transition-all duration-200">
+            className="group relative bg-[#2C2C2E] border border-[#3A3A3C] rounded-2xl p-4
+              hover:border-[#E8121E]/30
+              active:scale-95 transition-all duration-200 overflow-hidden">
+            <div className="absolute top-0 left-0 right-0 h-0.5 bg-[#E8121E] scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-left rounded-t-2xl" />
             <div className="text-3xl mb-2">👤</div>
             <div className="text-white text-sm font-medium">Сотрудники</div>
           </Link>
@@ -222,45 +267,51 @@ export default function Home() {
       </div>
 
       {/* Нижний декор */}
-      <div className="px-5 pb-8 text-center">
-        <span className="text-zinc-800 text-xs tracking-widest">一期一会</span>
+      <div className="pb-8 text-center">
+        <span className="text-[#3A3A3C] text-xs tracking-[0.3em]">一期一会</span>
       </div>
 
       {/* Модальное окно */}
       {modal && (
         <div className="fixed inset-0 z-50 flex flex-col justify-end" onClick={() => setModal(null)}>
-          <div className="absolute inset-0 bg-black/70" />
-          <div className="relative bg-zinc-900 rounded-t-3xl max-h-[75vh] flex flex-col ring-1 ring-zinc-800"
+          <div className="absolute inset-0 bg-black/75 backdrop-blur-sm" />
+          <div className="relative bg-[#1C1C1E] rounded-t-3xl max-h-[75vh] flex flex-col border-t border-[#3A3A3C]"
             onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-zinc-800">
+            {/* Ручка */}
+            <div className="flex justify-center pt-3 pb-1">
+              <div className="w-10 h-1 bg-[#48484A] rounded-full" />
+            </div>
+            <div className="flex items-center justify-between px-5 pt-2 pb-3 border-b border-[#3A3A3C]">
               <div className="font-semibold text-white text-sm">
-                {modal === 'noSessions' && `Без занятий · ${noSessions.length}`}
-                {modal === 'expiring'   && `Истекает абонемент · ${expiring.length}`}
-                {modal === 'churn'      && `Не приходили 7+ дней · ${churn.length}`}
+                {modal === 'noSessions' && `Без занятий · ${noSessions.length} чел.`}
+                {modal === 'expiring'   && `Истекает абонемент · ${expiring.length} чел.`}
+                {modal === 'churn'      && `Не приходили 7+ дней · ${churn.length} чел.`}
               </div>
               <button onClick={() => setModal(null)}
-                className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center text-zinc-400 text-lg">×</button>
+                className="w-8 h-8 rounded-full bg-[#2C2C2E] flex items-center justify-center text-[#8E8E93] text-lg border border-[#3A3A3C]">
+                ×
+              </button>
             </div>
-            <div className="overflow-y-auto flex-1 px-5 py-3 space-y-1">
+            <div className="overflow-y-auto flex-1 px-5 py-3 space-y-0">
               {modal === 'noSessions' && noSessions.map(s => (
                 <Link key={s.id} href={`/students/${s.id}`} onClick={() => setModal(null)}
-                  className="flex items-center justify-between py-2.5 border-b border-zinc-800 hover:text-amber-400 transition-colors">
-                  <span className="text-sm text-zinc-300">{s.name}</span>
-                  <span className="text-zinc-600 text-sm">›</span>
+                  className="flex items-center justify-between py-3 border-b border-[#2C2C2E] hover:text-[#E8121E] transition-colors">
+                  <span className="text-sm text-[#E5E5E7]">{s.name}</span>
+                  <span className="text-[#48484A] text-sm">›</span>
                 </Link>
               ))}
               {modal === 'expiring' && expiring.map(s => (
                 <Link key={s.id} href={`/students/${s.id}`} onClick={() => setModal(null)}
-                  className="flex items-center justify-between py-2.5 border-b border-zinc-800 hover:text-amber-400 transition-colors">
-                  <span className="text-sm text-zinc-300">{s.name}</span>
-                  <span className="text-zinc-600 text-sm">›</span>
+                  className="flex items-center justify-between py-3 border-b border-[#2C2C2E] hover:text-[#E8121E] transition-colors">
+                  <span className="text-sm text-[#E5E5E7]">{s.name}</span>
+                  <span className="text-[#48484A] text-sm">›</span>
                 </Link>
               ))}
               {modal === 'churn' && churn.map(s => (
                 <Link key={s.id} href={`/students/${s.id}`} onClick={() => setModal(null)}
-                  className="flex items-center justify-between py-2.5 border-b border-zinc-800 hover:text-amber-400 transition-colors">
-                  <span className="text-sm text-zinc-300">{s.name}</span>
-                  <span className="text-orange-500 text-xs">{s.daysSince !== null ? `${s.daysSince} дн.` : '—'}</span>
+                  className="flex items-center justify-between py-3 border-b border-[#2C2C2E] hover:text-[#E8121E] transition-colors">
+                  <span className="text-sm text-[#E5E5E7]">{s.name}</span>
+                  <span className="text-orange-500 text-xs font-medium">{s.daysSince !== null ? `${s.daysSince} дн.` : '—'}</span>
                 </Link>
               ))}
             </div>
