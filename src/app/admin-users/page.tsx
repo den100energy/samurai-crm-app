@@ -122,10 +122,11 @@ export default function AdminUsersPage() {
     await fetch('/api/admin/users', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: userId, permissions: user?.permissions || [] }),
+      body: JSON.stringify({ id: userId, permissions: user?.permissions || [], role: user?.role }),
     })
     setSavingId(null)
     setOpenPanel(prev => ({ ...prev, [userId]: null }))
+    loadAll()
   }
 
   async function saveEdit(userId: string) {
