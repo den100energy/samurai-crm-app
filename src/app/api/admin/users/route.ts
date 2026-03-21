@@ -14,9 +14,9 @@ function getAdminClient() {
 // Проверяем что вызывает основатель
 async function checkFounder() {
   const supabase = await createSupabaseServerClient()
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session) return false
-  const { data } = await supabase.from('user_profiles').select('role').eq('id', session.user.id).single()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return false
+  const { data } = await supabase.from('user_profiles').select('role').eq('id', user.id).single()
   return data?.role === 'founder'
 }
 
@@ -26,10 +26,9 @@ export async function GET() {
     return NextResponse.json({ error: 'Нет доступа' }, { status: 403 })
   }
   const admin = getAdminClient()
-  const supabase = await createSupabaseServerClient()
 
   const { data: { users } } = await admin.auth.admin.listUsers()
-  const { data: profiles } = await supabase.from('user_profiles').select('id, role, name, trainer_id, permissions')
+  const { data: profiles } = await admin.from('user_profiles').select('id, role, name, trainer_id, permissions')
 
   const profileMap = new Map((profiles || []).map(p => [p.id, p]))
   const result = (users || []).map(u => ({
@@ -62,13 +61,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: error?.message || 'Ошибка создания' }, { status: 500 })
   }
 
-  const supabase = await createSupabaseServerClient()
-  await supabase.from('user_profiles').insert({
+  const { error: profileError } = await admin.from('user_profiles').insert({
     id: data.user.id,
     role,
     name,
     trainer_id: trainer_id || null,
+    permissions: [],
   })
+
+  if (profileError) {
+    // Удаляем созданного auth-пользователя чтобы не было мусора
+    await admin.auth.admin.deleteUser(data.user.id)
+    return NextResponse.json({ error: profileError.message }, { status: 500 })
+  }
 
   return NextResponse.json({ ok: true, id: data.user.id })
 }
@@ -80,14 +85,16 @@ export async function PATCH(req: NextRequest) {
   }
   const { id, permissions, name, email, password } = await req.json()
   const admin = getAdminClient()
-  const supabase = await createSupabaseServerClient()
 
-  // Обновляем профиль (permissions и/или name)
+  // Обновляем профиль через admin-клиент (обходит RLS)
   if (permissions !== undefined || name !== undefined) {
-    const update: Record<string, unknown> = {}
+    const update: Record<string, unknown> = { id }
     if (permissions !== undefined) update.permissions = permissions
     if (name !== undefined) update.name = name
-    await supabase.from('user_profiles').update(update).eq('id', id)
+    const { error: upsertError } = await admin
+      .from('user_profiles')
+      .upsert(update, { onConflict: 'id' })
+    if (upsertError) return NextResponse.json({ error: upsertError.message }, { status: 500 })
   }
 
   // Обновляем email и/или пароль через admin API

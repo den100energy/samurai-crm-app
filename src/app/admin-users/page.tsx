@@ -132,9 +132,10 @@ export default function AdminUsersPage() {
     setSavingId(userId)
     const f = editForm[userId]
     if (!f) return
+    const currentUser = users.find(u => u.id === userId)
     const body: Record<string, string> = { id: userId }
     if (f.name) body.name = f.name
-    if (f.email) body.email = f.email
+    if (f.email && f.email !== currentUser?.email) body.email = f.email
     if (f.password) body.password = f.password
     const res = await fetch('/api/admin/users', {
       method: 'PATCH',
