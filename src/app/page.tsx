@@ -31,13 +31,11 @@ export default function Home() {
 
       if (!students) return
 
-      // student_id -> latest subscription
       const subMap = new Map<string, { sessions_left: number | null; end_date: string | null }>()
       for (const s of (allSubs || [])) {
         if (!subMap.has(s.student_id)) subMap.set(s.student_id, s)
       }
 
-      // student_id -> last attendance date (within 30 days)
       const lastDateMap = new Map<string, string>()
       for (const a of (recentAtt || [])) {
         if (!lastDateMap.has(a.student_id)) lastDateMap.set(a.student_id, a.date)
@@ -49,27 +47,17 @@ export default function Home() {
 
       for (const student of students) {
         const sub = subMap.get(student.id)
-        if (!sub || sub.sessions_left === 0) {
-          noSessArr.push({ id: student.id, name: student.name })
-        }
-        if (sub?.end_date && sub.end_date >= today && sub.end_date <= in7days) {
-          expiringArr.push({ id: student.id, name: student.name })
-        }
-        // Churn: active subscription but not attended in 7+ days
+        if (!sub || sub.sessions_left === 0) noSessArr.push({ id: student.id, name: student.name })
+        if (sub?.end_date && sub.end_date >= today && sub.end_date <= in7days) expiringArr.push({ id: student.id, name: student.name })
         const hasActiveSub = sub && (sub.sessions_left ?? 0) > 0 && (!sub.end_date || sub.end_date >= today)
         if (hasActiveSub) {
           const lastDate = lastDateMap.get(student.id)
-          const daysSince = lastDate
-            ? Math.floor((Date.now() - new Date(lastDate).getTime()) / 86400000)
-            : null
-          if (daysSince === null || daysSince >= 7) {
-            churnArr.push({ id: student.id, name: student.name, daysSince })
-          }
+          const daysSince = lastDate ? Math.floor((Date.now() - new Date(lastDate).getTime()) / 86400000) : null
+          if (daysSince === null || daysSince >= 7) churnArr.push({ id: student.id, name: student.name, daysSince })
         }
       }
 
       churnArr.sort((a, b) => (b.daysSince ?? 999) - (a.daysSince ?? 999))
-
       setTotalStudents(students.length)
       setNoSessions(noSessArr)
       setExpiring(expiringArr)
@@ -90,160 +78,186 @@ export default function Home() {
     router.push('/login')
   }
 
-  const sections = role
-    ? SECTIONS.filter(s => hasAccess(role, permissions, s.key))
-    : []
+  const sections = role ? SECTIONS.filter(s => hasAccess(role, permissions, s.key)) : []
+
+  const metrics = [
+    {
+      value: totalStudents,
+      label: 'Учеников',
+      kanji: '侍',
+      sub: 'всего активных',
+      color: 'from-zinc-800 to-zinc-900',
+      ring: 'ring-zinc-600',
+      text: 'text-white',
+      accent: 'text-amber-400',
+      onClick: null,
+    },
+    {
+      value: noSessions.length,
+      label: 'Без занятий',
+      kanji: '空',
+      sub: 'нет абонемента',
+      color: noSessions.length > 0 ? 'from-red-950 to-zinc-900' : 'from-zinc-800 to-zinc-900',
+      ring: noSessions.length > 0 ? 'ring-red-700' : 'ring-zinc-600',
+      text: noSessions.length > 0 ? 'text-red-400' : 'text-zinc-500',
+      accent: noSessions.length > 0 ? 'text-red-300' : 'text-zinc-600',
+      onClick: noSessions.length > 0 ? () => setModal('noSessions') : null,
+    },
+    {
+      value: expiring.length,
+      label: 'Истекает',
+      kanji: '期',
+      sub: 'абонемент в 7 дней',
+      color: expiring.length > 0 ? 'from-amber-950 to-zinc-900' : 'from-zinc-800 to-zinc-900',
+      ring: expiring.length > 0 ? 'ring-amber-600' : 'ring-zinc-600',
+      text: expiring.length > 0 ? 'text-amber-400' : 'text-zinc-500',
+      accent: expiring.length > 0 ? 'text-amber-300' : 'text-zinc-600',
+      onClick: expiring.length > 0 ? () => setModal('expiring') : null,
+    },
+    {
+      value: churn.length,
+      label: 'Не приходят',
+      kanji: '眠',
+      sub: '7+ дней без визита',
+      color: churn.length > 0 ? 'from-orange-950 to-zinc-900' : 'from-zinc-800 to-zinc-900',
+      ring: churn.length > 0 ? 'ring-orange-700' : 'ring-zinc-600',
+      text: churn.length > 0 ? 'text-orange-400' : 'text-zinc-500',
+      accent: churn.length > 0 ? 'text-orange-300' : 'text-zinc-600',
+      onClick: churn.length > 0 ? () => setModal('churn') : null,
+    },
+  ]
 
   return (
-    <main className="max-w-lg mx-auto p-4">
-      <div className="flex items-center justify-between pt-4 pb-2 mb-2">
+    <main className="min-h-screen bg-zinc-950">
+      {/* Header */}
+      <div className="px-5 pt-8 pb-4 flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">⚔️ Школа Самурая</h1>
-          <p className="text-gray-500 text-sm mt-0.5">Центр физического развития и самозащиты</p>
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-amber-400 text-2xl">⚔</span>
+            <h1 className="text-white text-xl font-bold tracking-wide">Школа Самурая</h1>
+          </div>
+          <p className="text-zinc-500 text-xs tracking-widest uppercase">武道 · Путь воина</p>
         </div>
-        {userName && (
-          <button onClick={signOut}
-            className="text-xs text-gray-400 border border-gray-200 px-3 py-1.5 rounded-xl shrink-0 ml-3">
-            Выйти
+        <div className="flex flex-col items-end gap-2">
+          {userName && (
+            <button onClick={signOut}
+              className="text-xs text-zinc-500 border border-zinc-800 px-3 py-1.5 rounded-lg hover:border-zinc-600 transition-colors">
+              Выйти
+            </button>
+          )}
+          <button onClick={sendReport} disabled={notifying}
+            className="text-xs text-zinc-500 disabled:opacity-40 hover:text-zinc-300 transition-colors">
+            {notifying ? '...' : '📨'}
           </button>
+        </div>
+      </div>
+
+      {/* Разделитель */}
+      <div className="mx-5 h-px bg-gradient-to-r from-transparent via-amber-900/50 to-transparent mb-6" />
+
+      {/* Метрики — приборная панель */}
+      <div className="px-4 grid grid-cols-2 gap-3 mb-6">
+        {metrics.map((m, i) => (
+          <button
+            key={i}
+            onClick={m.onClick ?? undefined}
+            disabled={!m.onClick}
+            className={`
+              relative bg-gradient-to-br ${m.color}
+              ring-1 ${m.ring}
+              rounded-2xl p-4 text-left
+              transition-all duration-200
+              ${m.onClick ? 'active:scale-95 hover:ring-2' : 'cursor-default'}
+              overflow-hidden
+            `}
+          >
+            {/* Иероглиф-фон */}
+            <span className={`absolute right-3 top-1 text-5xl font-bold opacity-10 select-none ${m.accent}`}>
+              {m.kanji}
+            </span>
+            {/* Значение */}
+            <div className={`text-3xl font-bold mb-0.5 ${m.text}`}>{m.value}</div>
+            <div className="text-white text-sm font-medium">{m.label}</div>
+            <div className="text-zinc-500 text-xs mt-0.5">{m.sub}</div>
+            {/* Стрелка если кликабельно */}
+            {m.onClick && (
+              <div className={`absolute bottom-3 right-3 text-xs ${m.accent} opacity-60`}>›</div>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* Разделитель */}
+      <div className="mx-5 h-px bg-gradient-to-r from-transparent via-zinc-800 to-transparent mb-5" />
+
+      {/* Навигация */}
+      <div className="px-4 grid grid-cols-2 gap-3 mb-6">
+        {sections.map((s) => (
+          <Link key={s.route} href={s.route}
+            className="group bg-zinc-900 ring-1 ring-zinc-800 rounded-2xl p-4
+              hover:ring-amber-900 hover:bg-zinc-800
+              active:scale-95 transition-all duration-200">
+            <div className="text-3xl mb-2">{s.emoji}</div>
+            <div className="text-white text-sm font-medium">{s.label}</div>
+          </Link>
+        ))}
+        {role === 'founder' && (
+          <Link href="/admin-users"
+            className="group bg-zinc-900 ring-1 ring-zinc-800 rounded-2xl p-4
+              hover:ring-amber-900 hover:bg-zinc-800
+              active:scale-95 transition-all duration-200">
+            <div className="text-3xl mb-2">👤</div>
+            <div className="text-white text-sm font-medium">Сотрудники</div>
+          </Link>
         )}
       </div>
 
-      {/* Компактные алерты */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm mb-4 overflow-hidden">
-        {noSessions.length > 0 ? (
-          <button onClick={() => setModal('noSessions')}
-            className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-red-50 transition-colors border-b border-gray-50">
-            <span className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center text-base shrink-0">❗</span>
-            <span className="flex-1 text-left text-sm font-medium text-gray-700">Закончились занятия</span>
-            <span className="text-red-500 font-bold text-sm">{noSessions.length}</span>
-            <span className="text-gray-300 text-sm">›</span>
-          </button>
-        ) : (
-          <div className="flex items-center gap-3 px-4 py-3.5 border-b border-gray-50">
-            <span className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center text-base shrink-0">✅</span>
-            <span className="flex-1 text-sm text-gray-400">Занятия есть у всех</span>
-          </div>
-        )}
-
-        {expiring.length > 0 ? (
-          <button onClick={() => setModal('expiring')}
-            className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-yellow-50 transition-colors border-b border-gray-50">
-            <span className="w-8 h-8 rounded-full bg-yellow-100 flex items-center justify-center text-base shrink-0">⚠️</span>
-            <span className="flex-1 text-left text-sm font-medium text-gray-700">Абонемент истекает</span>
-            <span className="text-yellow-500 font-bold text-sm">{expiring.length}</span>
-            <span className="text-gray-300 text-sm">›</span>
-          </button>
-        ) : (
-          <div className="flex items-center gap-3 px-4 py-3.5 border-b border-gray-50">
-            <span className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center text-base shrink-0">✅</span>
-            <span className="flex-1 text-sm text-gray-400">Абонементы не истекают</span>
-          </div>
-        )}
-
-        {churn.length > 0 ? (
-          <button onClick={() => setModal('churn')}
-            className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-orange-50 transition-colors">
-            <span className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center text-base shrink-0">⏰</span>
-            <span className="flex-1 text-left text-sm font-medium text-gray-700">Не приходили 7+ дней</span>
-            <span className="text-orange-500 font-bold text-sm">{churn.length}</span>
-            <span className="text-gray-300 text-sm">›</span>
-          </button>
-        ) : (
-          <div className="flex items-center gap-3 px-4 py-3.5">
-            <span className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center text-base shrink-0">✅</span>
-            <span className="flex-1 text-sm text-gray-400">Все ходят регулярно</span>
-          </div>
-        )}
+      {/* Нижний декор */}
+      <div className="px-5 pb-8 text-center">
+        <span className="text-zinc-800 text-xs tracking-widest">一期一会</span>
       </div>
 
       {/* Модальное окно */}
       {modal && (
         <div className="fixed inset-0 z-50 flex flex-col justify-end" onClick={() => setModal(null)}>
-          <div className="absolute inset-0 bg-black/40" />
-          <div className="relative bg-white rounded-t-3xl max-h-[75vh] flex flex-col"
+          <div className="absolute inset-0 bg-black/70" />
+          <div className="relative bg-zinc-900 rounded-t-3xl max-h-[75vh] flex flex-col ring-1 ring-zinc-800"
             onClick={e => e.stopPropagation()}>
-            {/* Шапка модалки */}
-            <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-gray-100">
-              <div className="font-semibold text-gray-800">
-                {modal === 'noSessions' && `❗ Закончились занятия (${noSessions.length})`}
-                {modal === 'expiring'   && `⚠️ Абонемент истекает (${expiring.length})`}
-                {modal === 'churn'      && `⏰ Не приходили 7+ дней (${churn.length})`}
+            <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-zinc-800">
+              <div className="font-semibold text-white text-sm">
+                {modal === 'noSessions' && `Без занятий · ${noSessions.length}`}
+                {modal === 'expiring'   && `Истекает абонемент · ${expiring.length}`}
+                {modal === 'churn'      && `Не приходили 7+ дней · ${churn.length}`}
               </div>
               <button onClick={() => setModal(null)}
-                className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 text-lg">×</button>
+                className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center text-zinc-400 text-lg">×</button>
             </div>
-            {/* Список */}
             <div className="overflow-y-auto flex-1 px-5 py-3 space-y-1">
               {modal === 'noSessions' && noSessions.map(s => (
                 <Link key={s.id} href={`/students/${s.id}`} onClick={() => setModal(null)}
-                  className="flex items-center justify-between py-2.5 border-b border-gray-50 hover:text-black">
-                  <span className="text-sm text-gray-700">{s.name}</span>
-                  <span className="text-gray-300 text-sm">›</span>
+                  className="flex items-center justify-between py-2.5 border-b border-zinc-800 hover:text-amber-400 transition-colors">
+                  <span className="text-sm text-zinc-300">{s.name}</span>
+                  <span className="text-zinc-600 text-sm">›</span>
                 </Link>
               ))}
               {modal === 'expiring' && expiring.map(s => (
                 <Link key={s.id} href={`/students/${s.id}`} onClick={() => setModal(null)}
-                  className="flex items-center justify-between py-2.5 border-b border-gray-50 hover:text-black">
-                  <span className="text-sm text-gray-700">{s.name}</span>
-                  <span className="text-gray-300 text-sm">›</span>
+                  className="flex items-center justify-between py-2.5 border-b border-zinc-800 hover:text-amber-400 transition-colors">
+                  <span className="text-sm text-zinc-300">{s.name}</span>
+                  <span className="text-zinc-600 text-sm">›</span>
                 </Link>
               ))}
               {modal === 'churn' && churn.map(s => (
                 <Link key={s.id} href={`/students/${s.id}`} onClick={() => setModal(null)}
-                  className="flex items-center justify-between py-2.5 border-b border-gray-50 hover:text-black">
-                  <span className="text-sm text-gray-700">{s.name}</span>
-                  <span className="text-orange-400 text-xs">{s.daysSince !== null ? `${s.daysSince} дн.` : 'нет данных'}</span>
+                  className="flex items-center justify-between py-2.5 border-b border-zinc-800 hover:text-amber-400 transition-colors">
+                  <span className="text-sm text-zinc-300">{s.name}</span>
+                  <span className="text-orange-500 text-xs">{s.daysSince !== null ? `${s.daysSince} дн.` : '—'}</span>
                 </Link>
               ))}
             </div>
           </div>
         </div>
       )}
-
-      <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm mb-4 flex justify-around text-center">
-        <div>
-          <div className="text-2xl font-bold text-gray-800">{totalStudents}</div>
-          <div className="text-xs text-gray-400">учеников</div>
-        </div>
-        <button onClick={() => noSessions.length > 0 && setModal('noSessions')}
-          className={noSessions.length > 0 ? 'cursor-pointer active:scale-95 transition-transform' : ''}>
-          <div className="text-2xl font-bold text-red-500">{noSessions.length}</div>
-          <div className="text-xs text-gray-400">без занятий</div>
-        </button>
-        <button onClick={() => expiring.length > 0 && setModal('expiring')}
-          className={expiring.length > 0 ? 'cursor-pointer active:scale-95 transition-transform' : ''}>
-          <div className="text-2xl font-bold text-yellow-500">{expiring.length}</div>
-          <div className="text-xs text-gray-400">истекает</div>
-        </button>
-        <button onClick={() => churn.length > 0 && setModal('churn')}
-          className={churn.length > 0 ? 'cursor-pointer active:scale-95 transition-transform' : ''}>
-          <div className="text-2xl font-bold text-orange-500">{churn.length}</div>
-          <div className="text-xs text-gray-400">не приходят</div>
-        </button>
-      </div>
-
-      <button onClick={sendReport} disabled={notifying}
-        className="w-full border border-gray-200 text-gray-600 py-2.5 rounded-xl text-sm mb-4 disabled:opacity-50">
-        {notifying ? 'Отправка...' : '📨 Отправить отчёт в Telegram'}
-      </button>
-
-      <div className="grid grid-cols-2 gap-4">
-        {sections.map((s) => (
-          <Link key={s.route} href={s.route}
-            className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 hover:shadow-md transition-shadow active:scale-95">
-            <div className="text-4xl mb-2">{s.emoji}</div>
-            <div className="font-semibold text-gray-800">{s.label}</div>
-          </Link>
-        ))}
-        {role === 'founder' && (
-          <Link href="/admin-users"
-            className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 hover:shadow-md transition-shadow active:scale-95">
-            <div className="text-4xl mb-2">👤</div>
-            <div className="font-semibold text-gray-800">Сотрудники</div>
-          </Link>
-        )}
-      </div>
     </main>
   )
 }
