@@ -117,8 +117,8 @@ export default function Home() {
       kanji: '侍',
       sub: 'активных',
       glow: '',
-      border: 'border-[#3A3A3C]',
-      numColor: 'text-white',
+      border: theme === 'dark' ? 'border-[#3A3A3C]' : 'border-[#E5E4E0]',
+      numColor: theme === 'dark' ? 'text-white' : 'text-[#1C1C1E]',
       onClick: null as (() => void) | null,
     },
     {
@@ -127,8 +127,8 @@ export default function Home() {
       kanji: '空',
       sub: 'нет абонемента',
       glow: noSessions.length > 0 ? 'glow-red' : '',
-      border: noSessions.length > 0 ? 'border-[#E8121E]/40' : 'border-[#3A3A3C]',
-      numColor: noSessions.length > 0 ? 'text-[#E8121E]' : 'text-[#48484A]',
+      border: noSessions.length > 0 ? 'border-[#E8121E]/40' : theme === 'dark' ? 'border-[#3A3A3C]' : 'border-[#E5E4E0]',
+      numColor: noSessions.length > 0 ? 'text-[#E8121E]' : theme === 'dark' ? 'text-[#48484A]' : 'text-[#C0BFBB]',
       onClick: noSessions.length > 0 ? () => setModal('noSessions') : null,
     },
     {
@@ -137,8 +137,8 @@ export default function Home() {
       kanji: '期',
       sub: 'абонемент в 7 дней',
       glow: expiring.length > 0 ? 'glow-amber' : '',
-      border: expiring.length > 0 ? 'border-amber-500/40' : 'border-[#3A3A3C]',
-      numColor: expiring.length > 0 ? 'text-amber-400' : 'text-[#48484A]',
+      border: expiring.length > 0 ? 'border-amber-500/40' : theme === 'dark' ? 'border-[#3A3A3C]' : 'border-[#E5E4E0]',
+      numColor: expiring.length > 0 ? 'text-amber-500' : theme === 'dark' ? 'text-[#48484A]' : 'text-[#C0BFBB]',
       onClick: expiring.length > 0 ? () => setModal('expiring') : null,
     },
     {
@@ -147,8 +147,8 @@ export default function Home() {
       kanji: '眠',
       sub: '7+ дней без визита',
       glow: churn.length > 0 ? 'glow-orange' : '',
-      border: churn.length > 0 ? 'border-orange-500/40' : 'border-[#3A3A3C]',
-      numColor: churn.length > 0 ? 'text-orange-400' : 'text-[#48484A]',
+      border: churn.length > 0 ? 'border-orange-500/40' : theme === 'dark' ? 'border-[#3A3A3C]' : 'border-[#E5E4E0]',
+      numColor: churn.length > 0 ? 'text-orange-500' : theme === 'dark' ? 'text-[#48484A]' : 'text-[#C0BFBB]',
       onClick: churn.length > 0 ? () => setModal('churn') : null,
     },
   ]
