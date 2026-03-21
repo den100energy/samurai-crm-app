@@ -31,9 +31,15 @@ export default function TrainerStudentsPage() {
 
   async function loadData() {
     const { data: slots } = await supabase.from('schedule').select('group_name').eq('trainer_name', userName)
-    const groups = [...new Set((slots || []).map(s => s.group_name).filter(Boolean))] as string[]
-    setMyGroups(groups)
+    let groups = [...new Set((slots || []).map(s => s.group_name).filter(Boolean))] as string[]
 
+    if (groups.length === 0) {
+      // Расписание не настроено — показываем всех учеников
+      const { data: studs } = await supabase.from('students').select('group_name').eq('status', 'active')
+      groups = [...new Set((studs || []).map(s => s.group_name).filter(Boolean))] as string[]
+    }
+
+    setMyGroups(groups)
     if (groups.length === 0) { setDataLoading(false); return }
 
     const { data: studs } = await supabase

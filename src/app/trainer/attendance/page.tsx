@@ -21,10 +21,18 @@ export default function TrainerAttendancePage() {
   useEffect(() => {
     if (!loading && userName) {
       supabase.from('schedule').select('group_name').eq('trainer_name', userName)
-        .then(({ data }) => {
+        .then(async ({ data }) => {
           const groups = [...new Set((data || []).map(s => s.group_name).filter(Boolean))] as string[]
-          setMyGroups(groups)
-          if (groups.length === 1) setSelectedGroup(groups[0])
+          if (groups.length > 0) {
+            setMyGroups(groups)
+            if (groups.length === 1) setSelectedGroup(groups[0])
+          } else {
+            // Расписание не настроено — показываем все группы
+            const { data: studs } = await supabase
+              .from('students').select('group_name').eq('status', 'active')
+            const allGroups = [...new Set((studs || []).map(s => s.group_name).filter(Boolean))] as string[]
+            setMyGroups(allGroups)
+          }
         })
     }
   }, [loading, userName])

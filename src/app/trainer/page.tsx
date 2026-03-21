@@ -64,9 +64,14 @@ export default function TrainerPage() {
           <h1 className="text-xl font-bold text-gray-800">🥋 {userName || 'Тренер'}</h1>
           <p className="text-sm text-gray-400">Кабинет тренера</p>
         </div>
-        <button onClick={signOut} className="text-sm text-gray-400 border border-gray-200 px-3 py-1.5 rounded-xl">
-          Выйти
-        </button>
+        <div className="flex items-center gap-2">
+          <Link href="/" className="text-sm text-gray-400 border border-gray-200 px-3 py-1.5 rounded-xl">
+            Главная
+          </Link>
+          <button onClick={signOut} className="text-sm text-gray-400 border border-gray-200 px-3 py-1.5 rounded-xl">
+            Выйти
+          </button>
+        </div>
       </div>
 
       {/* Статистика */}
@@ -96,6 +101,13 @@ export default function TrainerPage() {
           <span className="text-xs text-gray-400">{studentCount} чел.</span>
         </Link>
       </div>
+
+      {/* Предупреждение если расписание не настроено */}
+      {schedule.length === 0 && (
+        <div className="bg-amber-50 border border-amber-100 rounded-2xl p-3 mb-4 text-xs text-amber-700">
+          ⚠️ Расписание не настроено. Попросите администратора добавить ваши группы в расписание. Пока доступны все группы.
+        </div>
+      )}
 
       {/* Расписание сегодня */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-4">
