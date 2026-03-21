@@ -142,11 +142,8 @@ export default function AdminUsersPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     })
-    const data = await res.json()
-    if (!data.error) {
-      setOpenPanel(prev => ({ ...prev, [userId]: null }))
-      loadAll()
-    }
+    setOpenPanel(prev => ({ ...prev, [userId]: null }))
+    loadAll()
     setSavingId(null)
   }
 
