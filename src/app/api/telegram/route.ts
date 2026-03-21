@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
-const CLIENT_BOT_TOKEN = process.env.TELEGRAM_CLIENT_BOT_TOKEN!
+const CLIENT_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN!
 const FINANCE_CHAT_ID = process.env.TELEGRAM_FINANCE_CHAT_ID || ''
 
 const supabase = createClient(
