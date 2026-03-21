@@ -160,6 +160,10 @@ async function handleFinance(chat_id: number, text: string, sender: string, thre
 export async function POST(req: NextRequest) {
   const body = await req.json()
 
+  console.log('TG update keys:', JSON.stringify(Object.keys(body || {})))
+  console.log('chat_id:', body?.message?.chat?.id, 'text:', body?.message?.text, 'thread:', body?.message?.message_thread_id)
+  console.log('FINANCE_CHAT_ID env:', process.env.TELEGRAM_FINANCE_CHAT_ID)
+
   // Callback (кнопка)
   if (body?.callback_query) {
     const cb = body.callback_query
