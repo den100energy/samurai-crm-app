@@ -40,13 +40,26 @@ function parseFinanceMessage(text: string) {
 
   let rest = raw.slice(amountMatch[1].length).trim()
 
+  // Извлекаем дату в конце: ДД.ММ или ДД.ММ.ГГ или ДД.ММ.ГГГГ
+  let paid_at: string = new Date().toISOString().split('T')[0]
+  const dateMatch = rest.match(/\b(\d{1,2})\.(\d{1,2})(?:\.(\d{2,4}))?\s*$/)
+  if (dateMatch) {
+    const day = dateMatch[1].padStart(2, '0')
+    const month = dateMatch[2].padStart(2, '0')
+    let year = dateMatch[3]
+    if (!year) year = new Date().getFullYear().toString()
+    if (year.length === 2) year = '20' + year
+    paid_at = `${year}-${month}-${day}`
+    rest = rest.slice(0, dateMatch.index).trim()
+  }
+
   // Определяем payment_type
   let payment_type: 'cash' | 'transfer' = 'cash'
   if (/безнал|перевод|карта/i.test(rest)) {
     payment_type = 'transfer'
     rest = rest.replace(/\s*(безнал|перевод|карта)\s*/i, ' ').trim()
   } else if (/\bнал\b|наличн/i.test(rest)) {
-    rest = rest.replace(/\s*\bнал\b|наличн\w*\s*/i, ' ').trim()
+    rest = rest.replace(/\s*(\bнал\b|наличн\w*)\s*/i, ' ').trim()
   }
 
   // Ищем категорию (длинные первыми)
@@ -70,7 +83,7 @@ function parseFinanceMessage(text: string) {
     comment = words.slice(1).join(' ')
   }
 
-  return { direction, amount, category, comment, payment_type }
+  return { direction, amount, category, comment, payment_type, paid_at }
 }
 
 // ─── Telegram helpers ─────────────────────────────────────────────────────────
@@ -120,14 +133,13 @@ async function handleFinance(chat_id: number, text: string, sender: string, thre
     return
   }
 
-  const today = new Date().toISOString().split('T')[0]
   const { data: pending, error } = await supabase.from('payments').insert({
     amount: parsed.amount,
     direction: parsed.direction,
     category: parsed.category,
     description: parsed.comment || null,
     payment_type: parsed.payment_type,
-    paid_at: today,
+    paid_at: parsed.paid_at,
     status: 'pending',
   }).select().single()
 
@@ -138,7 +150,7 @@ async function handleFinance(chat_id: number, text: string, sender: string, thre
 
   const sign = parsed.direction === 'income' ? '💰 Доход' : '💸 Расход'
   const payLabel = parsed.payment_type === 'cash' ? 'наличные' : 'перевод'
-  const dateLabel = new Date().toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })
+  const dateLabel = new Date(parsed.paid_at + 'T12:00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })
 
   const msg =
     `${sign} · <b>${parsed.amount.toLocaleString()} ₽</b>\n` +
@@ -214,7 +226,12 @@ export async function POST(req: NextRequest) {
       `<b>Как записывать операции:</b>\n\n` +
       `<b>Доход:</b> <code>+ сумма категория комментарий</code>\n` +
       `<b>Расход:</b> <code>- сумма категория комментарий</code>\n\n` +
-      `<b>Безнал:</b> добавь слово <code>безнал</code>\n\n` +
+      `<b>Примеры:</b>\n` +
+      `<code>+ 5700 Абонементы Иванов Иван</code>\n` +
+      `<code>- 74160 Аренда апрель 11.04</code>\n` +
+      `<code>+ 6000 Абонементы Петров безнал 20.03</code>\n\n` +
+      `<b>Дата</b> (необязательно): ДД.ММ в конце\n` +
+      `<b>Безнал</b>: добавь слово <code>безнал</code>\n\n` +
       `<b>Категории доходов:</b>\n${INCOME_CATEGORIES.join(' · ')}\n\n` +
       `<b>Категории расходов:</b>\n${EXPENSE_CATEGORIES.join(' · ')}`,
       undefined, thread_id
