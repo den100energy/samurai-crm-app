@@ -206,14 +206,21 @@ export default function Home() {
           <div className="text-2xl font-bold text-gray-800">{totalStudents}</div>
           <div className="text-xs text-gray-400">учеников</div>
         </div>
-        <div>
+        <button onClick={() => noSessions.length > 0 && setModal('noSessions')}
+          className={noSessions.length > 0 ? 'cursor-pointer active:scale-95 transition-transform' : ''}>
           <div className="text-2xl font-bold text-red-500">{noSessions.length}</div>
           <div className="text-xs text-gray-400">без занятий</div>
-        </div>
-        <div>
+        </button>
+        <button onClick={() => expiring.length > 0 && setModal('expiring')}
+          className={expiring.length > 0 ? 'cursor-pointer active:scale-95 transition-transform' : ''}>
           <div className="text-2xl font-bold text-yellow-500">{expiring.length}</div>
           <div className="text-xs text-gray-400">истекает</div>
-        </div>
+        </button>
+        <button onClick={() => churn.length > 0 && setModal('churn')}
+          className={churn.length > 0 ? 'cursor-pointer active:scale-95 transition-transform' : ''}>
+          <div className="text-2xl font-bold text-orange-500">{churn.length}</div>
+          <div className="text-xs text-gray-400">не приходят</div>
+        </button>
       </div>
 
       <button onClick={sendReport} disabled={notifying}
