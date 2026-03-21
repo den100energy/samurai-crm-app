@@ -55,6 +55,13 @@ export default function LeadsPage() {
   async function updateStatus(id: string, status: string) {
     await supabase.from('leads').update({ status }).eq('id', id)
     setLeads(prev => prev.map(l => l.id === id ? { ...l, status } : l))
+    if (status === 'trial') {
+      fetch('/api/auto-send-survey', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lead_id: id }),
+      })
+    }
   }
 
   async function deleteLead(id: string) {
