@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/components/AuthProvider'
 
@@ -10,6 +11,7 @@ type AttendanceRecord = { student_id: string; present: boolean }
 
 export default function TrainerAttendancePage() {
   const { userName, loading } = useAuth()
+  const searchParams = useSearchParams()
   const [myGroups, setMyGroups] = useState<string[]>([])
   const [selectedGroup, setSelectedGroup] = useState('')
   const [date, setDate] = useState(new Date().toISOString().split('T')[0])
@@ -18,6 +20,14 @@ export default function TrainerAttendancePage() {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
 
+  // Pre-fill from URL params (?date=&group=)
+  useEffect(() => {
+    const urlDate = searchParams.get('date')
+    const urlGroup = searchParams.get('group')
+    if (urlDate) setDate(urlDate)
+    if (urlGroup) setSelectedGroup(urlGroup)
+  }, [searchParams])
+
   useEffect(() => {
     if (!loading && userName) {
       supabase.from('schedule').select('group_name').eq('trainer_name', userName)
@@ -25,13 +35,15 @@ export default function TrainerAttendancePage() {
           const groups = [...new Set((data || []).map(s => s.group_name).filter(Boolean))] as string[]
           if (groups.length > 0) {
             setMyGroups(groups)
-            if (groups.length === 1) setSelectedGroup(groups[0])
+            // Only auto-set group if no URL param was given
+            if (!searchParams.get('group') && groups.length === 1) setSelectedGroup(groups[0])
           } else {
             // Расписание не настроено — показываем все группы
             const { data: studs } = await supabase
               .from('students').select('group_name').eq('status', 'active')
             const allGroups = [...new Set((studs || []).map(s => s.group_name).filter(Boolean))] as string[]
             setMyGroups(allGroups)
+            if (!searchParams.get('group') && allGroups.length === 1) setSelectedGroup(allGroups[0])
           }
         })
     }
@@ -43,18 +55,16 @@ export default function TrainerAttendancePage() {
   }, [selectedGroup, date])
 
   async function loadStudentsAndAttendance() {
-    const [{ data: studs }, { data: att }] = await Promise.all([
-      supabase.from('students').select('id, name, group_name').eq('group_name', selectedGroup).eq('status', 'active').order('name'),
-      supabase.from('attendance').select('student_id, present').eq('date', date).in(
-        'student_id',
-        // temp: fetch students first then filter — handled below
-        ['00000000-0000-0000-0000-000000000000']
-      ),
-    ])
+    const { data: studs } = await supabase
+      .from('students')
+      .select('id, name, group_name')
+      .eq('group_name', selectedGroup)
+      .eq('status', 'active')
+      .order('name')
+
     const studList = studs || []
     setStudents(studList)
 
-    // Загружаем посещаемость отдельно
     if (studList.length > 0) {
       const { data: attData } = await supabase
         .from('attendance')
@@ -120,6 +130,11 @@ export default function TrainerAttendancePage() {
             <option value="">Выберите группу</option>
             {myGroups.map(g => <option key={g} value={g}>{g}</option>)}
           </select>
+        )}
+        {myGroups.length === 1 && !selectedGroup && (
+          <div className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-600">
+            {myGroups[0]}
+          </div>
         )}
       </div>
 

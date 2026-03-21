@@ -24,6 +24,24 @@ type Subscription = { sessions_left: number | null; sessions_total: number | nul
 type Survey = { id: string; filled_at: string | null; created_at: string } & Record<string, number | null | string>
 type Task = { id: string; title: string; description: string | null; due_date: string | null; completed: boolean }
 type Cert = { id: string; type: string; title: string; date: string | null; notes: string | null }
+type ScheduleSlot = { id: string; day_of_week: number; time_start: string | null; trainer_name: string | null }
+type ScheduleOverride = { date: string; group_name: string; trainer_name: string | null; cancelled: boolean; note: string | null }
+
+const WEEK_DAYS_SHORT = ['', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
+
+function getThisWeekDates(): Record<number, string> {
+  const now = new Date()
+  const jsDay = now.getDay()
+  const monday = new Date(now)
+  monday.setDate(now.getDate() - (jsDay === 0 ? 6 : jsDay - 1))
+  const dates: Record<number, string> = {}
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(monday)
+    d.setDate(monday.getDate() + i)
+    dates[i + 1] = d.toISOString().split('T')[0]
+  }
+  return dates
+}
 
 const CERT_ICONS: Record<string,string> = {
   belt: '🥋', seminar: '📚', masterclass: '🎯', competition: '🏆', other: '⭐'
@@ -243,6 +261,8 @@ export default function CabinetPage() {
   const [certs, setCerts] = useState<Cert[]>([])
   const [attendance, setAttendance] = useState<{ date: string; present: boolean }[]>([])
   const [aiProgram, setAiProgram] = useState<string | null>(null)
+  const [scheduleSlots, setScheduleSlots] = useState<ScheduleSlot[]>([])
+  const [scheduleOverrides, setScheduleOverrides] = useState<ScheduleOverride[]>([])
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<'home' | 'progress' | 'tasks' | 'achievements'>('home')
   const [togglingTask, setTogglingTask] = useState<string | null>(null)
@@ -264,7 +284,11 @@ export default function CabinetPage() {
 
     const sid = studentData.id
 
-    const [subRes, surveysRes, tasksRes, certsRes, attRes, diagRes] = await Promise.all([
+    const weekDates = getThisWeekDates()
+    const monday = weekDates[1]
+    const sunday = weekDates[7]
+
+    const [subRes, surveysRes, tasksRes, certsRes, attRes, diagRes, schedRes, ovRes] = await Promise.all([
       supabase.from('subscriptions').select('sessions_left, sessions_total, end_date, type')
         .eq('student_id', sid).order('created_at', { ascending: false }).limit(1).maybeSingle(),
       supabase.from('progress_surveys').select('*').eq('student_id', sid).order('created_at'),
@@ -276,6 +300,15 @@ export default function CabinetPage() {
         .order('date', { ascending: false }).limit(180),
       supabase.from('diagnostic_surveys').select('ai_program').eq('student_id', sid)
         .order('created_at', { ascending: false }).limit(1).maybeSingle(),
+      studentData.group_name
+        ? supabase.from('schedule').select('id, day_of_week, time_start, trainer_name')
+            .eq('group_name', studentData.group_name).order('day_of_week').order('time_start')
+        : Promise.resolve({ data: [] }),
+      studentData.group_name
+        ? supabase.from('schedule_overrides').select('date, group_name, trainer_name, cancelled, note')
+            .eq('group_name', studentData.group_name)
+            .gte('date', monday).lte('date', sunday)
+        : Promise.resolve({ data: [] }),
     ])
 
     setSubscription(subRes.data)
@@ -284,6 +317,8 @@ export default function CabinetPage() {
     setCerts(certsRes.data || [])
     setAttendance(attRes.data || [])
     setAiProgram(diagRes.data?.ai_program || null)
+    setScheduleSlots((schedRes.data as ScheduleSlot[]) || [])
+    setScheduleOverrides((ovRes.data as ScheduleOverride[]) || [])
     setLoading(false)
   }
 
@@ -453,6 +488,62 @@ export default function CabinetPage() {
                 <div className="text-sm text-gray-400 text-center py-4">Абонемент не найден</div>
               )}
             </div>
+
+            {/* Расписание на эту неделю */}
+            {scheduleSlots.length > 0 && (() => {
+              const weekDates = getThisWeekDates()
+              const jsDay = new Date().getDay()
+              const todayNum = jsDay === 0 ? 7 : jsDay
+              return (
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+                  <h2 className="font-semibold text-gray-800 mb-3">📅 Расписание на неделю</h2>
+                  <div className="space-y-2">
+                    {[1,2,3,4,5,6,7].map(dayNum => {
+                      const slot = scheduleSlots.find(s => s.day_of_week === dayNum)
+                      if (!slot) return null
+                      const dateStr = weekDates[dayNum]
+                      const override = scheduleOverrides.find(o => o.date === dateStr)
+                      const isToday = dayNum === todayNum
+                      const isPast = new Date(dateStr + 'T23:59:59') < new Date()
+                      const cancelled = override?.cancelled
+                      const trainerName = override && !override.cancelled && override.trainer_name
+                        ? override.trainer_name
+                        : slot.trainer_name
+
+                      return (
+                        <div key={dayNum} className={`flex items-center gap-3 py-2 border-b border-gray-50 last:border-0 ${isPast && !isToday ? 'opacity-40' : ''}`}>
+                          <div className={`text-xs w-20 shrink-0 ${isToday ? 'font-bold text-black' : 'text-gray-500'}`}>
+                            {WEEK_DAYS_SHORT[dayNum]}{' '}
+                            <span className="text-gray-400">
+                              {new Date(dateStr + 'T00:00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}
+                            </span>
+                          </div>
+                          {cancelled ? (
+                            <div className="flex-1">
+                              <span className="text-xs text-red-500">❌ Тренировка отменена</span>
+                              {override?.note && <span className="text-xs text-gray-400 ml-1">· {override.note}</span>}
+                            </div>
+                          ) : (
+                            <div className="flex-1 flex items-center gap-2">
+                              {slot.time_start && (
+                                <span className="text-xs font-medium text-gray-700">{slot.time_start.slice(0,5)}</span>
+                              )}
+                              {trainerName && (
+                                <span className={`text-xs ${override && !override.cancelled ? 'text-amber-600 font-medium' : 'text-gray-500'}`}>
+                                  {override && !override.cancelled && override.trainer_name ? '🔄 ' : ''}
+                                  {trainerName}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                          {isToday && <span className="text-xs bg-black text-white px-2 py-0.5 rounded-full shrink-0">сегодня</span>}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })()}
 
             {/* Календарь посещений */}
             <AttendanceCalendar attendance={attendance} />

@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/send-survey2",
       "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/cron/weekly-schedule-reminder",
+      "schedule": "0 9 * * 6"
     }
   ]
 }
