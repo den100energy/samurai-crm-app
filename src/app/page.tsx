@@ -145,10 +145,19 @@ export default function Home() {
               Выйти
             </button>
           )}
-          <button onClick={sendReport} disabled={notifying}
-            className="text-xs text-zinc-500 disabled:opacity-40 hover:text-zinc-300 transition-colors">
-            {notifying ? '...' : '📨'}
-          </button>
+          <div className="relative group">
+            <button onClick={sendReport} disabled={notifying}
+              className="text-xs text-zinc-400 border border-zinc-700 px-3 py-1.5 rounded-lg
+                hover:border-amber-700 hover:text-amber-400 disabled:opacity-40 transition-colors flex items-center gap-1.5">
+              <span>📨</span>
+              <span>{notifying ? 'Отправка...' : 'Отчёт'}</span>
+            </button>
+            <div className="absolute right-0 top-full mt-2 w-48 bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2
+              text-xs text-zinc-300 leading-relaxed
+              opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-10">
+              Отправить сводку по ученикам (без занятий, истекающие абонементы) в Telegram
+            </div>
+          </div>
         </div>
       </div>
 
