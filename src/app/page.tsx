@@ -10,11 +10,12 @@ import { SECTIONS, hasAccess } from '@/lib/auth'
 export default function Home() {
   const { role, userName, permissions } = useAuth()
   const router = useRouter()
-  const [expiring, setExpiring] = useState<any[]>([])
-  const [noSessions, setNoSessions] = useState<any[]>([])
+  const [expiring, setExpiring] = useState<{ id: string; name: string }[]>([])
+  const [noSessions, setNoSessions] = useState<{ id: string; name: string }[]>([])
   const [churn, setChurn] = useState<{ id: string; name: string; daysSince: number | null }[]>([])
   const [totalStudents, setTotalStudents] = useState(0)
   const [notifying, setNotifying] = useState(false)
+  const [modal, setModal] = useState<'noSessions' | 'expiring' | 'churn' | null>(null)
 
   useEffect(() => {
     async function load() {
@@ -49,10 +50,10 @@ export default function Home() {
       for (const student of students) {
         const sub = subMap.get(student.id)
         if (!sub || sub.sessions_left === 0) {
-          noSessArr.push({ id: student.id, students: { name: student.name } })
+          noSessArr.push({ id: student.id, name: student.name })
         }
         if (sub?.end_date && sub.end_date >= today && sub.end_date <= in7days) {
-          expiringArr.push({ id: student.id, students: { name: student.name } })
+          expiringArr.push({ id: student.id, name: student.name })
         }
         // Churn: active subscription but not attended in 7+ days
         const hasActiveSub = sub && (sub.sessions_left ?? 0) > 0 && (!sub.end_date || sub.end_date >= today)
@@ -108,48 +109,95 @@ export default function Home() {
         )}
       </div>
 
-      {noSessions.length > 0 && (
-        <div className="bg-red-50 border border-red-200 rounded-2xl p-4 mb-3">
-          <div className="font-semibold text-red-700 mb-2">❗ Закончились занятия ({noSessions.length})</div>
-          <div className="space-y-1">
-            {noSessions.slice(0, 5).map((s: any) => (
-              <div key={s.id} className="text-sm text-red-600">{s.students?.name}</div>
-            ))}
-            {noSessions.length > 5 && <div className="text-sm text-red-400">и ещё {noSessions.length - 5}...</div>}
+      {/* Компактные алерты */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm mb-4 overflow-hidden">
+        {noSessions.length > 0 ? (
+          <button onClick={() => setModal('noSessions')}
+            className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-red-50 transition-colors border-b border-gray-50">
+            <span className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center text-base shrink-0">❗</span>
+            <span className="flex-1 text-left text-sm font-medium text-gray-700">Закончились занятия</span>
+            <span className="text-red-500 font-bold text-sm">{noSessions.length}</span>
+            <span className="text-gray-300 text-sm">›</span>
+          </button>
+        ) : (
+          <div className="flex items-center gap-3 px-4 py-3.5 border-b border-gray-50">
+            <span className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center text-base shrink-0">✅</span>
+            <span className="flex-1 text-sm text-gray-400">Занятия есть у всех</span>
           </div>
-        </div>
-      )}
+        )}
 
-      {expiring.length > 0 && (
-        <div className="bg-yellow-50 border border-yellow-200 rounded-2xl p-4 mb-3">
-          <div className="font-semibold text-yellow-700 mb-2">⚠️ Абонемент истекает через 7 дней ({expiring.length})</div>
-          <div className="space-y-1">
-            {expiring.slice(0, 5).map((s: any) => (
-              <div key={s.id} className="text-sm text-yellow-700">{s.students?.name}</div>
-            ))}
-            {expiring.length > 5 && <div className="text-sm text-yellow-500">и ещё {expiring.length - 5}...</div>}
+        {expiring.length > 0 ? (
+          <button onClick={() => setModal('expiring')}
+            className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-yellow-50 transition-colors border-b border-gray-50">
+            <span className="w-8 h-8 rounded-full bg-yellow-100 flex items-center justify-center text-base shrink-0">⚠️</span>
+            <span className="flex-1 text-left text-sm font-medium text-gray-700">Абонемент истекает</span>
+            <span className="text-yellow-500 font-bold text-sm">{expiring.length}</span>
+            <span className="text-gray-300 text-sm">›</span>
+          </button>
+        ) : (
+          <div className="flex items-center gap-3 px-4 py-3.5 border-b border-gray-50">
+            <span className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center text-base shrink-0">✅</span>
+            <span className="flex-1 text-sm text-gray-400">Абонементы не истекают</span>
           </div>
-        </div>
-      )}
+        )}
 
-      {churn.length > 0 && (
-        <div className="bg-orange-50 border border-orange-200 rounded-2xl p-4 mb-3">
-          <div className="font-semibold text-orange-700 mb-2">⏰ Не приходили 7+ дней ({churn.length})</div>
-          <div className="space-y-1">
-            {churn.slice(0, 5).map(s => (
-              <div key={s.id} className="flex justify-between text-sm">
-                <span className="text-orange-700">{s.name}</span>
-                <span className="text-orange-400">{s.daysSince !== null ? `${s.daysSince} дн.` : 'нет данных'}</span>
+        {churn.length > 0 ? (
+          <button onClick={() => setModal('churn')}
+            className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-orange-50 transition-colors">
+            <span className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center text-base shrink-0">⏰</span>
+            <span className="flex-1 text-left text-sm font-medium text-gray-700">Не приходили 7+ дней</span>
+            <span className="text-orange-500 font-bold text-sm">{churn.length}</span>
+            <span className="text-gray-300 text-sm">›</span>
+          </button>
+        ) : (
+          <div className="flex items-center gap-3 px-4 py-3.5">
+            <span className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center text-base shrink-0">✅</span>
+            <span className="flex-1 text-sm text-gray-400">Все ходят регулярно</span>
+          </div>
+        )}
+      </div>
+
+      {/* Модальное окно */}
+      {modal && (
+        <div className="fixed inset-0 z-50 flex flex-col justify-end" onClick={() => setModal(null)}>
+          <div className="absolute inset-0 bg-black/40" />
+          <div className="relative bg-white rounded-t-3xl max-h-[75vh] flex flex-col"
+            onClick={e => e.stopPropagation()}>
+            {/* Шапка модалки */}
+            <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-gray-100">
+              <div className="font-semibold text-gray-800">
+                {modal === 'noSessions' && `❗ Закончились занятия (${noSessions.length})`}
+                {modal === 'expiring'   && `⚠️ Абонемент истекает (${expiring.length})`}
+                {modal === 'churn'      && `⏰ Не приходили 7+ дней (${churn.length})`}
               </div>
-            ))}
-            {churn.length > 5 && <div className="text-sm text-orange-400">и ещё {churn.length - 5}...</div>}
+              <button onClick={() => setModal(null)}
+                className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 text-lg">×</button>
+            </div>
+            {/* Список */}
+            <div className="overflow-y-auto flex-1 px-5 py-3 space-y-1">
+              {modal === 'noSessions' && noSessions.map(s => (
+                <Link key={s.id} href={`/students/${s.id}`} onClick={() => setModal(null)}
+                  className="flex items-center justify-between py-2.5 border-b border-gray-50 hover:text-black">
+                  <span className="text-sm text-gray-700">{s.name}</span>
+                  <span className="text-gray-300 text-sm">›</span>
+                </Link>
+              ))}
+              {modal === 'expiring' && expiring.map(s => (
+                <Link key={s.id} href={`/students/${s.id}`} onClick={() => setModal(null)}
+                  className="flex items-center justify-between py-2.5 border-b border-gray-50 hover:text-black">
+                  <span className="text-sm text-gray-700">{s.name}</span>
+                  <span className="text-gray-300 text-sm">›</span>
+                </Link>
+              ))}
+              {modal === 'churn' && churn.map(s => (
+                <Link key={s.id} href={`/students/${s.id}`} onClick={() => setModal(null)}
+                  className="flex items-center justify-between py-2.5 border-b border-gray-50 hover:text-black">
+                  <span className="text-sm text-gray-700">{s.name}</span>
+                  <span className="text-orange-400 text-xs">{s.daysSince !== null ? `${s.daysSince} дн.` : 'нет данных'}</span>
+                </Link>
+              ))}
+            </div>
           </div>
-        </div>
-      )}
-
-      {noSessions.length === 0 && expiring.length === 0 && churn.length === 0 && (
-        <div className="bg-green-50 border border-green-200 rounded-2xl p-3 mb-3 text-center text-sm text-green-700">
-          ✅ Всё в порядке — у всех учеников есть занятия
         </div>
       )}
 
