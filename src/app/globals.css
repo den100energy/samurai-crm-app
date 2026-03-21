@@ -1,6 +1,8 @@
 @import "tailwindcss";
 
-/* ── Тёмная тема (по умолчанию) ─────────────────────────────── */
+/* ══════════════════════════════════════════════════
+   ТЁМНАЯ ТЕМА (по умолчанию)
+══════════════════════════════════════════════════ */
 :root,
 [data-theme="dark"] {
   --bg:          #1C1C1E;
@@ -10,87 +12,149 @@
   --border-light:#48484A;
   --text-1:      #FFFFFF;
   --text-2:      #E5E5E7;
-  --text-3:      #8E8E93;
-  --text-4:      #636366;
-  --text-5:      #48484A;
+  --text-3:      #AEAEB2;
+  --text-4:      #8E8E93;
+  --text-5:      #636366;
   --red:         #E8121E;
   --input-bg:    #2C2C2E;
   --input-border:#3A3A3C;
 }
 
-/* ── Светлая тема ───────────────────────────────────────────── */
+/* ══════════════════════════════════════════════════
+   СВЕТЛАЯ ТЕМА
+══════════════════════════════════════════════════ */
 [data-theme="light"] {
   --bg:          #F5F4F0;
   --bg-card:     #FFFFFF;
   --bg-hover:    #F0EFEB;
   --border:      #E5E4E0;
-  --border-light:#ECECEC;
+  --border-light:#D8D7D3;
   --text-1:      #0A0A0A;
   --text-2:      #1C1C1E;
-  --text-3:      #6B6B6B;
-  --text-4:      #9A9A9A;
-  --text-5:      #C0BFBB;
+  --text-3:      #3A3A3C;
+  --text-4:      #6B6B6B;
+  --text-5:      #9A9A9A;
   --red:         #E8121E;
   --input-bg:    #FFFFFF;
   --input-border:#D8D7D3;
 }
 
-/* ── Базовые стили ──────────────────────────────────────────── */
-body { background-color: var(--bg); color: var(--text-1); transition: background-color 0.3s, color 0.3s; }
+/* ══════════════════════════════════════════════════
+   БАЗОВЫЕ СТИЛИ
+══════════════════════════════════════════════════ */
+body {
+  background-color: var(--bg);
+  color: var(--text-1);
+  transition: background-color 0.3s, color 0.3s;
+}
 .app-bg { background-color: var(--bg); }
 
-/* ── Glow эффекты ───────────────────────────────────────────── */
+/* ══════════════════════════════════════════════════
+   GLOW ЭФФЕКТЫ (дашборд)
+══════════════════════════════════════════════════ */
 .glow-red    { box-shadow: 0 0 24px rgba(232,18,30,0.25),  0 0 48px rgba(232,18,30,0.08); }
 .glow-amber  { box-shadow: 0 0 24px rgba(245,158,11,0.25), 0 0 48px rgba(245,158,11,0.08); }
 .glow-orange { box-shadow: 0 0 24px rgba(234,88,12,0.25),  0 0 48px rgba(234,88,12,0.08); }
 
-/* ── Анимации ───────────────────────────────────────────────── */
+/* ══════════════════════════════════════════════════
+   АНИМАЦИЯ СОЛНЦА
+══════════════════════════════════════════════════ */
 @keyframes sunPulse {
   0%, 100% { opacity: 0.85; transform: scale(1); }
   50%       { opacity: 1;    transform: scale(1.04); }
 }
 .sun-pulse { animation: sunPulse 5s ease-in-out infinite; }
 
-/* ── Переопределение Tailwind-классов для светлой темы ─────── */
-/* Фоны */
-[data-theme="light"] .bg-white        { background-color: #FFFFFF !important; }
-[data-theme="light"] .bg-gray-50      { background-color: #F5F4F0 !important; }
-[data-theme="light"] .bg-gray-100     { background-color: #ECECEC !important; }
-[data-theme="light"] .bg-gray-200     { background-color: #E0DFDb !important; }
-[data-theme="dark"]  .bg-white        { background-color: #2C2C2E !important; }
-[data-theme="dark"]  .bg-gray-50      { background-color: #1C1C1E !important; }
-[data-theme="dark"]  .bg-gray-100     { background-color: #3A3A3C !important; }
-[data-theme="dark"]  .bg-gray-200     { background-color: #48484A !important; }
+/* ══════════════════════════════════════════════════
+   ТЁМНАЯ ТЕМА — ПЕРЕОПРЕДЕЛЕНИЕ TAILWIND КЛАССОВ
+══════════════════════════════════════════════════ */
 
-/* Текст */
-[data-theme="dark"]  .text-gray-800   { color: #E5E5E7 !important; }
-[data-theme="dark"]  .text-gray-700   { color: #C7C7CC !important; }
-[data-theme="dark"]  .text-gray-600   { color: #8E8E93 !important; }
-[data-theme="dark"]  .text-gray-500   { color: #8E8E93 !important; }
-[data-theme="dark"]  .text-gray-400   { color: #636366 !important; }
-[data-theme="dark"]  .text-gray-300   { color: #48484A !important; }
-[data-theme="dark"]  .text-black      { color: #FFFFFF !important; }
+/* ─── Серые фоны ─── */
+[data-theme="dark"] .bg-white        { background-color: #2C2C2E !important; }
+[data-theme="dark"] .bg-gray-50      { background-color: #1C1C1E !important; }
+[data-theme="dark"] .bg-gray-100     { background-color: #3A3A3C !important; }
+[data-theme="dark"] .bg-gray-200     { background-color: #48484A !important; }
+[data-theme="dark"] .bg-gray-700     { background-color: #636366 !important; }
+[data-theme="dark"] .bg-gray-800     { background-color: #48484A !important; }
 
-/* Границы */
-[data-theme="dark"]  .border-gray-100 { border-color: #3A3A3C !important; }
-[data-theme="dark"]  .border-gray-200 { border-color: #3A3A3C !important; }
-[data-theme="dark"]  .border-gray-300 { border-color: #48484A !important; }
+/* ─── Цветные фоны -50 (бейджи, карточки статусов) ─── */
+[data-theme="dark"] .bg-green-50     { background-color: #1A2E1E !important; }
+[data-theme="dark"] .bg-red-50       { background-color: #2E1A1A !important; }
+[data-theme="dark"] .bg-blue-50      { background-color: #1A1E2E !important; }
+[data-theme="dark"] .bg-yellow-50    { background-color: #2E2A14 !important; }
+[data-theme="dark"] .bg-amber-50     { background-color: #2E2614 !important; }
+[data-theme="dark"] .bg-orange-50    { background-color: #2E1E14 !important; }
+[data-theme="dark"] .bg-purple-50    { background-color: #1E1A2E !important; }
 
-/* Инпуты */
-[data-theme="dark"]  input,
-[data-theme="dark"]  select,
-[data-theme="dark"]  textarea {
+/* ─── Цветные фоны -100 ─── */
+[data-theme="dark"] .bg-green-100    { background-color: #1E3824 !important; }
+[data-theme="dark"] .bg-red-100      { background-color: #381E1E !important; }
+[data-theme="dark"] .bg-blue-100     { background-color: #1E2238 !important; }
+[data-theme="dark"] .bg-yellow-100   { background-color: #38321A !important; }
+[data-theme="dark"] .bg-amber-100    { background-color: #382E1A !important; }
+[data-theme="dark"] .bg-orange-100   { background-color: #38241A !important; }
+[data-theme="dark"] .bg-purple-100   { background-color: #261E38 !important; }
+
+/* ─── Серый текст ─── */
+[data-theme="dark"] .text-gray-900   { color: #F2F2F7 !important; }
+[data-theme="dark"] .text-gray-800   { color: #E5E5E7 !important; }
+[data-theme="dark"] .text-gray-700   { color: #D1D1D6 !important; }
+[data-theme="dark"] .text-gray-600   { color: #AEAEB2 !important; }
+[data-theme="dark"] .text-gray-500   { color: #8E8E93 !important; }
+[data-theme="dark"] .text-gray-400   { color: #6D6D72 !important; }
+[data-theme="dark"] .text-gray-300   { color: #8E8E93 !important; }
+[data-theme="dark"] .text-black      { color: #F2F2F7 !important; }
+
+/* ─── Цветной текст — делаем чуть светлее для читаемости на тёмном фоне ─── */
+[data-theme="dark"] .text-green-700  { color: #4ADE80 !important; }
+[data-theme="dark"] .text-green-600  { color: #34D399 !important; }
+[data-theme="dark"] .text-green-500  { color: #34D399 !important; }
+[data-theme="dark"] .text-red-600    { color: #F87171 !important; }
+[data-theme="dark"] .text-red-500    { color: #F87171 !important; }
+[data-theme="dark"] .text-red-400    { color: #FCA5A5 !important; }
+[data-theme="dark"] .text-blue-700   { color: #60A5FA !important; }
+[data-theme="dark"] .text-blue-600   { color: #60A5FA !important; }
+[data-theme="dark"] .text-blue-500   { color: #93C5FD !important; }
+[data-theme="dark"] .text-yellow-600 { color: #FCD34D !important; }
+[data-theme="dark"] .text-yellow-500 { color: #FDE68A !important; }
+[data-theme="dark"] .text-amber-700  { color: #FCD34D !important; }
+[data-theme="dark"] .text-amber-600  { color: #FDE68A !important; }
+[data-theme="dark"] .text-orange-700 { color: #FB923C !important; }
+[data-theme="dark"] .text-orange-600 { color: #FB923C !important; }
+[data-theme="dark"] .text-orange-500 { color: #FDBA74 !important; }
+[data-theme="dark"] .text-purple-700 { color: #C084FC !important; }
+[data-theme="dark"] .text-purple-600 { color: #C084FC !important; }
+
+/* ─── Границы ─── */
+[data-theme="dark"] .border-gray-50  { border-color: #2C2C2E !important; }
+[data-theme="dark"] .border-gray-100 { border-color: #3A3A3C !important; }
+[data-theme="dark"] .border-gray-200 { border-color: #3A3A3C !important; }
+[data-theme="dark"] .border-gray-300 { border-color: #48484A !important; }
+[data-theme="dark"] .border-green-100{ border-color: #1E3824 !important; }
+[data-theme="dark"] .border-red-100  { border-color: #381E1E !important; }
+[data-theme="dark"] .border-blue-100 { border-color: #1E2238 !important; }
+
+/* ─── Инпуты, селекты, текстареи ─── */
+[data-theme="dark"] input,
+[data-theme="dark"] select,
+[data-theme="dark"] textarea {
   background-color: #2C2C2E !important;
   color: #E5E5E7 !important;
   border-color: #3A3A3C !important;
 }
-[data-theme="dark"]  input::placeholder,
-[data-theme="dark"]  textarea::placeholder { color: #636366 !important; }
+[data-theme="dark"] input::placeholder,
+[data-theme="dark"] textarea::placeholder { color: #636366 !important; }
+[data-theme="dark"] select option { background-color: #2C2C2E; color: #E5E5E7; }
 
-/* Тени */
-[data-theme="dark"]  .shadow-sm  { box-shadow: 0 1px 4px rgba(0,0,0,0.6) !important; }
-[data-theme="dark"]  .shadow-md  { box-shadow: 0 4px 12px rgba(0,0,0,0.7) !important; }
+/* ─── Тени ─── */
+[data-theme="dark"] .shadow-sm  { box-shadow: 0 1px 4px rgba(0,0,0,0.5) !important; }
+[data-theme="dark"] .shadow-md  { box-shadow: 0 4px 12px rgba(0,0,0,0.6) !important; }
 
-/* Кнопки */
-[data-theme="dark"]  .bg-black   { background-color: #E8121E !important; }
-[data-theme="dark"]  .hover\:bg-black:hover { background-color: #C00F19 !important; }
+/* ─── Чёрные кнопки → красные в тёмной теме ─── */
+[data-theme="dark"] .bg-black          { background-color: #E8121E !important; }
+[data-theme="dark"] .hover\:bg-black:hover { background-color: #C00F19 !important; }
+
+/* ─── Hover-состояния ─── */
+[data-theme="dark"] .hover\:text-black:hover { color: #F2F2F7 !important; }
+[data-theme="dark"] .hover\:bg-gray-50:hover { background-color: #3A3A3C !important; }
+[data-theme="dark"] .hover\:bg-red-50:hover  { background-color: #3A1F1F !important; }
