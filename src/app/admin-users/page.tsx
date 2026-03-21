@@ -39,7 +39,7 @@ export default function AdminUsersPage() {
 
   async function loadAll() {
     const [usersRes, trainersRes] = await Promise.all([
-      fetch('/api/admin/users'),
+      fetch('/api/admin/users', { cache: 'no-store' }),
       import('@/lib/supabase').then(m => m.supabase.from('trainers').select('id, name').order('name')),
     ])
     const usersData = await usersRes.json()
