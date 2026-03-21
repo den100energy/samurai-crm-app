@@ -3,6 +3,7 @@ import { Roboto_Slab } from 'next/font/google'
 import './globals.css'
 import FloatingBack from '@/components/FloatingBack'
 import { AuthProvider } from '@/components/AuthProvider'
+import { ThemeProvider } from '@/components/ThemeProvider'
 
 const robotoSlab = Roboto_Slab({
   subsets: ['latin', 'cyrillic'],
@@ -18,12 +19,14 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="ru" className={robotoSlab.variable}>
-      <body className="bg-[#1C1C1E] min-h-screen" style={{ fontFamily: 'var(--font-roboto-slab), serif' }}>
-        <AuthProvider>
-          {children}
-          <FloatingBack />
-        </AuthProvider>
+    <html lang="ru" className={robotoSlab.variable} data-theme="dark">
+      <body className="app-bg min-h-screen" style={{ fontFamily: 'var(--font-roboto-slab), serif' }}>
+        <ThemeProvider>
+          <AuthProvider>
+            {children}
+            <FloatingBack />
+          </AuthProvider>
+        </ThemeProvider>
       </body>
     </html>
   )

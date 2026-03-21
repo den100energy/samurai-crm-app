@@ -1,19 +1,96 @@
 @import "tailwindcss";
 
-:root {
-  --brand-red: #E8121E;
-  --bg-main: #1C1C1E;
-  --bg-card: #2C2C2E;
-  --bg-card-hover: #3A3A3C;
-  --border-subtle: #3A3A3C;
+/* ── Тёмная тема (по умолчанию) ─────────────────────────────── */
+:root,
+[data-theme="dark"] {
+  --bg:          #1C1C1E;
+  --bg-card:     #2C2C2E;
+  --bg-hover:    #3A3A3C;
+  --border:      #3A3A3C;
+  --border-light:#48484A;
+  --text-1:      #FFFFFF;
+  --text-2:      #E5E5E7;
+  --text-3:      #8E8E93;
+  --text-4:      #636366;
+  --text-5:      #48484A;
+  --red:         #E8121E;
+  --input-bg:    #2C2C2E;
+  --input-border:#3A3A3C;
 }
 
+/* ── Светлая тема ───────────────────────────────────────────── */
+[data-theme="light"] {
+  --bg:          #F5F4F0;
+  --bg-card:     #FFFFFF;
+  --bg-hover:    #F0EFEB;
+  --border:      #E5E4E0;
+  --border-light:#ECECEC;
+  --text-1:      #0A0A0A;
+  --text-2:      #1C1C1E;
+  --text-3:      #6B6B6B;
+  --text-4:      #9A9A9A;
+  --text-5:      #C0BFBB;
+  --red:         #E8121E;
+  --input-bg:    #FFFFFF;
+  --input-border:#D8D7D3;
+}
+
+/* ── Базовые стили ──────────────────────────────────────────── */
+body { background-color: var(--bg); color: var(--text-1); transition: background-color 0.3s, color 0.3s; }
+.app-bg { background-color: var(--bg); }
+
+/* ── Glow эффекты ───────────────────────────────────────────── */
 .glow-red    { box-shadow: 0 0 24px rgba(232,18,30,0.25),  0 0 48px rgba(232,18,30,0.08); }
 .glow-amber  { box-shadow: 0 0 24px rgba(245,158,11,0.25), 0 0 48px rgba(245,158,11,0.08); }
 .glow-orange { box-shadow: 0 0 24px rgba(234,88,12,0.25),  0 0 48px rgba(234,88,12,0.08); }
 
+/* ── Анимации ───────────────────────────────────────────────── */
 @keyframes sunPulse {
   0%, 100% { opacity: 0.85; transform: scale(1); }
   50%       { opacity: 1;    transform: scale(1.04); }
 }
 .sun-pulse { animation: sunPulse 5s ease-in-out infinite; }
+
+/* ── Переопределение Tailwind-классов для светлой темы ─────── */
+/* Фоны */
+[data-theme="light"] .bg-white        { background-color: #FFFFFF !important; }
+[data-theme="light"] .bg-gray-50      { background-color: #F5F4F0 !important; }
+[data-theme="light"] .bg-gray-100     { background-color: #ECECEC !important; }
+[data-theme="light"] .bg-gray-200     { background-color: #E0DFDb !important; }
+[data-theme="dark"]  .bg-white        { background-color: #2C2C2E !important; }
+[data-theme="dark"]  .bg-gray-50      { background-color: #1C1C1E !important; }
+[data-theme="dark"]  .bg-gray-100     { background-color: #3A3A3C !important; }
+[data-theme="dark"]  .bg-gray-200     { background-color: #48484A !important; }
+
+/* Текст */
+[data-theme="dark"]  .text-gray-800   { color: #E5E5E7 !important; }
+[data-theme="dark"]  .text-gray-700   { color: #C7C7CC !important; }
+[data-theme="dark"]  .text-gray-600   { color: #8E8E93 !important; }
+[data-theme="dark"]  .text-gray-500   { color: #8E8E93 !important; }
+[data-theme="dark"]  .text-gray-400   { color: #636366 !important; }
+[data-theme="dark"]  .text-gray-300   { color: #48484A !important; }
+[data-theme="dark"]  .text-black      { color: #FFFFFF !important; }
+
+/* Границы */
+[data-theme="dark"]  .border-gray-100 { border-color: #3A3A3C !important; }
+[data-theme="dark"]  .border-gray-200 { border-color: #3A3A3C !important; }
+[data-theme="dark"]  .border-gray-300 { border-color: #48484A !important; }
+
+/* Инпуты */
+[data-theme="dark"]  input,
+[data-theme="dark"]  select,
+[data-theme="dark"]  textarea {
+  background-color: #2C2C2E !important;
+  color: #E5E5E7 !important;
+  border-color: #3A3A3C !important;
+}
+[data-theme="dark"]  input::placeholder,
+[data-theme="dark"]  textarea::placeholder { color: #636366 !important; }
+
+/* Тени */
+[data-theme="dark"]  .shadow-sm  { box-shadow: 0 1px 4px rgba(0,0,0,0.6) !important; }
+[data-theme="dark"]  .shadow-md  { box-shadow: 0 4px 12px rgba(0,0,0,0.7) !important; }
+
+/* Кнопки */
+[data-theme="dark"]  .bg-black   { background-color: #E8121E !important; }
+[data-theme="dark"]  .hover\:bg-black:hover { background-color: #C00F19 !important; }

@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase'
 import { useEffect, useState } from 'react'
 import { useAuth } from '@/components/AuthProvider'
 import { SECTIONS, hasAccess } from '@/lib/auth'
+import { useTheme } from '@/components/ThemeProvider'
 
 // Mountain silhouette SVG
 function MountainDivider() {
@@ -35,6 +36,7 @@ function RedSun() {
 
 export default function Home() {
   const { role, userName, permissions } = useAuth()
+  const { theme, toggle: toggleTheme } = useTheme()
   const router = useRouter()
   const [expiring, setExpiring] = useState<{ id: string; name: string }[]>([])
   const [noSessions, setNoSessions] = useState<{ id: string; name: string }[]>([])
@@ -152,11 +154,11 @@ export default function Home() {
   ]
 
   return (
-    <main className="min-h-screen bg-[#1C1C1E] overflow-x-hidden">
+    <main className="min-h-screen overflow-x-hidden" style={{ backgroundColor: 'var(--bg)' }}>
 
       {/* Hero header с красным солнцем */}
       <div className="relative px-5 pt-10 pb-0"
-        style={{ background: 'linear-gradient(180deg, #0A0A0A 0%, #1C1C1E 100%)' }}>
+        style={{ background: theme === 'dark' ? 'linear-gradient(180deg, #0A0A0A 0%, #1C1C1E 100%)' : 'linear-gradient(180deg, #E8E6E0 0%, #F5F4F0 100%)' }}>
 
         {/* Верхняя строка */}
         <div className="flex items-center justify-between mb-6">
@@ -186,6 +188,12 @@ export default function Home() {
                 Отправить сводку (без занятий, истекающие абонементы) в Telegram
               </div>
             </div>
+            <button onClick={toggleTheme}
+              title={theme === 'dark' ? 'Светлая тема' : 'Тёмная тема'}
+              className="text-xs text-[#8E8E93] border border-[#3A3A3C] px-2.5 py-1.5 rounded-lg
+                hover:border-[#E8121E]/50 hover:text-[#E8121E] transition-all duration-200">
+              {theme === 'dark' ? '☀' : '🌙'}
+            </button>
             {userName && (
               <button onClick={signOut}
                 className="text-xs text-[#8E8E93] border border-[#3A3A3C] px-3 py-1.5 rounded-lg
@@ -208,11 +216,12 @@ export default function Home() {
             onClick={m.onClick ?? undefined}
             disabled={!m.onClick}
             className={`
-              relative bg-[#2C2C2E] border ${m.border} ${m.glow}
+              relative border ${m.border} ${m.glow}
               rounded-2xl p-4 text-left overflow-hidden
               transition-all duration-300
               ${m.onClick ? 'active:scale-95 cursor-pointer' : 'cursor-default'}
             `}
+            style={{ backgroundColor: 'var(--bg-card)' }}
           >
             {/* Иероглиф-фон */}
             <span className="absolute right-2 top-0 text-[52px] font-bold select-none leading-none"
@@ -245,23 +254,22 @@ export default function Home() {
       <div className="px-4 grid grid-cols-2 gap-3 mb-8">
         {sections.map((s) => (
           <Link key={s.route} href={s.route}
-            className="group relative bg-[#2C2C2E] border border-[#3A3A3C] rounded-2xl p-4
-              hover:border-[#E8121E]/30 hover:bg-[#2C2C2E]
+            style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border)', color: 'var(--text-1)' }}
+            className="group relative border rounded-2xl p-4
               active:scale-95 transition-all duration-200 overflow-hidden">
-            {/* Красная линия сверху при ховере */}
             <div className="absolute top-0 left-0 right-0 h-0.5 bg-[#E8121E] scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-left rounded-t-2xl" />
             <div className="text-3xl mb-2">{s.emoji}</div>
-            <div className="text-white text-sm font-medium">{s.label}</div>
+            <div className="text-sm font-medium" style={{ color: 'var(--text-1)' }}>{s.label}</div>
           </Link>
         ))}
         {role === 'founder' && (
           <Link href="/admin-users"
-            className="group relative bg-[#2C2C2E] border border-[#3A3A3C] rounded-2xl p-4
-              hover:border-[#E8121E]/30
+            style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border)' }}
+            className="group relative border rounded-2xl p-4
               active:scale-95 transition-all duration-200 overflow-hidden">
             <div className="absolute top-0 left-0 right-0 h-0.5 bg-[#E8121E] scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-left rounded-t-2xl" />
             <div className="text-3xl mb-2">👤</div>
-            <div className="text-white text-sm font-medium">Сотрудники</div>
+            <div className="text-sm font-medium" style={{ color: 'var(--text-1)' }}>Сотрудники</div>
           </Link>
         )}
       </div>
@@ -275,14 +283,15 @@ export default function Home() {
       {modal && (
         <div className="fixed inset-0 z-50 flex flex-col justify-end" onClick={() => setModal(null)}>
           <div className="absolute inset-0 bg-black/75 backdrop-blur-sm" />
-          <div className="relative bg-[#1C1C1E] rounded-t-3xl max-h-[75vh] flex flex-col border-t border-[#3A3A3C]"
+          <div className="relative rounded-t-3xl max-h-[75vh] flex flex-col border-t"
+            style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)' }}
             onClick={e => e.stopPropagation()}>
             {/* Ручка */}
             <div className="flex justify-center pt-3 pb-1">
               <div className="w-10 h-1 bg-[#48484A] rounded-full" />
             </div>
-            <div className="flex items-center justify-between px-5 pt-2 pb-3 border-b border-[#3A3A3C]">
-              <div className="font-semibold text-white text-sm">
+            <div className="flex items-center justify-between px-5 pt-2 pb-3 border-b" style={{ borderColor: 'var(--border)' }}>
+              <div className="font-semibold text-sm" style={{ color: 'var(--text-1)' }}>
                 {modal === 'noSessions' && `Без занятий · ${noSessions.length} чел.`}
                 {modal === 'expiring'   && `Истекает абонемент · ${expiring.length} чел.`}
                 {modal === 'churn'      && `Не приходили 7+ дней · ${churn.length} чел.`}
