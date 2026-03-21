@@ -76,7 +76,7 @@ function parseFinanceMessage(text: string) {
 // ─── Telegram helpers ─────────────────────────────────────────────────────────
 
 async function send(chat_id: number, text: string, reply_markup?: object, thread_id?: number) {
-  await fetch(`https://api.telegram.org/bot${CRM_BOT_TOKEN}/sendMessage`, {
+  const res = await fetch(`https://api.telegram.org/bot${CRM_BOT_TOKEN}/sendMessage`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -84,6 +84,8 @@ async function send(chat_id: number, text: string, reply_markup?: object, thread
       ...(thread_id ? { message_thread_id: thread_id } : {}),
     }),
   })
+  const json = await res.json()
+  if (!json.ok) console.error('TG send error:', JSON.stringify(json), 'chat:', chat_id, 'thread:', thread_id)
 }
 
 async function editMsg(chat_id: number, message_id: number, text: string) {
