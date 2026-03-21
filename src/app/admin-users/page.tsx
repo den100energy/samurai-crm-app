@@ -119,14 +119,19 @@ export default function AdminUsersPage() {
   async function savePerms(userId: string) {
     setSavingId(userId)
     const user = users.find(u => u.id === userId)
-    await fetch('/api/admin/users', {
+    const res = await fetch('/api/admin/users', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: userId, permissions: user?.permissions || [], role: user?.role }),
     })
+    const data = await res.json()
     setSavingId(null)
+    if (data.error) {
+      alert('Ошибка сохранения прав: ' + data.error)
+      return
+    }
     setOpenPanel(prev => ({ ...prev, [userId]: null }))
-    loadAll()
+    await loadAll()
   }
 
   async function saveEdit(userId: string) {
