@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
@@ -9,7 +9,7 @@ import { useAuth } from '@/components/AuthProvider'
 type Student = { id: string; name: string; group_name: string | null }
 type AttendanceRecord = { student_id: string; present: boolean }
 
-export default function TrainerAttendancePage() {
+function AttendanceContent() {
   const { userName, loading } = useAuth()
   const searchParams = useSearchParams()
   const [myGroups, setMyGroups] = useState<string[]>([])
@@ -177,5 +177,13 @@ export default function TrainerAttendancePage() {
         </>
       )}
     </main>
+  )
+}
+
+export default function TrainerAttendancePage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-gray-400">Загрузка...</div>}>
+      <AttendanceContent />
+    </Suspense>
   )
 }
