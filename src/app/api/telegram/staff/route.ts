@@ -75,11 +75,14 @@ function parseFinanceMessage(text: string) {
 
 // ─── Telegram helpers ─────────────────────────────────────────────────────────
 
-async function send(chat_id: number, text: string, reply_markup?: object) {
+async function send(chat_id: number, text: string, reply_markup?: object, thread_id?: number) {
   await fetch(`https://api.telegram.org/bot${CRM_BOT_TOKEN}/sendMessage`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ chat_id, text, parse_mode: 'HTML', reply_markup }),
+    body: JSON.stringify({
+      chat_id, text, parse_mode: 'HTML', reply_markup,
+      ...(thread_id ? { message_thread_id: thread_id } : {}),
+    }),
   })
 }
 
@@ -101,7 +104,7 @@ async function answerCb(id: string) {
 
 // ─── Обработчик финансового сообщения ────────────────────────────────────────
 
-async function handleFinance(chat_id: number, text: string, sender: string) {
+async function handleFinance(chat_id: number, text: string, sender: string, thread_id?: number) {
   const parsed = parseFinanceMessage(text)
 
   if (!parsed) {
@@ -109,7 +112,8 @@ async function handleFinance(chat_id: number, text: string, sender: string) {
       `❌ Не понял формат. Примеры:\n\n` +
       `<code>+ 5700 Абонементы Иванов Иван</code>\n` +
       `<code>- 74160 Аренда апрель</code>\n` +
-      `<code>+ 6000 Абонементы Петров безнал</code>`
+      `<code>+ 6000 Абонементы Петров безнал</code>`,
+      undefined, thread_id
     )
     return
   }
@@ -126,7 +130,7 @@ async function handleFinance(chat_id: number, text: string, sender: string) {
   }).select().single()
 
   if (error || !pending) {
-    await send(chat_id, '❌ Ошибка сохранения. Попробуй ещё раз.')
+    await send(chat_id, '❌ Ошибка сохранения. Попробуй ещё раз.', undefined, thread_id)
     return
   }
 
@@ -146,7 +150,7 @@ async function handleFinance(chat_id: number, text: string, sender: string) {
       { text: '✅ Записать', callback_data: `fin_ok:${pending.id}` },
       { text: '❌ Отмена', callback_data: `fin_no:${pending.id}` },
     ]]
-  })
+  }, thread_id)
 }
 
 // ─── POST handler ─────────────────────────────────────────────────────────────
@@ -193,12 +197,13 @@ export async function POST(req: NextRequest) {
   const chat_id: number = message.chat.id
   const text: string = message.text || ''
   const firstName: string = message.from?.first_name || ''
+  const thread_id: number | undefined = message.message_thread_id
 
   // Финансовые команды (из любого чата если нет FINANCE_CHAT_ID, или из нужного чата)
   const isAllowed = !FINANCE_CHAT_ID || String(chat_id) === String(FINANCE_CHAT_ID)
 
   if (isAllowed && (text.startsWith('+') || text.startsWith('-'))) {
-    await handleFinance(chat_id, text, firstName)
+    await handleFinance(chat_id, text, firstName, thread_id)
     return NextResponse.json({ ok: true })
   }
 
@@ -209,7 +214,8 @@ export async function POST(req: NextRequest) {
       `<b>Расход:</b> <code>- сумма категория комментарий</code>\n\n` +
       `<b>Безнал:</b> добавь слово <code>безнал</code>\n\n` +
       `<b>Категории доходов:</b>\n${INCOME_CATEGORIES.join(' · ')}\n\n` +
-      `<b>Категории расходов:</b>\n${EXPENSE_CATEGORIES.join(' · ')}`
+      `<b>Категории расходов:</b>\n${EXPENSE_CATEGORIES.join(' · ')}`,
+      undefined, thread_id
     )
     return NextResponse.json({ ok: true })
   }
