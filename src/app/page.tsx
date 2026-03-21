@@ -12,6 +12,7 @@ export default function Home() {
   const router = useRouter()
   const [expiring, setExpiring] = useState<any[]>([])
   const [noSessions, setNoSessions] = useState<any[]>([])
+  const [churn, setChurn] = useState<{ id: string; name: string; daysSince: number | null }[]>([])
   const [totalStudents, setTotalStudents] = useState(0)
   const [notifying, setNotifying] = useState(false)
 
@@ -19,38 +20,59 @@ export default function Home() {
     async function load() {
       const today = new Date().toISOString().split('T')[0]
       const in7days = new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0]
+      const ago30days = new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0]
 
-      const [{ data: students }, { data: allSubs }] = await Promise.all([
+      const [{ data: students }, { data: allSubs }, { data: recentAtt }] = await Promise.all([
         supabase.from('students').select('id, name').eq('status', 'active'),
         supabase.from('subscriptions').select('student_id, sessions_left, end_date').order('created_at', { ascending: false }),
+        supabase.from('attendance').select('student_id, date').eq('present', true).gte('date', ago30days).order('date', { ascending: false }),
       ])
 
       if (!students) return
 
-      // Build map: student_id -> latest subscription
+      // student_id -> latest subscription
       const subMap = new Map<string, { sessions_left: number | null; end_date: string | null }>()
       for (const s of (allSubs || [])) {
         if (!subMap.has(s.student_id)) subMap.set(s.student_id, s)
       }
 
+      // student_id -> last attendance date (within 30 days)
+      const lastDateMap = new Map<string, string>()
+      for (const a of (recentAtt || [])) {
+        if (!lastDateMap.has(a.student_id)) lastDateMap.set(a.student_id, a.date)
+      }
+
       const noSessArr: any[] = []
       const expiringArr: any[] = []
+      const churnArr: { id: string; name: string; daysSince: number | null }[] = []
 
       for (const student of students) {
         const sub = subMap.get(student.id)
-        // No subscription at all, or sessions ran out
         if (!sub || sub.sessions_left === 0) {
           noSessArr.push({ id: student.id, students: { name: student.name } })
         }
-        // Subscription expires within 7 days
         if (sub?.end_date && sub.end_date >= today && sub.end_date <= in7days) {
           expiringArr.push({ id: student.id, students: { name: student.name } })
         }
+        // Churn: active subscription but not attended in 7+ days
+        const hasActiveSub = sub && (sub.sessions_left ?? 0) > 0 && (!sub.end_date || sub.end_date >= today)
+        if (hasActiveSub) {
+          const lastDate = lastDateMap.get(student.id)
+          const daysSince = lastDate
+            ? Math.floor((Date.now() - new Date(lastDate).getTime()) / 86400000)
+            : null
+          if (daysSince === null || daysSince >= 7) {
+            churnArr.push({ id: student.id, name: student.name, daysSince })
+          }
+        }
       }
+
+      churnArr.sort((a, b) => (b.daysSince ?? 999) - (a.daysSince ?? 999))
 
       setTotalStudents(students.length)
       setNoSessions(noSessArr)
       setExpiring(expiringArr)
+      setChurn(churnArr)
     }
     load()
   }, [])
@@ -110,7 +132,22 @@ export default function Home() {
         </div>
       )}
 
-      {noSessions.length === 0 && expiring.length === 0 && (
+      {churn.length > 0 && (
+        <div className="bg-orange-50 border border-orange-200 rounded-2xl p-4 mb-3">
+          <div className="font-semibold text-orange-700 mb-2">⏰ Не приходили 7+ дней ({churn.length})</div>
+          <div className="space-y-1">
+            {churn.slice(0, 5).map(s => (
+              <div key={s.id} className="flex justify-between text-sm">
+                <span className="text-orange-700">{s.name}</span>
+                <span className="text-orange-400">{s.daysSince !== null ? `${s.daysSince} дн.` : 'нет данных'}</span>
+              </div>
+            ))}
+            {churn.length > 5 && <div className="text-sm text-orange-400">и ещё {churn.length - 5}...</div>}
+          </div>
+        </div>
+      )}
+
+      {noSessions.length === 0 && expiring.length === 0 && churn.length === 0 && (
         <div className="bg-green-50 border border-green-200 rounded-2xl p-3 mb-3 text-center text-sm text-green-700">
           ✅ Всё в порядке — у всех учеников есть занятия
         </div>
