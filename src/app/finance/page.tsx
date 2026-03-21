@@ -7,17 +7,32 @@ import { supabase } from '@/lib/supabase'
 type Payment = {
   id: string
   amount: number
+  direction: 'income' | 'expense' | null
+  category: string | null
   payment_type: string
   description: string | null
   paid_at: string
-  students: { name: string } | null
+  status: string | null
 }
-
-type Student = { id: string; name: string }
 
 const MONTHS = [
   'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
   'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'
+]
+
+const INCOME_CATEGORIES = [
+  'Абонементы', 'Доплата за абон.', 'Мероприятия+', 'Товары+', 'Услуги+',
+  'Проб.зан', 'МК+', 'Интенсив+', 'Аттестация+', 'Курсы+',
+  'Получение кредита', 'Взнос основателя', 'Поступлений инвестиций',
+]
+
+const EXPENSE_CATEGORIES = [
+  'АНО Вакикай', 'Аренда', 'Возврат', 'Возврат инвестиций',
+  'ГСМ+транспорт', 'Кредит возврат', 'Маркетинг Абонементы',
+  'Маркетинг Доп.Продажи', 'Маркетинг Мероп.', 'Налоги',
+  'Обслуживание денег', 'Выплата Основателю', 'Промоутеры',
+  'Расходники', 'Связь/интернет', 'Сервисы', 'ФОНД ОТ',
+  'ФОТ - оклады', 'ФОТ бонус', 'Юрист', 'Мероприятия-', 'Товары-',
 ]
 
 export default function FinancePage() {
@@ -25,11 +40,15 @@ export default function FinancePage() {
   const [month, setMonth] = useState(now.getMonth())
   const [year] = useState(now.getFullYear())
   const [payments, setPayments] = useState<Payment[]>([])
-  const [students, setStudents] = useState<Student[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({
-    student_id: '', amount: '', payment_type: 'cash', description: '', paid_at: now.toISOString().split('T')[0]
+    direction: 'income' as 'income' | 'expense',
+    category: 'Абонементы',
+    amount: '',
+    payment_type: 'cash',
+    description: '',
+    paid_at: now.toISOString().split('T')[0],
   })
 
   async function loadPayments(m: number) {
@@ -40,59 +59,96 @@ export default function FinancePage() {
 
     const { data } = await supabase
       .from('payments')
-      .select('*, students(name)')
+      .select('id, amount, direction, category, payment_type, description, paid_at, status')
       .gte('paid_at', from)
       .lte('paid_at', to)
+      .neq('status', 'pending')
       .order('paid_at', { ascending: false })
 
     setPayments(data || [])
     setLoading(false)
   }
 
-  useEffect(() => {
-    supabase.from('students').select('id, name').eq('status', 'active').order('name')
-      .then(({ data }) => setStudents(data || []))
-    loadPayments(month)
-  }, [])
+  useEffect(() => { loadPayments(month) }, [])
 
   function changeMonth(m: number) {
     setMonth(m)
     loadPayments(m)
   }
 
+  function changeDirection(dir: 'income' | 'expense') {
+    const defaultCat = dir === 'income' ? 'Абонементы' : 'Аренда'
+    setForm(f => ({ ...f, direction: dir, category: defaultCat }))
+  }
+
   async function addPayment(e: React.FormEvent) {
     e.preventDefault()
     const { data } = await supabase.from('payments').insert({
-      student_id: form.student_id || null,
       amount: parseFloat(form.amount),
+      direction: form.direction,
+      category: form.category,
       payment_type: form.payment_type,
       description: form.description || null,
       paid_at: form.paid_at,
-    }).select('*, students(name)').single()
+      status: 'confirmed',
+    }).select('id, amount, direction, category, payment_type, description, paid_at, status').single()
 
-    if (data) setPayments(prev => [data, ...prev])
+    if (data) setPayments(prev => [data, ...prev].sort((a, b) => b.paid_at.localeCompare(a.paid_at)))
     setShowForm(false)
-    setForm({ student_id: '', amount: '', payment_type: 'cash', description: '', paid_at: now.toISOString().split('T')[0] })
+    setForm({ direction: 'income', category: 'Абонементы', amount: '', payment_type: 'cash', description: '', paid_at: now.toISOString().split('T')[0] })
   }
 
   async function deletePayment(id: string) {
-    if (!confirm('Удалить платёж?')) return
+    if (!confirm('Удалить запись?')) return
     await supabase.from('payments').delete().eq('id', id)
     setPayments(prev => prev.filter(p => p.id !== id))
   }
 
-  const totalAll = payments.reduce((sum, p) => sum + p.amount, 0)
-  const totalCash = payments.filter(p => p.payment_type === 'cash').reduce((sum, p) => sum + p.amount, 0)
-  const totalTransfer = payments.filter(p => p.payment_type === 'transfer').reduce((sum, p) => sum + p.amount, 0)
+  function exportCSV() {
+    const monthName = MONTHS[month]
+    const rows = [['Дата', 'Доход', 'Расход', 'Категория', 'Комментарий', 'Тип оплаты']]
+    const sorted = [...payments].sort((a, b) => a.paid_at.localeCompare(b.paid_at))
+    for (const p of sorted) {
+      const isIncome = p.direction === 'income' || p.direction === null
+      rows.push([
+        p.paid_at,
+        isIncome ? String(p.amount) : '',
+        !isIncome ? String(p.amount) : '',
+        p.category || '',
+        p.description || '',
+        p.payment_type === 'cash' ? 'Наличные' : 'Перевод',
+      ])
+    }
+    const csv = rows.map(r => r.map(c => `"${c}"`).join(',')).join('\n')
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `ОДДС_${monthName}_${year}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  // Итоги
+  const income = payments.filter(p => p.direction === 'income' || p.direction === null).reduce((s, p) => s + p.amount, 0)
+  const expense = payments.filter(p => p.direction === 'expense').reduce((s, p) => s + p.amount, 0)
+  const balance = income - expense
+  const cash = payments.filter(p => p.payment_type === 'cash' && (p.direction === 'income' || p.direction === null)).reduce((s, p) => s + p.amount, 0)
+  const transfer = payments.filter(p => p.payment_type === 'transfer' && (p.direction === 'income' || p.direction === null)).reduce((s, p) => s + p.amount, 0)
+
+  const categories = form.direction === 'income' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES
 
   return (
     <main className="max-w-lg mx-auto p-4">
       <div className="flex items-center gap-3 mb-4">
         <Link href="/" className="text-gray-500 hover:text-black text-xl font-bold leading-none">←</Link>
         <h1 className="text-xl font-bold text-gray-800">Финансы</h1>
+        <button onClick={exportCSV} className="ml-auto text-xs border border-gray-200 text-gray-600 px-3 py-1.5 rounded-xl">
+          ⬇ CSV
+        </button>
         <button onClick={() => setShowForm(!showForm)}
-          className="ml-auto bg-black text-white px-4 py-2 rounded-xl text-sm font-medium">
-          + Платёж
+          className="bg-black text-white px-4 py-2 rounded-xl text-sm font-medium">
+          + Добавить
         </button>
       </div>
 
@@ -108,32 +164,62 @@ export default function FinancePage() {
       </div>
 
       {/* Итоги */}
+      <div className="grid grid-cols-2 gap-3 mb-3">
+        <div className="bg-green-50 border border-green-100 rounded-2xl p-3 text-center">
+          <div className="text-lg font-bold text-green-700">+{income.toLocaleString()} ₽</div>
+          <div className="text-xs text-green-500">Доходы</div>
+        </div>
+        <div className="bg-red-50 border border-red-100 rounded-2xl p-3 text-center">
+          <div className="text-lg font-bold text-red-600">−{expense.toLocaleString()} ₽</div>
+          <div className="text-xs text-red-400">Расходы</div>
+        </div>
+      </div>
       <div className="grid grid-cols-3 gap-3 mb-4">
-        <div className="bg-white rounded-2xl p-3 border border-gray-100 shadow-sm text-center">
-          <div className="text-lg font-bold text-gray-800">{totalAll.toLocaleString()} ₽</div>
-          <div className="text-xs text-gray-400">Всего</div>
+        <div className={`rounded-2xl p-3 border text-center ${balance >= 0 ? 'bg-white border-gray-100' : 'bg-red-50 border-red-100'}`}>
+          <div className={`text-base font-bold ${balance >= 0 ? 'text-gray-800' : 'text-red-600'}`}>
+            {balance >= 0 ? '+' : ''}{balance.toLocaleString()} ₽
+          </div>
+          <div className="text-xs text-gray-400">Баланс</div>
         </div>
-        <div className="bg-white rounded-2xl p-3 border border-gray-100 shadow-sm text-center">
-          <div className="text-lg font-bold text-green-600">{totalCash.toLocaleString()} ₽</div>
-          <div className="text-xs text-gray-400">Наличные</div>
+        <div className="bg-white rounded-2xl p-3 border border-gray-100 text-center">
+          <div className="text-base font-bold text-gray-700">{cash.toLocaleString()} ₽</div>
+          <div className="text-xs text-gray-400">💵 Касса</div>
         </div>
-        <div className="bg-white rounded-2xl p-3 border border-gray-100 shadow-sm text-center">
-          <div className="text-lg font-bold text-blue-600">{totalTransfer.toLocaleString()} ₽</div>
-          <div className="text-xs text-gray-400">Перевод</div>
+        <div className="bg-white rounded-2xl p-3 border border-gray-100 text-center">
+          <div className="text-base font-bold text-gray-700">{transfer.toLocaleString()} ₽</div>
+          <div className="text-xs text-gray-400">💳 Счёт</div>
         </div>
       </div>
 
       {/* Форма добавления */}
       {showForm && (
         <form onSubmit={addPayment} className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm mb-4 space-y-3">
-          <select value={form.student_id} onChange={e => setForm({...form, student_id: e.target.value})}
+          {/* Доход / Расход */}
+          <div className="flex gap-2">
+            <button type="button" onClick={() => changeDirection('income')}
+              className={`flex-1 py-2 rounded-xl text-sm font-medium border transition-colors
+                ${form.direction === 'income' ? 'bg-green-600 text-white border-green-600' : 'border-gray-200 text-gray-600'}`}>
+              💰 Доход
+            </button>
+            <button type="button" onClick={() => changeDirection('expense')}
+              className={`flex-1 py-2 rounded-xl text-sm font-medium border transition-colors
+                ${form.direction === 'expense' ? 'bg-red-500 text-white border-red-500' : 'border-gray-200 text-gray-600'}`}>
+              💸 Расход
+            </button>
+          </div>
+
+          {/* Категория */}
+          <select value={form.category} onChange={e => setForm({...form, category: e.target.value})}
             className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none bg-white">
-            <option value="">Ученик (необязательно)</option>
-            {students.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            {categories.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
+
+          {/* Сумма */}
           <input required value={form.amount} onChange={e => setForm({...form, amount: e.target.value})}
             placeholder="Сумма (₽) *" type="number" min="0"
             className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none" />
+
+          {/* Нал / Безнал */}
           <div className="flex gap-2">
             <button type="button" onClick={() => setForm({...form, payment_type: 'cash'})}
               className={`flex-1 py-2 rounded-xl text-sm font-medium border transition-colors
@@ -146,37 +232,58 @@ export default function FinancePage() {
               💳 Перевод
             </button>
           </div>
+
+          {/* Комментарий */}
           <input value={form.description} onChange={e => setForm({...form, description: e.target.value})}
-            placeholder="Комментарий (абонемент, взнос...)"
+            placeholder="Комментарий (имя, назначение...)"
             className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none" />
+
+          {/* Дата */}
           <input required value={form.paid_at} onChange={e => setForm({...form, paid_at: e.target.value})}
             type="date" className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none" />
-          <button type="submit" className="w-full bg-black text-white py-2.5 rounded-xl text-sm font-medium">
-            Сохранить
-          </button>
+
+          <div className="flex gap-2">
+            <button type="submit" className="flex-1 bg-black text-white py-2.5 rounded-xl text-sm font-medium">
+              Сохранить
+            </button>
+            <button type="button" onClick={() => setShowForm(false)}
+              className="px-4 border border-gray-200 text-gray-500 py-2.5 rounded-xl text-sm">
+              Отмена
+            </button>
+          </div>
         </form>
       )}
 
-      {/* Список платежей */}
+      {/* Список операций */}
       {loading ? (
         <div className="text-center text-gray-400 py-12">Загрузка...</div>
       ) : payments.length === 0 ? (
-        <div className="text-center text-gray-400 py-12">Платежей в {MONTHS[month]} нет</div>
+        <div className="text-center text-gray-400 py-12">Операций в {MONTHS[month]} нет</div>
       ) : (
         <div className="space-y-2">
-          {payments.map(p => (
-            <div key={p.id} className="bg-white rounded-xl px-4 py-3 border border-gray-100 shadow-sm flex items-center gap-3">
-              <div className="text-xl">{p.payment_type === 'cash' ? '💵' : '💳'}</div>
-              <div className="flex-1 min-w-0">
-                <div className="font-medium text-gray-800">{p.students?.name || 'Без ученика'}</div>
-                <div className="text-xs text-gray-400">{p.description || '—'} · {p.paid_at}</div>
+          {payments.map(p => {
+            const isIncome = p.direction === 'income' || p.direction === null
+            return (
+              <div key={p.id} className="bg-white rounded-xl px-4 py-3 border border-gray-100 shadow-sm flex items-center gap-3">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0
+                  ${isIncome ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
+                  {isIncome ? '+' : '−'}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium text-gray-800 text-sm">{p.category || '—'}</div>
+                  <div className="text-xs text-gray-400 truncate">
+                    {p.description || ''}
+                    {p.description ? ' · ' : ''}
+                    {p.payment_type === 'cash' ? '💵' : '💳'} · {p.paid_at.slice(5).replace('-', '.')}
+                  </div>
+                </div>
+                <div className={`font-bold text-sm shrink-0 ${isIncome ? 'text-green-700' : 'text-red-500'}`}>
+                  {isIncome ? '+' : '−'}{p.amount.toLocaleString()} ₽
+                </div>
+                <button onClick={() => deletePayment(p.id)} className="text-gray-300 hover:text-red-400 text-lg shrink-0">×</button>
               </div>
-              <div className="text-right">
-                <div className="font-bold text-gray-800">{p.amount.toLocaleString()} ₽</div>
-              </div>
-              <button onClick={() => deletePayment(p.id)} className="text-gray-300 hover:text-red-400 text-lg ml-1">×</button>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
     </main>
