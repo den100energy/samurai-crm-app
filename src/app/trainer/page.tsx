@@ -5,6 +5,8 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/components/AuthProvider'
+import { useTheme } from '@/components/ThemeProvider'
+import { hasAccess } from '@/lib/auth'
 
 type ScheduleSlot = {
   id: string
@@ -21,7 +23,6 @@ type Override = {
   cancelled: boolean
 }
 
-const DAYS = ['', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье']
 const DAYS_SHORT = ['', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
 const TODAY_NUM = new Date().getDay() === 0 ? 7 : new Date().getDay()
 
@@ -40,20 +41,21 @@ function getWeekDates(): Record<number, string> {
 }
 
 export default function TrainerPage() {
-  const { userName, role, loading } = useAuth()
+  const { userName, role, permissions, loading } = useAuth()
+  const { theme, toggle: toggleTheme } = useTheme()
   const router = useRouter()
   const [schedule, setSchedule] = useState<ScheduleSlot[]>([])
   const [overrides, setOverrides] = useState<Override[]>([])
   const [studentCount, setStudentCount] = useState(0)
+
+  const dark = theme === 'dark'
 
   useEffect(() => {
     if (!loading && role !== 'trainer') {
       router.replace('/')
       return
     }
-    if (!loading && userName) {
-      loadData()
-    }
+    if (!loading && userName) loadData()
   }, [loading, role, userName])
 
   async function loadData() {
@@ -83,104 +85,116 @@ export default function TrainerPage() {
   if (loading) return <div className="min-h-screen flex items-center justify-center text-gray-400">Загрузка...</div>
 
   const weekDates = getWeekDates()
-  const todaySlots = schedule.filter(s => s.day_of_week === TODAY_NUM)
   const myGroups = [...new Set(schedule.map(s => s.group_name))]
 
-  // Build upcoming slots with dates (today + future this week), applying overrides
-  const upcomingSlots = [TODAY_NUM, ...Array.from({length: 7 - TODAY_NUM}, (_, i) => TODAY_NUM + i + 1)]
-    .flatMap(dayNum => {
-      return schedule
-        .filter(s => s.day_of_week === dayNum)
-        .map(s => {
-          const dateStr = weekDates[dayNum]
-          const override = overrides.find(o => o.date === dateStr && o.group_name === s.group_name)
-          // If cancelled or reassigned to another trainer — skip
-          if (override?.cancelled) return null
-          if (override?.trainer_name && override.trainer_name !== userName) return null
-          return { ...s, dateStr, dayNum, override }
-        })
-        .filter(Boolean)
-    }) as (ScheduleSlot & { dateStr: string; dayNum: number; override: Override | undefined })[]
+  const upcomingSlots = [TODAY_NUM, ...Array.from({ length: 7 - TODAY_NUM }, (_, i) => TODAY_NUM + i + 1)]
+    .flatMap(dayNum => schedule
+      .filter(s => s.day_of_week === dayNum)
+      .map(s => {
+        const dateStr = weekDates[dayNum]
+        const override = overrides.find(o => o.date === dateStr && o.group_name === s.group_name)
+        if (override?.cancelled) return null
+        if (override?.trainer_name && override.trainer_name !== userName) return null
+        return { ...s, dateStr, dayNum, override }
+      })
+      .filter(Boolean)
+    ) as (ScheduleSlot & { dateStr: string; dayNum: number; override: Override | undefined })[]
+
+  // Sections available to this trainer based on permissions
+  const navSections = [
+    { key: 'students', label: 'Ученики', emoji: '🥋', href: '/trainer/students', sub: `${studentCount} чел.` },
+    { key: 'leads', label: 'Лиды', emoji: '📋', href: '/leads', sub: 'Заявки' },
+    { key: 'finance', label: 'Финансы', emoji: '💰', href: '/finance', sub: 'Платежи' },
+    { key: 'events', label: 'Мероприятия', emoji: '🎉', href: '/events', sub: 'Список' },
+    { key: 'schedule', label: 'Расписание', emoji: '🗓', href: '/schedule', sub: 'Просмотр' },
+    { key: 'analytics', label: 'Аналитика', emoji: '📊', href: '/analytics', sub: 'Статистика' },
+    { key: 'broadcast', label: 'Рассылка', emoji: '📣', href: '/broadcast', sub: 'Telegram' },
+    { key: 'tickets', label: 'Обращения', emoji: '📝', href: '/tickets', sub: 'Вопросы' },
+  ].filter(s => hasAccess(role!, permissions, s.key))
+
+  const card = dark
+    ? 'bg-[#2C2C2E] border-[#3A3A3C]'
+    : 'bg-white border-gray-100 shadow-sm'
+
+  const textPrimary = dark ? 'text-[#E5E5E7]' : 'text-gray-800'
+  const textSecondary = dark ? 'text-[#8E8E93]' : 'text-gray-400'
 
   return (
-    <main className="max-w-lg mx-auto p-4">
-      {/* Шапка */}
+    <main className="max-w-lg mx-auto p-4" style={{ background: 'var(--bg)', minHeight: '100vh' }}>
+
+      {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-xl font-bold text-gray-800">🥋 {userName || 'Тренер'}</h1>
-          <p className="text-sm text-gray-400">Кабинет тренера</p>
+          <h1 className={`text-xl font-bold ${textPrimary}`}>🥋 {userName || 'Тренер'}</h1>
+          <p className={`text-sm ${textSecondary}`}>Кабинет тренера</p>
         </div>
         <div className="flex items-center gap-2">
-          <Link href="/" className="text-sm text-gray-400 border border-gray-200 px-3 py-1.5 rounded-xl">
-            Главная
-          </Link>
-          <button onClick={signOut} className="text-sm text-gray-400 border border-gray-200 px-3 py-1.5 rounded-xl">
+          <button onClick={toggleTheme}
+            className={`text-lg border rounded-xl px-3 py-1.5 ${card} ${textSecondary} border-opacity-50`}>
+            {dark ? '☀' : '🌙'}
+          </button>
+          <button onClick={signOut}
+            className={`text-sm border rounded-xl px-3 py-1.5 ${card} ${textSecondary}`}>
             Выйти
           </button>
         </div>
       </div>
 
-      {/* Статистика */}
+      {/* Stats */}
       <div className="grid grid-cols-2 gap-3 mb-4">
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 text-center">
-          <div className="text-2xl font-bold text-gray-800">{studentCount}</div>
-          <div className="text-xs text-gray-400 mt-0.5">учеников</div>
+        <div className={`rounded-2xl border p-4 text-center ${card}`}>
+          <div className={`text-2xl font-bold ${textPrimary}`}>{studentCount}</div>
+          <div className={`text-xs mt-0.5 ${textSecondary}`}>учеников</div>
         </div>
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 text-center">
-          <div className="text-2xl font-bold text-gray-800">{myGroups.length}</div>
-          <div className="text-xs text-gray-400 mt-0.5">групп</div>
+        <div className={`rounded-2xl border p-4 text-center ${card}`}>
+          <div className={`text-2xl font-bold ${textPrimary}`}>{myGroups.length}</div>
+          <div className={`text-xs mt-0.5 ${textSecondary}`}>групп</div>
         </div>
       </div>
 
-      {/* Быстрые действия */}
-      <div className="grid grid-cols-2 gap-3 mb-4">
-        <Link href="/trainer/attendance"
-          className="bg-black text-white rounded-2xl p-4 flex flex-col gap-1">
-          <span className="text-2xl">✅</span>
-          <span className="font-medium text-sm">Посещаемость</span>
-          <span className="text-xs text-gray-400">Отметить сегодня</span>
-        </Link>
-        <Link href="/trainer/students"
-          className="bg-white border border-gray-100 shadow-sm rounded-2xl p-4 flex flex-col gap-1">
-          <span className="text-2xl">👥</span>
-          <span className="font-medium text-sm text-gray-800">Мои ученики</span>
-          <span className="text-xs text-gray-400">{studentCount} чел.</span>
-        </Link>
-      </div>
+      {/* Attendance — always visible */}
+      <Link href="/trainer/attendance"
+        className="block rounded-2xl border p-4 mb-4 relative overflow-hidden"
+        style={{ background: '#B22222', borderColor: '#8B0000' }}>
+        <div className="relative z-10">
+          <div className="text-2xl mb-1">✅</div>
+          <div className="text-white font-semibold">Посещаемость</div>
+          <div className="text-red-200 text-xs mt-0.5">Отметить сегодня</div>
+        </div>
+      </Link>
 
-      {/* Предупреждение если расписание не настроено */}
+      {/* Schedule warning */}
       {schedule.length === 0 && (
         <div className="bg-amber-50 border border-amber-100 rounded-2xl p-3 mb-4 text-xs text-amber-700">
-          ⚠️ Расписание не настроено. Попросите администратора добавить ваши группы в расписание. Пока доступны все группы.
+          ⚠️ Расписание не настроено. Попросите администратора добавить ваши группы.
         </div>
       )}
 
-      {/* Занятия на этой неделе с датами */}
+      {/* Upcoming slots this week */}
       {upcomingSlots.length > 0 && (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-4">
-          <h2 className="font-semibold text-gray-800 mb-3">Занятия на этой неделе</h2>
+        <div className={`rounded-2xl border p-4 mb-4 ${card}`}>
+          <h2 className={`font-semibold mb-3 ${textPrimary}`}>Занятия на этой неделе</h2>
           <div className="space-y-2">
-            {upcomingSlots.map((slot, idx) => {
+            {upcomingSlots.map(slot => {
               const isToday = slot.dayNum === TODAY_NUM
               const dateLabel = new Date(slot.dateStr + 'T00:00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })
               return (
                 <div key={`${slot.id}-${slot.dateStr}`}
-                  className={`flex items-center justify-between py-2 border-b border-gray-50 last:border-0 ${isToday ? 'font-medium' : ''}`}>
+                  className={`flex items-center justify-between py-2 border-b last:border-0 ${dark ? 'border-[#3A3A3C]' : 'border-gray-50'}`}>
                   <div>
-                    <div className={`text-sm ${isToday ? 'text-black font-semibold' : 'text-gray-700'}`}>
+                    <div className={`text-sm ${isToday ? (dark ? 'text-white font-semibold' : 'text-black font-semibold') : textPrimary}`}>
                       {slot.group_name}
                     </div>
-                    <div className="text-xs text-gray-400 mt-0.5">
+                    <div className={`text-xs mt-0.5 ${textSecondary}`}>
                       {DAYS_SHORT[slot.dayNum]} {dateLabel}
-                      {isToday && <span className="ml-1 text-black font-medium">— сегодня</span>}
+                      {isToday && <span className={`ml-1 font-medium ${dark ? 'text-[#E5E5E7]' : 'text-black'}`}>— сегодня</span>}
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-bold text-gray-700">{slot.time_start?.slice(0,5)}</span>
+                    <span className={`text-sm font-bold ${textPrimary}`}>{slot.time_start?.slice(0, 5)}</span>
                     <Link
                       href={`/trainer/attendance?date=${slot.dateStr}&group=${encodeURIComponent(slot.group_name)}`}
-                      className="text-xs bg-black text-white px-2.5 py-1 rounded-lg"
-                    >
+                      className="text-xs bg-black text-white px-2.5 py-1 rounded-lg">
                       ✅
                     </Link>
                   </div>
@@ -191,31 +205,21 @@ export default function TrainerPage() {
         </div>
       )}
 
-      {/* Расписание на неделю (шаблон) */}
-      {schedule.length > 0 && (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-          <h2 className="font-semibold text-gray-800 mb-3">Шаблон расписания</h2>
-          <div className="space-y-1">
-            {[1,2,3,4,5,6,7].map(day => {
-              const slots = schedule.filter(s => s.day_of_week === day)
-              if (slots.length === 0) return null
-              return (
-                <div key={day} className="flex items-start gap-3 py-1.5">
-                  <span className={`text-xs w-20 shrink-0 pt-0.5 ${day === TODAY_NUM ? 'font-bold text-black' : 'text-gray-400'}`}>
-                    {DAYS[day]}
-                  </span>
-                  <div className="flex flex-wrap gap-1.5">
-                    {slots.map(s => (
-                      <span key={s.id} className="text-xs bg-gray-100 rounded-lg px-2 py-1">
-                        {s.time_start?.slice(0,5)} {s.group_name}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )
-            })}
+      {/* Permission-based nav sections */}
+      {navSections.length > 0 && (
+        <>
+          <h2 className={`text-sm font-medium mb-3 ${textSecondary}`}>Доступные разделы</h2>
+          <div className="grid grid-cols-2 gap-3 mb-4">
+            {navSections.map(s => (
+              <Link key={s.key} href={s.href}
+                className={`rounded-2xl border p-4 flex flex-col gap-1 transition-opacity hover:opacity-80 ${card}`}>
+                <span className="text-2xl">{s.emoji}</span>
+                <span className={`font-medium text-sm ${textPrimary}`}>{s.label}</span>
+                <span className={`text-xs ${textSecondary}`}>{s.sub}</span>
+              </Link>
+            ))}
           </div>
-        </div>
+        </>
       )}
     </main>
   )
