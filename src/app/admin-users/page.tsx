@@ -33,7 +33,7 @@ export default function AdminUsersPage() {
   const [savingId, setSavingId] = useState<string | null>(null)
 
   // Форма редактирования сотрудника
-  const [editForm, setEditForm] = useState<Record<string, { name: string; email: string; password: string }>>({})
+  const [editForm, setEditForm] = useState<Record<string, { name: string; email: string; password: string; trainer_id: string }>>({})
 
   useEffect(() => { loadAll() }, [])
 
@@ -85,7 +85,7 @@ export default function AdminUsersPage() {
     // Инициализируем форму редактирования
     if (panel === 'edit') {
       const u = users.find(u => u.id === userId)
-      if (u) setEditForm(prev => ({ ...prev, [userId]: { name: u.name || '', email: u.email || '', password: '' } }))
+      if (u) setEditForm(prev => ({ ...prev, [userId]: { name: u.name || '', email: u.email || '', password: '', trainer_id: u.trainer_id || '' } }))
     }
   }
 
@@ -139,10 +139,11 @@ export default function AdminUsersPage() {
     const f = editForm[userId]
     if (!f) return
     const currentUser = users.find(u => u.id === userId)
-    const body: Record<string, string> = { id: userId }
+    const body: Record<string, string | null> = { id: userId }
     if (f.name) body.name = f.name
     if (f.email && f.email !== currentUser?.email) body.email = f.email
     if (f.password) body.password = f.password
+    body.trainer_id = f.trainer_id || null
     const res = await fetch('/api/admin/users', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -353,6 +354,19 @@ export default function AdminUsersPage() {
                         placeholder="••••••••"
                         className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none" />
                     </div>
+                    {trainers.length > 0 && (
+                      <div>
+                        <label className="text-xs text-gray-500 block mb-1">🥋 Работает как тренер</label>
+                        <select
+                          value={ef.trainer_id}
+                          onChange={e => setEditForm(prev => ({ ...prev, [u.id]: { ...ef, trainer_id: e.target.value } }))}
+                          className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none bg-white">
+                          <option value="">— не тренирует —</option>
+                          {trainers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                        </select>
+                        <p className="text-xs text-gray-400 mt-1">Если выбрано — появится кабинет тренера</p>
+                      </div>
+                    )}
                     <div className="flex gap-2 pt-1">
                       <button onClick={() => saveEdit(u.id)} disabled={savingId === u.id}
                         className="flex-1 bg-black text-white py-2.5 rounded-xl text-sm font-medium disabled:opacity-50">

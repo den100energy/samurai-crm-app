@@ -83,15 +83,16 @@ export async function PATCH(req: NextRequest) {
   if (!(await checkFounder())) {
     return NextResponse.json({ error: 'Нет доступа' }, { status: 403 })
   }
-  const { id, permissions, name, email, password, role } = await req.json()
+  const { id, permissions, name, email, password, role, trainer_id } = await req.json()
   const admin = getAdminClient()
 
   // Обновляем профиль через admin-клиент (обходит RLS)
-  if (permissions !== undefined || name !== undefined) {
+  if (permissions !== undefined || name !== undefined || trainer_id !== undefined) {
     const update: Record<string, unknown> = { id }
     if (permissions !== undefined) update.permissions = permissions
     if (name !== undefined) update.name = name
     if (role !== undefined) update.role = role
+    if (trainer_id !== undefined) update.trainer_id = trainer_id || null
     const { error: upsertError } = await admin
       .from('user_profiles')
       .upsert(update, { onConflict: 'id' })
