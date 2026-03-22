@@ -17,6 +17,7 @@ type Student = {
   health_notes: string | null
   invite_token: string | null
   telegram_chat_id: number | null
+  photo_url: string | null
 }
 
 type Contact = {
@@ -118,6 +119,7 @@ export default function StudentPage() {
   const [studentProfile, setStudentProfile] = useState<any>(null)
   const [compareProgram, setCompareProgram] = useState('')
   const [generatingCompare, setGeneratingCompare] = useState(false)
+  const [uploadingPhoto, setUploadingPhoto] = useState(false)
   const [payments, setPayments] = useState<{ id: string; amount: number; category: string | null; paid_at: string; payment_type: string; description: string | null }[]>([])
 
   useEffect(() => {
@@ -534,6 +536,20 @@ export default function StudentPage() {
   const currentBelt = belts[0]
   const checkinUrl = typeof window !== 'undefined' ? `${window.location.origin}/checkin/${id}` : ''
 
+  async function uploadPhoto(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file || !student) return
+    setUploadingPhoto(true)
+    const fd = new FormData()
+    fd.append('file', file)
+    fd.append('student_id', id)
+    const res = await fetch('/api/upload-photo', { method: 'POST', body: fd })
+    const data = await res.json()
+    if (data.url) setStudent(prev => prev ? { ...prev, photo_url: data.url } : null)
+    setUploadingPhoto(false)
+    e.target.value = ''
+  }
+
   return (
     <main className="max-w-lg mx-auto p-4">
       <div className="flex items-center gap-3 mb-4">
@@ -555,9 +571,26 @@ export default function StudentPage() {
       {/* Student info */}
       <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm mb-4">
         <div className="flex items-center gap-3 mb-4">
-          <div className="w-14 h-14 rounded-full bg-gray-100 flex items-center justify-center text-2xl font-bold text-gray-600">
-            {student.name[0]}
-          </div>
+          <label className="relative cursor-pointer group shrink-0">
+            <div className="w-16 h-16 rounded-full overflow-hidden bg-gray-100 flex items-center justify-center text-2xl font-bold text-gray-600 border-2 border-transparent group-hover:border-black transition-colors">
+              {student.photo_url ? (
+                <img src={student.photo_url} alt={student.name} className="w-full h-full object-cover" />
+              ) : (
+                <span>{student.name[0]}</span>
+              )}
+            </div>
+            {uploadingPhoto && (
+              <div className="absolute inset-0 rounded-full bg-black/40 flex items-center justify-center">
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              </div>
+            )}
+            {!uploadingPhoto && (
+              <div className="absolute inset-0 rounded-full bg-black/0 group-hover:bg-black/30 flex items-center justify-center transition-all">
+                <span className="text-white text-xs opacity-0 group-hover:opacity-100 font-medium">📷</span>
+              </div>
+            )}
+            <input type="file" accept="image/*" className="hidden" onChange={uploadPhoto} disabled={uploadingPhoto} />
+          </label>
           {editing ? (
             <input value={form.name || ''} onChange={e => setForm({...form, name: e.target.value})}
               className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-lg font-semibold outline-none" />

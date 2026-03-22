@@ -10,6 +10,7 @@ type Student = {
   phone: string | null
   group_name: string | null
   status: string
+  photo_url: string | null
 }
 
 const GROUPS = ['Все', 'Дети 4-9', 'Подростки (нач)', 'Подростки (оп)', 'Цигун', 'Индивидуальные']
@@ -77,8 +78,10 @@ export default function StudentsPage() {
           {filtered.map(s => (
             <Link key={s.id} href={`/students/${s.id}`}
               className="flex items-center bg-white rounded-xl px-4 py-3 shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
-              <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-lg font-bold text-gray-600 mr-3">
-                {s.name[0]}
+              <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-lg font-bold text-gray-600 mr-3 overflow-hidden shrink-0">
+                {s.photo_url
+                  ? <img src={s.photo_url} alt={s.name} className="w-full h-full object-cover" />
+                  : s.name[0]}
               </div>
               <div>
                 <div className="font-medium text-gray-800">{s.name}</div>
