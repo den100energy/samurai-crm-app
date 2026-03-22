@@ -511,6 +511,14 @@ export default function StudentPage() {
     alert('Ссылка скопирована!\n' + url)
   }
 
+  function copyStudentTelegramLink() {
+    if (!student?.invite_token) return alert('Токен не найден')
+    const botUsername = process.env.NEXT_PUBLIC_TELEGRAM_CLIENT_BOT_USERNAME
+    const link = `https://t.me/${botUsername}?start=${student.invite_token}`
+    navigator.clipboard.writeText(link)
+    alert(`Ссылка скопирована!\n\nОтправьте ученику:\n${link}\n\nПосле нажатия Telegram-бот автоматически привяжет его аккаунт.`)
+  }
+
   function openWhatsApp() {
     if (!student?.phone) return alert('Телефон не указан')
     const phone = student.phone.replace(/\D/g, '')
@@ -1080,6 +1088,18 @@ export default function StudentPage() {
         <button onClick={copyParentLink}
           className="flex-1 border border-gray-200 text-gray-600 text-sm py-2.5 rounded-xl">
           🔗 Кабинет родителя
+        </button>
+      </div>
+
+      {/* Telegram ученика */}
+      <div className="flex gap-2 mb-4">
+        <button onClick={copyStudentTelegramLink}
+          className={`flex-1 text-sm py-2.5 rounded-xl border flex items-center justify-center gap-2
+            ${student.telegram_chat_id
+              ? 'border-green-200 bg-green-50 text-green-700'
+              : 'border-blue-200 bg-blue-50 text-blue-700'
+            }`}>
+          {student.telegram_chat_id ? '✓ Telegram подключён' : '📱 Подключить Telegram ученика'}
         </button>
       </div>
 
