@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
+import { useAuth } from '@/components/AuthProvider'
 
 type Lead = {
   id: string
@@ -26,6 +27,8 @@ const STAGES = [
 const ACTIVE_STAGES = STAGES.filter(s => s.key !== 'converted' && s.key !== 'lost')
 
 export default function LeadsPage() {
+  const { role, permissions } = useAuth()
+  const canEdit = role !== 'trainer' || permissions.includes('leads.edit')
   const [leads, setLeads] = useState<Lead[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -86,10 +89,12 @@ export default function LeadsPage() {
       <div className="flex items-center gap-3 mb-4">
         <Link href="/" className="text-gray-500 hover:text-black text-xl font-bold leading-none">←</Link>
         <h1 className="text-xl font-bold text-gray-800">Лиды</h1>
-        <button onClick={() => setShowForm(!showForm)}
-          className="ml-auto bg-black text-white px-4 py-2 rounded-xl text-sm font-medium">
-          + Добавить
-        </button>
+        {canEdit && (
+          <button onClick={() => setShowForm(!showForm)}
+            className="ml-auto bg-black text-white px-4 py-2 rounded-xl text-sm font-medium">
+            + Добавить
+          </button>
+        )}
       </div>
 
       {/* Статистика */}
@@ -137,7 +142,7 @@ export default function LeadsPage() {
       </div>
 
       {/* Форма добавления */}
-      {showForm && (
+      {showForm && canEdit && (
         <form onSubmit={addLead} className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm mb-4 space-y-3">
           <input required value={form.name} onChange={e => setForm({...form, name: e.target.value})}
             placeholder="Имя *" className="w-full border border-gray-200 rounded-xl px-4 py-2.5 outline-none text-sm" />
@@ -176,7 +181,7 @@ export default function LeadsPage() {
                     {stageLeads.map(l => (
                       <LeadCard key={l.id} lead={l} expanded={expandedLead === l.id}
                         onToggle={() => setExpandedLead(expandedLead === l.id ? null : l.id)}
-                        onStatusChange={updateStatus} onDelete={deleteLead} />
+                        onStatusChange={updateStatus} onDelete={deleteLead} canEdit={canEdit} />
                     ))}
                   </div>
                 )}
@@ -206,7 +211,7 @@ export default function LeadsPage() {
           ) : leads.map(l => (
             <LeadCard key={l.id} lead={l} expanded={expandedLead === l.id}
               onToggle={() => setExpandedLead(expandedLead === l.id ? null : l.id)}
-              onStatusChange={updateStatus} onDelete={deleteLead} />
+              onStatusChange={updateStatus} onDelete={deleteLead} canEdit={canEdit} />
           ))}
         </div>
       )}
@@ -223,12 +228,13 @@ const QUALITIES = [
   ['activity','Активность'],['self_defense','Самозащита'],
 ]
 
-function LeadCard({ lead, expanded, onToggle, onStatusChange, onDelete }: {
+function LeadCard({ lead, expanded, onToggle, onStatusChange, onDelete, canEdit }: {
   lead: Lead
   expanded: boolean
   onToggle: () => void
   onStatusChange: (id: string, status: string) => void
   onDelete: (id: string) => void
+  canEdit: boolean
 }) {
   const stage = STAGES.find(s => s.key === lead.status)
   const hoursAgo = Math.floor((Date.now() - new Date(lead.created_at).getTime()) / 3600000)
@@ -564,23 +570,27 @@ function LeadCard({ lead, expanded, onToggle, onStatusChange, onDelete }: {
             </div>
           )}
 
-          <div className="flex gap-1 mt-3 flex-wrap">
-            {STAGES.map(s => s.key === 'converted' ? (
-              <button key={s.key}
-                onClick={() => lead.status !== 'converted' ? setShowConvert(true) : undefined}
-                className={`text-xs px-2 py-1 rounded-full transition-colors
-                  ${lead.status === s.key ? 'bg-black text-white' : 'bg-gray-100 text-gray-600'}`}>
-                {s.label}
-              </button>
-            ) : (
-              <button key={s.key} onClick={() => onStatusChange(lead.id, s.key)}
-                className={`text-xs px-2 py-1 rounded-full transition-colors
-                  ${lead.status === s.key ? 'bg-black text-white' : 'bg-gray-100 text-gray-600'}`}>
-                {s.label}
-              </button>
-            ))}
-          </div>
-          <button onClick={() => onDelete(lead.id)} className="text-xs text-red-400 mt-2">Удалить</button>
+          {canEdit && (
+            <>
+              <div className="flex gap-1 mt-3 flex-wrap">
+                {STAGES.map(s => s.key === 'converted' ? (
+                  <button key={s.key}
+                    onClick={() => lead.status !== 'converted' ? setShowConvert(true) : undefined}
+                    className={`text-xs px-2 py-1 rounded-full transition-colors
+                      ${lead.status === s.key ? 'bg-black text-white' : 'bg-gray-100 text-gray-600'}`}>
+                    {s.label}
+                  </button>
+                ) : (
+                  <button key={s.key} onClick={() => onStatusChange(lead.id, s.key)}
+                    className={`text-xs px-2 py-1 rounded-full transition-colors
+                      ${lead.status === s.key ? 'bg-black text-white' : 'bg-gray-100 text-gray-600'}`}>
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+              <button onClick={() => onDelete(lead.id)} className="text-xs text-red-400 mt-2">Удалить</button>
+            </>
+          )}
         </div>
       )}
     </div>

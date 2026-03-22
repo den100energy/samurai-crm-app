@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
+import { useAuth } from '@/components/AuthProvider'
 
 type Event = {
   id: string
@@ -28,6 +29,8 @@ const BONUS_COLORS: Record<string, string> = {
 }
 
 export default function EventsPage() {
+  const { role, permissions } = useAuth()
+  const canEdit = role !== 'trainer' || permissions.includes('events.edit')
   const [events, setEvents] = useState<Event[]>([])
   const [trainers, setTrainers] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
@@ -87,13 +90,15 @@ export default function EventsPage() {
       <div className="flex items-center gap-3 mb-4">
         <Link href="/" className="text-gray-500 hover:text-black text-xl font-bold leading-none">←</Link>
         <h1 className="text-xl font-bold text-gray-800">Мероприятия</h1>
-        <button onClick={() => setShowForm(!showForm)}
-          className="ml-auto bg-black text-white px-4 py-2 rounded-xl text-sm font-medium">
-          + Создать
-        </button>
+        {canEdit && (
+          <button onClick={() => setShowForm(!showForm)}
+            className="ml-auto bg-black text-white px-4 py-2 rounded-xl text-sm font-medium">
+            + Создать
+          </button>
+        )}
       </div>
 
-      {showForm && (
+      {showForm && canEdit && (
         <form onSubmit={addEvent} className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm mb-4 space-y-3">
           <input required value={form.name} onChange={e => setForm({...form, name: e.target.value})}
             placeholder="Название *" className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none" />
@@ -144,7 +149,7 @@ export default function EventsPage() {
             <div className="mb-4">
               <div className="text-sm font-medium text-gray-500 mb-2">Предстоящие</div>
               <div className="space-y-2">
-                {upcoming.map(e => <EventCard key={e.id} event={e} bonusColors={BONUS_COLORS} onDelete={deleteEvent} />)}
+                {upcoming.map(e => <EventCard key={e.id} event={e} bonusColors={BONUS_COLORS} onDelete={deleteEvent} canEdit={canEdit} />)}
               </div>
             </div>
           )}
@@ -152,7 +157,7 @@ export default function EventsPage() {
             <div>
               <div className="text-sm font-medium text-gray-500 mb-2">Прошедшие</div>
               <div className="space-y-2">
-                {past.map(e => <EventCard key={e.id} event={e} bonusColors={BONUS_COLORS} onDelete={deleteEvent} />)}
+                {past.map(e => <EventCard key={e.id} event={e} bonusColors={BONUS_COLORS} onDelete={deleteEvent} canEdit={canEdit} />)}
               </div>
             </div>
           )}
@@ -162,7 +167,7 @@ export default function EventsPage() {
   )
 }
 
-function EventCard({ event, bonusColors, onDelete }: { event: Event; bonusColors: Record<string, string>; onDelete: (id: string) => void }) {
+function EventCard({ event, bonusColors, onDelete, canEdit }: { event: Event; bonusColors: Record<string, string>; onDelete: (id: string) => void; canEdit: boolean }) {
   return (
     <Link href={`/events/${event.id}`}
       className="block bg-white rounded-xl p-4 border border-gray-100 shadow-sm hover:shadow-md transition-shadow">

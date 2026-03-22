@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
+import { useAuth } from '@/components/AuthProvider'
 
 type Student = {
   id: string
@@ -28,6 +29,8 @@ async function loadWithSub(students: { id: string; name: string; group_name: str
 }
 
 export default function AttendancePage() {
+  const { role, permissions } = useAuth()
+  const canEdit = role !== 'trainer' || permissions.includes('attendance.edit')
   const [students, setStudents] = useState<Student[]>([])
   const [guests, setGuests] = useState<Student[]>([])
   const [group, setGroup] = useState(GROUPS[0])
@@ -233,10 +236,12 @@ export default function AttendancePage() {
             Присутствует: {present.size - guestsPresentCount} из {students.length}
             {guestsPresentCount > 0 && ` + ${guestsPresentCount} гост.`}
           </div>
-          <button onClick={save} disabled={saving}
-            className="w-full bg-black text-white py-3 rounded-xl font-medium disabled:opacity-50">
-            {saved ? '✓ Сохранено!' : saving ? 'Сохранение...' : 'Сохранить посещаемость'}
-          </button>
+          {canEdit && (
+            <button onClick={save} disabled={saving}
+              className="w-full bg-black text-white py-3 rounded-xl font-medium disabled:opacity-50">
+              {saved ? '✓ Сохранено!' : saving ? 'Сохранение...' : 'Сохранить посещаемость'}
+            </button>
+          )}
         </>
       )}
     </main>

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
+import { useAuth } from '@/components/AuthProvider'
 
 type Student = {
   id: string
@@ -16,6 +17,8 @@ type Student = {
 const GROUPS = ['Все', 'Дети 4-9', 'Подростки (нач)', 'Подростки (оп)', 'Цигун', 'Индивидуальные']
 
 export default function StudentsPage() {
+  const { role, permissions } = useAuth()
+  const canAdd = role !== 'trainer' || permissions.includes('students.add')
   const [students, setStudents] = useState<Student[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('Все')
@@ -41,14 +44,16 @@ export default function StudentsPage() {
       <div className="flex items-center gap-3 mb-4">
         <Link href="/" className="text-gray-500 hover:text-black text-xl font-bold leading-none">← </Link>
         <h1 className="text-xl font-bold text-gray-800">Ученики</h1>
-        <Link href="/import"
-          className="text-sm text-gray-500 border border-gray-200 px-3 py-2 rounded-xl">
-          📂 Импорт
-        </Link>
-        <Link href="/students/new"
-          className="bg-black text-white px-4 py-2 rounded-xl text-sm font-medium">
-          + Добавить
-        </Link>
+        {canAdd && <>
+          <Link href="/import"
+            className="text-sm text-gray-500 border border-gray-200 px-3 py-2 rounded-xl">
+            📂 Импорт
+          </Link>
+          <Link href="/students/new"
+            className="bg-black text-white px-4 py-2 rounded-xl text-sm font-medium">
+            + Добавить
+          </Link>
+        </>}
       </div>
 
       <input

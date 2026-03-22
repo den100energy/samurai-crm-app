@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
+import { useAuth } from '@/components/AuthProvider'
 
 type Payment = {
   id: string
@@ -40,6 +41,8 @@ const EXPENSE_CATEGORIES = [
 ]
 
 export default function FinancePage() {
+  const { role, permissions } = useAuth()
+  const canAdd = role !== 'trainer' || permissions.includes('finance.add')
   const now = new Date()
   const [month, setMonth] = useState(now.getMonth())
   const [year] = useState(now.getFullYear())
@@ -164,10 +167,12 @@ export default function FinancePage() {
         <button onClick={exportCSV} className="text-xs border border-gray-200 text-gray-600 px-3 py-1.5 rounded-xl">
           ⬇ CSV
         </button>
-        <button onClick={() => setShowForm(!showForm)}
-          className="bg-black text-white px-4 py-2 rounded-xl text-sm font-medium">
-          + Добавить
-        </button>
+        {canAdd && (
+          <button onClick={() => setShowForm(!showForm)}
+            className="bg-black text-white px-4 py-2 rounded-xl text-sm font-medium">
+            + Добавить
+          </button>
+        )}
       </div>
 
       {/* Выбор месяца */}
@@ -210,7 +215,7 @@ export default function FinancePage() {
       </div>
 
       {/* Форма добавления */}
-      {showForm && (
+      {showForm && canAdd && (
         <form onSubmit={addPayment} className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm mb-4 space-y-3">
           {/* Доход / Расход */}
           <div className="flex gap-2">

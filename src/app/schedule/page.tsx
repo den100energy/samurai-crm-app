@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/components/ThemeProvider'
+import { useAuth } from '@/components/AuthProvider'
 
 type ScheduleEntry = {
   id: string
@@ -81,6 +82,8 @@ function nearestDateForDay(dayNum: number): string {
 }
 
 export default function SchedulePage() {
+  const { role, permissions } = useAuth()
+  const canEdit = role !== 'trainer' || permissions.includes('schedule.edit')
   const { theme } = useTheme()
   const dark = theme === 'dark'
   const pageBg = dark ? 'bg-[#1C1C1E]' : 'bg-white'
@@ -247,10 +250,12 @@ export default function SchedulePage() {
       <div className="flex items-center gap-3 mb-4">
         <Link href="/" className={`text-xl font-bold leading-none hover:opacity-70 ${textSecondary}`}>←</Link>
         <h1 className={`text-xl font-bold ${textPrimary}`}>Расписание</h1>
-        <button onClick={() => setShowForm(!showForm)}
-          className="ml-auto bg-red-700 hover:bg-red-800 text-white px-4 py-2 rounded-xl text-sm font-medium transition-colors">
-          + Добавить
-        </button>
+        {canEdit && (
+          <button onClick={() => setShowForm(!showForm)}
+            className="ml-auto bg-red-700 hover:bg-red-800 text-white px-4 py-2 rounded-xl text-sm font-medium transition-colors">
+            + Добавить
+          </button>
+        )}
       </div>
 
       {/* Изменения на этой неделе */}
@@ -301,7 +306,7 @@ export default function SchedulePage() {
         </div>
       )}
 
-      {showForm && (
+      {showForm && canEdit && (
         <form onSubmit={save} className={`rounded-2xl p-4 border mb-4 space-y-3 ${cardBase}`}>
           <div className={`text-sm font-medium ${textPrimary}`}>Новое занятие в расписании</div>
           <select required value={form.group_name} onChange={e => setForm({...form, group_name: e.target.value})}
@@ -436,29 +441,31 @@ export default function SchedulePage() {
                             {hasOverride && <span className="text-amber-500 font-medium">⚡ изменено</span>}
                           </div>
                         </div>
-                        <div className="flex items-center gap-1.5 ml-3 shrink-0">
-                          <button
-                            onClick={() => openOverrideModal(entry)}
-                            className="text-xs text-amber-600 border border-amber-400/60 bg-amber-400/20 px-2 py-1 rounded-lg hover:bg-amber-400/30 font-medium transition-colors"
-                            title="Изменить на этой неделе"
-                          >
-                            ⚡
-                          </button>
-                          <button
-                            onClick={() => startEdit(entry)}
-                            className={`text-xs px-2 py-1 rounded-lg border font-medium transition-colors ${dark ? 'border-[#48484A] bg-[#3A3A3C] text-[#8E8E93] hover:bg-[#48484A]' : 'border-gray-300 bg-white text-gray-600 hover:bg-gray-50'}`}
-                            title="Редактировать"
-                          >
-                            ✎
-                          </button>
-                          <button
-                            onClick={() => remove(entry.id)}
-                            className={`text-xs px-2 py-1 rounded-lg border font-medium transition-colors ${dark ? 'border-red-800/50 bg-red-900/30 text-red-400 hover:bg-red-900/60' : 'border-red-200 bg-red-50 text-red-500 hover:bg-red-100'}`}
-                            title="Удалить"
-                          >
-                            ✕
-                          </button>
-                        </div>
+                        {canEdit && (
+                          <div className="flex items-center gap-1.5 ml-3 shrink-0">
+                            <button
+                              onClick={() => openOverrideModal(entry)}
+                              className="text-xs text-amber-600 border border-amber-400/60 bg-amber-400/20 px-2 py-1 rounded-lg hover:bg-amber-400/30 font-medium transition-colors"
+                              title="Изменить на этой неделе"
+                            >
+                              ⚡
+                            </button>
+                            <button
+                              onClick={() => startEdit(entry)}
+                              className={`text-xs px-2 py-1 rounded-lg border font-medium transition-colors ${dark ? 'border-[#48484A] bg-[#3A3A3C] text-[#8E8E93] hover:bg-[#48484A]' : 'border-gray-300 bg-white text-gray-600 hover:bg-gray-50'}`}
+                              title="Редактировать"
+                            >
+                              ✎
+                            </button>
+                            <button
+                              onClick={() => remove(entry.id)}
+                              className={`text-xs px-2 py-1 rounded-lg border font-medium transition-colors ${dark ? 'border-red-800/50 bg-red-900/30 text-red-400 hover:bg-red-900/60' : 'border-red-200 bg-red-50 text-red-500 hover:bg-red-100'}`}
+                              title="Удалить"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        )}
                       </div>
                     )
                   })}
