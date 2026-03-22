@@ -158,7 +158,10 @@ export default function FinancePage() {
       <div className="flex items-center gap-3 mb-4">
         <Link href="/" className="text-gray-500 hover:text-black text-xl font-bold leading-none">←</Link>
         <h1 className="text-xl font-bold text-gray-800">Финансы</h1>
-        <button onClick={exportCSV} className="ml-auto text-xs border border-gray-200 text-gray-600 px-3 py-1.5 rounded-xl">
+        <Link href="/finance/analytics" className="ml-auto text-xs border border-gray-200 text-gray-600 px-3 py-1.5 rounded-xl">
+          📊 Аналитика
+        </Link>
+        <button onClick={exportCSV} className="text-xs border border-gray-200 text-gray-600 px-3 py-1.5 rounded-xl">
           ⬇ CSV
         </button>
         <button onClick={() => setShowForm(!showForm)}
