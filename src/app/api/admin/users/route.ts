@@ -87,16 +87,17 @@ export async function PATCH(req: NextRequest) {
   const admin = getAdminClient()
 
   // Обновляем профиль через admin-клиент (обходит RLS)
-  if (permissions !== undefined || name !== undefined || trainer_id !== undefined) {
-    const update: Record<string, unknown> = { id }
+  if (permissions !== undefined || name !== undefined || trainer_id !== undefined || role !== undefined) {
+    const update: Record<string, unknown> = {}
     if (permissions !== undefined) update.permissions = permissions
     if (name !== undefined) update.name = name
     if (role !== undefined) update.role = role
     if (trainer_id !== undefined) update.trainer_id = trainer_id || null
-    const { error: upsertError } = await admin
+    const { error: updateError } = await admin
       .from('user_profiles')
-      .upsert(update, { onConflict: 'id' })
-    if (upsertError) return NextResponse.json({ error: upsertError.message }, { status: 500 })
+      .update(update)
+      .eq('id', id)
+    if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 })
   }
 
   // Обновляем email и/или пароль через admin API

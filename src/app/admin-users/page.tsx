@@ -156,7 +156,7 @@ export default function AdminUsersPage() {
     body.trainer_id = f.trainer_id || null
 
     const { supabase } = await import('@/lib/supabase')
-    await Promise.all([
+    const [res] = await Promise.all([
       fetch('/api/admin/users', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -170,9 +170,14 @@ export default function AdminUsersPage() {
           }).eq('id', f.trainer_id)
         : Promise.resolve(),
     ])
-    setOpenPanel(prev => ({ ...prev, [userId]: null }))
-    loadAll()
+    const data = await (res as Response).json()
     setSavingId(null)
+    if (data.error) {
+      alert('Ошибка сохранения: ' + data.error)
+      return
+    }
+    setOpenPanel(prev => ({ ...prev, [userId]: null }))
+    await loadAll()
   }
 
   if (role !== 'founder') {
