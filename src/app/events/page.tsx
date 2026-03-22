@@ -12,6 +12,8 @@ type Event = {
   description: string | null
   bonus_type: string | null
   group_restriction: string | null
+  trainer_name: string | null
+  trainer_name_extra: string | null
   participant_count?: number
   paid_count?: number
 }
@@ -27,18 +29,20 @@ const BONUS_COLORS: Record<string, string> = {
 
 export default function EventsPage() {
   const [events, setEvents] = useState<Event[]>([])
+  const [trainers, setTrainers] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState({ name: '', date: '', price: '', description: '', bonus_type: '', group_restriction: '' })
+  const [form, setForm] = useState({ name: '', date: '', price: '', description: '', bonus_type: '', group_restriction: '', trainer_name: '', trainer_name_extra: '' })
   const [saving, setSaving] = useState(false)
 
   async function load() {
-    const { data } = await supabase
-      .from('events')
-      .select('*, event_participants(id, paid)')
-      .order('date', { ascending: false })
+    const [{ data }, { data: tr }] = await Promise.all([
+      supabase.from('events').select('*, event_participants(id, paid)').order('date', { ascending: false }),
+      supabase.from('trainers').select('name').order('name'),
+    ])
+    setTrainers((tr || []).map(t => t.name))
 
-    const enriched = (data || []).map((e: any) => ({
+    const enriched = ((data as any[]) || []).map((e: any) => ({
       ...e,
       participant_count: e.event_participants?.length || 0,
       paid_count: e.event_participants?.filter((p: any) => p.paid).length || 0,
@@ -59,8 +63,10 @@ export default function EventsPage() {
       description: form.description || null,
       bonus_type: form.bonus_type || null,
       group_restriction: form.group_restriction || null,
+      trainer_name: form.trainer_name || null,
+      trainer_name_extra: form.trainer_name_extra || null,
     })
-    setForm({ name: '', date: '', price: '', description: '', bonus_type: '', group_restriction: '' })
+    setForm({ name: '', date: '', price: '', description: '', bonus_type: '', group_restriction: '', trainer_name: '', trainer_name_extra: '' })
     setShowForm(false)
     setSaving(false)
     load()
@@ -107,6 +113,16 @@ export default function EventsPage() {
             className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none bg-white">
             <option value="">Все группы</option>
             {GROUPS.map(g => <option key={g} value={g}>{g}</option>)}
+          </select>
+          <select value={form.trainer_name} onChange={e => setForm({...form, trainer_name: e.target.value})}
+            className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none bg-white">
+            <option value="">Ответственный тренер</option>
+            {trainers.map(t => <option key={t} value={t}>{t}</option>)}
+          </select>
+          <select value={form.trainer_name_extra} onChange={e => setForm({...form, trainer_name_extra: e.target.value})}
+            className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none bg-white">
+            <option value="">Доп. тренер (необязательно)</option>
+            {trainers.filter(t => t !== form.trainer_name).map(t => <option key={t} value={t}>{t}</option>)}
           </select>
           <textarea value={form.description} onChange={e => setForm({...form, description: e.target.value})}
             placeholder="Описание" rows={2}
@@ -164,6 +180,12 @@ function EventCard({ event, bonusColors, onDelete }: { event: Event; bonusColors
             )}
           </div>
           <div className="text-sm text-gray-400 mt-0.5">📅 {event.date}</div>
+          {(event.trainer_name || event.trainer_name_extra) && (
+            <div className="text-xs text-gray-500 mt-0.5">
+              {event.trainer_name && <span>👤 {event.trainer_name}</span>}
+              {event.trainer_name_extra && <span className="ml-2 text-gray-400">+ {event.trainer_name_extra}</span>}
+            </div>
+          )}
           {event.description && <div className="text-sm text-gray-500 mt-1">{event.description}</div>}
         </div>
         <div className="text-right ml-3">
