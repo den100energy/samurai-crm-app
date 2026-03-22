@@ -15,7 +15,7 @@ type StaffUser = {
   created_at: string
 }
 
-type Trainer = { id: string; name: string; phone: string | null; telegram_username: string | null }
+type Trainer = { id: string; name: string; phone: string | null; telegram_username: string | null; vk_url: string | null }
 type Panel = 'permissions' | 'edit' | null
 
 export default function AdminUsersPage() {
@@ -33,14 +33,14 @@ export default function AdminUsersPage() {
   const [savingId, setSavingId] = useState<string | null>(null)
 
   // Форма редактирования сотрудника
-  const [editForm, setEditForm] = useState<Record<string, { name: string; email: string; password: string; trainer_id: string; phone: string; telegram_username: string }>>({})
+  const [editForm, setEditForm] = useState<Record<string, { name: string; email: string; password: string; trainer_id: string; phone: string; telegram_username: string; vk_url: string }>>({})
 
   useEffect(() => { loadAll() }, [])
 
   async function loadAll() {
     const [usersRes, trainersRes] = await Promise.all([
       fetch('/api/admin/users', { cache: 'no-store' }),
-      import('@/lib/supabase').then(m => m.supabase.from('trainers').select('id, name, phone, telegram_username').order('name')),
+      import('@/lib/supabase').then(m => m.supabase.from('trainers').select('id, name, phone, telegram_username, vk_url').order('name')),
     ])
     const usersData = await usersRes.json()
     const list: StaffUser[] = Array.isArray(usersData)
@@ -94,6 +94,7 @@ export default function AdminUsersPage() {
           trainer_id: u.trainer_id || '',
           phone: trainerData?.phone || '',
           telegram_username: trainerData?.telegram_username || '',
+          vk_url: trainerData?.vk_url || '',
         } }))
       }
     }
@@ -167,6 +168,7 @@ export default function AdminUsersPage() {
         ? supabase.from('trainers').update({
             phone: f.phone || null,
             telegram_username: f.telegram_username || null,
+            vk_url: f.vk_url || null,
           }).eq('id', f.trainer_id)
         : Promise.resolve(),
     ])
@@ -410,6 +412,15 @@ export default function AdminUsersPage() {
                             value={ef.telegram_username}
                             onChange={e => setEditForm(prev => ({ ...prev, [u.id]: { ...ef, telegram_username: e.target.value.replace('@', '') } }))}
                             placeholder="username"
+                            className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs text-gray-500 block mb-1">ВКонтакте тренера (ссылка)</label>
+                          <input
+                            value={ef.vk_url}
+                            onChange={e => setEditForm(prev => ({ ...prev, [u.id]: { ...ef, vk_url: e.target.value } }))}
+                            placeholder="https://vk.com/username"
                             className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none"
                           />
                         </div>

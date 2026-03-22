@@ -21,7 +21,7 @@ const QUALITY_LABELS: Record<string,string> = {
 }
 
 type Student = { id: string; name: string; group_name: string | null; birth_date: string | null; photo_url: string | null }
-type TrainerInfo = { name: string; phone: string | null; telegram_username: string | null }
+type TrainerInfo = { name: string; phone: string | null; telegram_username: string | null; vk_url: string | null }
 type Subscription = { sessions_left: number | null; sessions_total: number | null; end_date: string | null; type: string }
 type Survey = { id: string; filled_at: string | null; created_at: string } & Record<string, number | null | string>
 type Task = { id: string; title: string; description: string | null; due_date: string | null; completed: boolean }
@@ -328,7 +328,7 @@ export default function CabinetPage() {
     const trainerName = slots[0]?.trainer_name
     if (trainerName) {
       const { data: tr } = await supabase
-        .from('trainers').select('name, phone, telegram_username').eq('name', trainerName).maybeSingle()
+        .from('trainers').select('name, phone, telegram_username, vk_url').eq('name', trainerName).maybeSingle()
       if (tr) setTrainerInfo(tr)
     }
 
@@ -566,6 +566,12 @@ export default function CabinetPage() {
                           ✈️ Написать в Telegram
                         </a>
                       )}
+                      {trainerInfo?.vk_url && (
+                        <a href={trainerInfo.vk_url} target="_blank"
+                          className="block mt-1.5 text-center bg-white border border-red-200 text-red-600 rounded-lg py-1.5 font-medium text-sm">
+                          ВК Написать ВКонтакте
+                        </a>
+                      )}
                     </div>
                   )}
                 </>
@@ -651,6 +657,12 @@ export default function CabinetPage() {
                     <a href={`https://t.me/${trainerInfo.telegram_username}`} target="_blank"
                       className="flex-1 text-center border border-blue-200 bg-blue-50 text-blue-700 text-sm py-2 rounded-xl">
                       ✈️ Telegram
+                    </a>
+                  )}
+                  {trainerInfo.vk_url && (
+                    <a href={trainerInfo.vk_url} target="_blank"
+                      className="flex-1 text-center border border-blue-200 bg-blue-50 text-blue-700 text-sm py-2 rounded-xl">
+                      ВК ВКонтакте
                     </a>
                   )}
                 </div>

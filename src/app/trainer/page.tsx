@@ -50,6 +50,7 @@ export default function TrainerPage() {
   const [studentCount, setStudentCount] = useState(0)
   const [trainerPhone, setTrainerPhone] = useState('')
   const [trainerTg, setTrainerTg] = useState('')
+  const [trainerVk, setTrainerVk] = useState('')
   const [showProfile, setShowProfile] = useState(false)
   const [savingProfile, setSavingProfile] = useState(false)
   const [profileSaved, setProfileSaved] = useState(false)
@@ -74,13 +75,14 @@ export default function TrainerPage() {
       supabase.from('students').select('id, group_name').eq('status', 'active'),
       supabase.from('schedule_overrides').select('date, group_name, trainer_name, cancelled')
         .gte('date', monday).lte('date', sunday),
-      supabase.from('trainers').select('phone, telegram_username').eq('name', userName).maybeSingle(),
+      supabase.from('trainers').select('phone, telegram_username, vk_url').eq('name', userName).maybeSingle(),
     ])
     setSchedule(slots || [])
     setOverrides(ovData || [])
     if (trainerRow) {
       setTrainerPhone(trainerRow.phone || '')
       setTrainerTg(trainerRow.telegram_username || '')
+      setTrainerVk(trainerRow.vk_url || '')
     }
 
     const trainerGroups = [...new Set((slots || []).map(s => s.group_name))]
@@ -97,7 +99,7 @@ export default function TrainerPage() {
     if (!userName) return
     setSavingProfile(true)
     await supabase.from('trainers')
-      .update({ phone: trainerPhone || null, telegram_username: trainerTg || null })
+      .update({ phone: trainerPhone || null, telegram_username: trainerTg || null, vk_url: trainerVk || null })
       .eq('name', userName)
     setSavingProfile(false)
     setProfileSaved(true)
@@ -225,6 +227,17 @@ export default function TrainerPage() {
                 value={trainerTg}
                 onChange={e => setTrainerTg(e.target.value.replace('@', ''))}
                 placeholder="username"
+                className={`mt-1 w-full rounded-xl px-3 py-2.5 text-sm outline-none border ${
+                  dark ? 'bg-[#1C1C1E] border-[#3A3A3C] text-[#E5E5E7]' : 'bg-white border-gray-200 text-gray-800'
+                }`}
+              />
+            </div>
+            <div>
+              <label className={`text-xs font-medium ${textSecondary}`}>ВКонтакте (ссылка)</label>
+              <input
+                value={trainerVk}
+                onChange={e => setTrainerVk(e.target.value)}
+                placeholder="https://vk.com/username"
                 className={`mt-1 w-full rounded-xl px-3 py-2.5 text-sm outline-none border ${
                   dark ? 'bg-[#1C1C1E] border-[#3A3A3C] text-[#E5E5E7]' : 'bg-white border-gray-200 text-gray-800'
                 }`}
