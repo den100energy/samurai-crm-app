@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
+import { useTheme } from '@/components/ThemeProvider'
 
 type ScheduleEntry = {
   id: string
@@ -36,13 +37,24 @@ const DAYS = [
 
 const GROUPS = ['Дети 4-9', 'Подростки (нач)', 'Подростки (оп)', 'Цигун', 'Индивидуальные']
 
-const GROUP_COLORS: Record<string, string> = {
-  'Дети 4-9':        'bg-yellow-50 border-yellow-200 text-yellow-800',
-  'Подростки (нач)': 'bg-blue-50 border-blue-200 text-blue-800',
-  'Подростки (оп)':  'bg-purple-50 border-purple-200 text-purple-800',
-  'Цигун':           'bg-green-50 border-green-200 text-green-800',
-  'Индивидуальные':  'bg-orange-50 border-orange-200 text-orange-800',
+const GROUP_COLORS_LIGHT: Record<string, { card: string; label: string; sub: string }> = {
+  'Дети 4-9':        { card: 'bg-yellow-50 border-yellow-200', label: 'text-yellow-900', sub: 'text-yellow-700' },
+  'Подростки (нач)': { card: 'bg-blue-50 border-blue-200',     label: 'text-blue-900',   sub: 'text-blue-700' },
+  'Подростки (оп)':  { card: 'bg-purple-50 border-purple-200', label: 'text-purple-900', sub: 'text-purple-700' },
+  'Цигун':           { card: 'bg-green-50 border-green-200',   label: 'text-green-900',  sub: 'text-green-700' },
+  'Индивидуальные':  { card: 'bg-orange-50 border-orange-200', label: 'text-orange-900', sub: 'text-orange-700' },
 }
+
+const GROUP_COLORS_DARK: Record<string, { card: string; label: string; sub: string }> = {
+  'Дети 4-9':        { card: 'bg-yellow-950/60 border-yellow-700/40', label: 'text-yellow-200', sub: 'text-yellow-400' },
+  'Подростки (нач)': { card: 'bg-blue-950/60 border-blue-700/40',     label: 'text-blue-200',   sub: 'text-blue-400' },
+  'Подростки (оп)':  { card: 'bg-purple-950/60 border-purple-700/40', label: 'text-purple-200', sub: 'text-purple-400' },
+  'Цигун':           { card: 'bg-green-950/60 border-green-700/40',   label: 'text-green-200',  sub: 'text-green-400' },
+  'Индивидуальные':  { card: 'bg-orange-950/60 border-orange-700/40', label: 'text-orange-200', sub: 'text-orange-400' },
+}
+
+const GROUP_COLORS_FALLBACK_LIGHT = { card: 'bg-gray-50 border-gray-200', label: 'text-gray-800', sub: 'text-gray-500' }
+const GROUP_COLORS_FALLBACK_DARK  = { card: 'bg-[#2C2C2E] border-[#3A3A3C]', label: 'text-[#E5E5E7]', sub: 'text-[#8E8E93]' }
 
 const emptyForm = { group_name: '', trainer_name: '', days: [] as number[], time_start: '', time_end: '' }
 const emptyOverride = { date: '', group_name: '', trainer_name: '', cancelled: false, note: '', time_start: '' }
@@ -69,6 +81,15 @@ function nearestDateForDay(dayNum: number): string {
 }
 
 export default function SchedulePage() {
+  const { theme } = useTheme()
+  const dark = theme === 'dark'
+  const pageBg = dark ? 'bg-[#1C1C1E]' : 'bg-white'
+  const textPrimary = dark ? 'text-[#E5E5E7]' : 'text-gray-800'
+  const textSecondary = dark ? 'text-[#8E8E93]' : 'text-gray-500'
+  const cardBase = dark ? 'bg-[#2C2C2E] border-[#3A3A3C]' : 'bg-white border-gray-100 shadow-sm'
+  const inputCls = dark ? 'bg-[#1C1C1E] border-[#3A3A3C] text-[#E5E5E7]' : 'border-gray-200 bg-white text-gray-800'
+  const selectCls = dark ? 'bg-[#1C1C1E] border-[#3A3A3C] text-[#E5E5E7]' : 'border-gray-200 bg-white text-gray-800'
+
   const [entries, setEntries] = useState<ScheduleEntry[]>([])
   const [overrides, setOverrides] = useState<Override[]>([])
   const [trainers, setTrainers] = useState<string[]>([])
@@ -222,38 +243,38 @@ export default function SchedulePage() {
   const weekDates = getWeekDates()
 
   return (
-    <main className="max-w-lg mx-auto p-4">
+    <main className="max-w-lg mx-auto p-4" style={{ background: 'var(--bg)', minHeight: '100vh' }}>
       <div className="flex items-center gap-3 mb-4">
-        <Link href="/" className="text-gray-500 hover:text-black text-xl font-bold leading-none">←</Link>
-        <h1 className="text-xl font-bold text-gray-800">Расписание</h1>
+        <Link href="/" className={`text-xl font-bold leading-none hover:opacity-70 ${textSecondary}`}>←</Link>
+        <h1 className={`text-xl font-bold ${textPrimary}`}>Расписание</h1>
         <button onClick={() => setShowForm(!showForm)}
-          className="ml-auto bg-black text-white px-4 py-2 rounded-xl text-sm font-medium">
+          className="ml-auto bg-red-700 hover:bg-red-800 text-white px-4 py-2 rounded-xl text-sm font-medium transition-colors">
           + Добавить
         </button>
       </div>
 
       {/* Изменения на этой неделе */}
       {overrides.length > 0 && (
-        <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4 mb-4">
-          <h2 className="font-semibold text-amber-800 text-sm mb-3">⚡ Изменения на этой неделе</h2>
+        <div className={`rounded-2xl p-4 mb-4 ${dark ? 'bg-amber-950/40 border border-amber-800/40' : 'bg-amber-50 border border-amber-100'}`}>
+          <h2 className={`font-semibold text-sm mb-3 ${dark ? 'text-amber-300' : 'text-amber-800'}`}>⚡ Изменения на этой неделе</h2>
           <div className="space-y-2">
             {overrides.map(ov => {
               const d = new Date(ov.date + 'T00:00:00')
               const dayName = d.toLocaleDateString('ru-RU', { weekday: 'short', day: 'numeric', month: 'short' })
               return (
-                <div key={ov.id} className="bg-white rounded-xl border border-amber-100 p-3 flex items-start justify-between gap-2">
+                <div key={ov.id} className={`rounded-xl border p-3 flex items-start justify-between gap-2 ${dark ? 'bg-[#2C2C2E] border-[#3A3A3C]' : 'bg-white border-amber-100'}`}>
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-gray-800">
+                    <div className={`text-sm font-medium ${textPrimary}`}>
                       {ov.cancelled ? '❌' : '🔄'} {ov.group_name}
                     </div>
-                    <div className="text-xs text-gray-500 mt-0.5">
+                    <div className={`text-xs mt-0.5 ${textSecondary}`}>
                       {dayName}
                       {!ov.cancelled && ov.trainer_name && <span> · {ov.trainer_name}</span>}
-                      {ov.cancelled && <span className="text-red-500"> · отменено</span>}
+                      {ov.cancelled && <span className="text-red-400"> · отменено</span>}
                       {ov.note && <span> · {ov.note}</span>}
                     </div>
                     {ov.notified_at && (
-                      <div className="text-xs text-green-600 mt-0.5">
+                      <div className="text-xs text-green-500 mt-0.5">
                         ✓ Уведомлено {new Date(ov.notified_at).toLocaleDateString('ru-RU')}
                       </div>
                     )}
@@ -268,7 +289,10 @@ export default function SchedulePage() {
                         {notifying === ov.id ? '...' : '📨'}
                       </button>
                     )}
-                    <button onClick={() => deleteOverride(ov.id)} className="text-xs text-gray-400 hover:text-red-500 px-1">✕</button>
+                    <button onClick={() => deleteOverride(ov.id)}
+                      className={`text-xs px-2 py-1 rounded-lg border transition-colors ${dark ? 'border-red-800/50 bg-red-900/30 text-red-400 hover:bg-red-900/60' : 'border-red-200 bg-red-50 text-red-500 hover:bg-red-100'}`}>
+                      ✕
+                    </button>
                   </div>
                 </div>
               )
@@ -278,22 +302,22 @@ export default function SchedulePage() {
       )}
 
       {showForm && (
-        <form onSubmit={save} className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm mb-4 space-y-3">
-          <div className="text-sm font-medium text-gray-700">Новое занятие в расписании</div>
+        <form onSubmit={save} className={`rounded-2xl p-4 border mb-4 space-y-3 ${cardBase}`}>
+          <div className={`text-sm font-medium ${textPrimary}`}>Новое занятие в расписании</div>
           <select required value={form.group_name} onChange={e => setForm({...form, group_name: e.target.value})}
-            className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none bg-white">
+            className={`w-full border rounded-xl px-3 py-2 text-sm outline-none ${selectCls}`}>
             <option value="">Группа *</option>
             {GROUPS.map(g => <option key={g} value={g}>{g}</option>)}
           </select>
           <div>
-            <div className="text-xs text-gray-500 mb-1.5">Дни недели *</div>
+            <div className={`text-xs mb-1.5 ${textSecondary}`}>Дни недели *</div>
             <div className="flex gap-1.5 flex-wrap">
               {DAYS.map(d => (
                 <button key={d.num} type="button" onClick={() => toggleDay(d.num)}
                   className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors
                     ${form.days.includes(d.num)
                       ? 'bg-black text-white border-black'
-                      : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'}`}>
+                      : dark ? 'bg-[#3A3A3C] text-[#8E8E93] border-[#48484A]' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'}`}>
                   {d.short}
                 </button>
               ))}
@@ -301,14 +325,12 @@ export default function SchedulePage() {
           </div>
           <div className="flex gap-2">
             <input type="time" value={form.time_start} onChange={e => setForm({...form, time_start: e.target.value})}
-              className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none"
-              placeholder="Начало" />
+              className={`flex-1 border rounded-xl px-3 py-2 text-sm outline-none ${inputCls}`} />
             <input type="time" value={form.time_end} onChange={e => setForm({...form, time_end: e.target.value})}
-              className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none"
-              placeholder="Конец" />
+              className={`flex-1 border rounded-xl px-3 py-2 text-sm outline-none ${inputCls}`} />
           </div>
           <select value={form.trainer_name} onChange={e => setForm({...form, trainer_name: e.target.value})}
-            className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none bg-white">
+            className={`w-full border rounded-xl px-3 py-2 text-sm outline-none ${selectCls}`}>
             <option value="">Тренер (необязательно)</option>
             {trainers.map(t => <option key={t} value={t}>{t}</option>)}
           </select>
@@ -318,7 +340,7 @@ export default function SchedulePage() {
               {saving ? 'Сохранение...' : 'Сохранить'}
             </button>
             <button type="button" onClick={() => setShowForm(false)}
-              className="px-4 border border-gray-200 text-gray-500 py-2 rounded-xl text-sm">
+              className={`px-4 border py-2 rounded-xl text-sm ${dark ? 'border-[#3A3A3C] text-[#8E8E93]' : 'border-gray-200 text-gray-500'}`}>
               Отмена
             </button>
           </div>
@@ -326,7 +348,7 @@ export default function SchedulePage() {
       )}
 
       {entries.length === 0 ? (
-        <div className="text-center text-gray-400 py-16">
+        <div className={`text-center py-16 ${textSecondary}`}>
           <div className="text-4xl mb-3">🗓</div>
           <div>Расписание не добавлено</div>
           <div className="text-sm mt-1">Нажмите "+ Добавить" чтобы начать</div>
@@ -339,39 +361,41 @@ export default function SchedulePage() {
             const isToday = day.num === todayNum
             const dateStr = weekDates[day.num]
             return (
-              <div key={day.num} className={`bg-white rounded-2xl border shadow-sm overflow-hidden ${isToday ? 'border-black' : 'border-gray-100'}`}>
-                <div className={`px-4 py-2 flex items-center justify-between ${isToday ? 'bg-black' : 'bg-gray-50'}`}>
-                  <div className={`font-semibold text-sm ${isToday ? 'text-white' : 'text-gray-700'}`}>
-                    {day.full} {isToday && <span className="text-xs font-normal opacity-70 ml-1">— сегодня</span>}
-                    {dateStr && <span className={`text-xs font-normal ml-2 ${isToday ? 'opacity-60' : 'text-gray-400'}`}>
+              <div key={day.num} className={`rounded-2xl border overflow-hidden ${isToday ? 'border-red-700' : dark ? 'border-[#3A3A3C]' : 'border-gray-100 shadow-sm'}`}>
+                <div className={`px-4 py-2.5 flex items-center justify-between ${isToday ? 'bg-red-700' : dark ? 'bg-[#2C2C2E]' : 'bg-gray-50'}`}>
+                  <div className={`font-semibold text-sm ${isToday ? 'text-white' : textPrimary}`}>
+                    {day.full}
+                    {isToday && <span className="text-xs font-normal opacity-70 ml-1">— сегодня</span>}
+                    {dateStr && <span className={`text-xs font-normal ml-2 ${isToday ? 'opacity-70' : textSecondary}`}>
                       {new Date(dateStr + 'T00:00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}
                     </span>}
                   </div>
-                  <div className={`text-xs ${isToday ? 'text-gray-300' : 'text-gray-400'}`}>
+                  <div className={`text-xs ${isToday ? 'text-red-200' : textSecondary}`}>
                     {dayEntries.length} {dayEntries.length === 1 ? 'группа' : 'группы'}
                   </div>
                 </div>
-                <div className="p-3 space-y-2">
+                <div className={`p-3 space-y-2 ${dark ? 'bg-[#1C1C1E]' : 'bg-white'}`}>
                   {dayEntries.map(entry => {
-                    const colorClass = GROUP_COLORS[entry.group_name] || 'bg-gray-50 border-gray-200 text-gray-700'
-                    // Check if this slot has an override this week
+                    const colors = dark
+                      ? (GROUP_COLORS_DARK[entry.group_name] || GROUP_COLORS_FALLBACK_DARK)
+                      : (GROUP_COLORS_LIGHT[entry.group_name] || GROUP_COLORS_FALLBACK_LIGHT)
                     const hasOverride = overrides.some(o => o.group_name === entry.group_name && o.date === dateStr)
 
                     if (editId === entry.id) return (
-                      <form key={entry.id} onSubmit={saveEdit} className="p-3 rounded-xl border border-gray-300 bg-white space-y-2">
+                      <form key={entry.id} onSubmit={saveEdit} className={`p-3 rounded-xl border space-y-2 ${cardBase}`}>
                         <select value={editForm.group_name} onChange={e => setEditForm({...editForm, group_name: e.target.value})}
-                          className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm outline-none bg-white">
+                          className={`w-full border rounded-lg px-2 py-1.5 text-sm outline-none ${selectCls}`}>
                           {GROUPS.map(g => <option key={g} value={g}>{g}</option>)}
                         </select>
                         <div>
-                          <div className="text-xs text-gray-500 mb-1">Дни недели</div>
+                          <div className={`text-xs mb-1 ${textSecondary}`}>Дни недели</div>
                           <div className="flex gap-1 flex-wrap">
                             {DAYS.map(d => (
                               <button key={d.num} type="button" onClick={() => toggleEditDay(d.num)}
                                 className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors
                                   ${editForm.days.includes(d.num)
                                     ? 'bg-black text-white border-black'
-                                    : 'bg-white text-gray-600 border-gray-200'}`}>
+                                    : dark ? 'bg-[#3A3A3C] text-[#8E8E93] border-[#48484A]' : 'bg-white text-gray-600 border-gray-200'}`}>
                                 {d.short}
                               </button>
                             ))}
@@ -379,46 +403,61 @@ export default function SchedulePage() {
                         </div>
                         <div className="flex gap-2">
                           <input type="time" value={editForm.time_start} onChange={e => setEditForm({...editForm, time_start: e.target.value})}
-                            className="flex-1 border border-gray-200 rounded-lg px-2 py-1.5 text-sm outline-none" />
+                            className={`flex-1 border rounded-lg px-2 py-1.5 text-sm outline-none ${inputCls}`} />
                           <input type="time" value={editForm.time_end} onChange={e => setEditForm({...editForm, time_end: e.target.value})}
-                            className="flex-1 border border-gray-200 rounded-lg px-2 py-1.5 text-sm outline-none" />
+                            className={`flex-1 border rounded-lg px-2 py-1.5 text-sm outline-none ${inputCls}`} />
                         </div>
                         <select value={editForm.trainer_name} onChange={e => setEditForm({...editForm, trainer_name: e.target.value})}
-                          className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm outline-none bg-white">
+                          className={`w-full border rounded-lg px-2 py-1.5 text-sm outline-none ${selectCls}`}>
                           <option value="">Тренер (необязательно)</option>
                           {trainers.map(t => <option key={t} value={t}>{t}</option>)}
                         </select>
                         <div className="flex gap-2">
                           <button type="submit" className="flex-1 bg-black text-white py-1.5 rounded-lg text-sm font-medium">Сохранить</button>
-                          <button type="button" onClick={() => setEditId(null)} className="px-3 border border-gray-200 text-gray-500 py-1.5 rounded-lg text-sm">Отмена</button>
+                          <button type="button" onClick={() => setEditId(null)}
+                            className={`px-3 border py-1.5 rounded-lg text-sm ${dark ? 'border-[#3A3A3C] text-[#8E8E93]' : 'border-gray-200 text-gray-500'}`}>
+                            Отмена
+                          </button>
                         </div>
                       </form>
                     )
 
                     return (
-                      <div key={entry.id} className={`flex items-center justify-between p-3 rounded-xl border ${colorClass} ${hasOverride ? 'opacity-50' : ''}`}>
-                        <div>
-                          <div className="font-medium text-sm">{entry.group_name}</div>
-                          <div className="text-xs opacity-70 mt-0.5 flex items-center gap-2">
+                      <div key={entry.id} className={`flex items-center justify-between p-3 rounded-xl border ${colors.card} ${hasOverride ? 'opacity-60' : ''}`}>
+                        <div className="flex-1 min-w-0">
+                          <div className={`font-semibold text-sm ${colors.label}`}>{entry.group_name}</div>
+                          <div className={`text-xs mt-0.5 flex items-center gap-2 ${colors.sub}`}>
                             {entry.time_start && entry.time_end && (
                               <span>🕐 {entry.time_start.slice(0,5)}–{entry.time_end.slice(0,5)}</span>
                             )}
                             {entry.trainer_name && (
                               <span>👤 {entry.trainer_name}</span>
                             )}
-                            {hasOverride && <span className="text-amber-600">⚡ изменено</span>}
+                            {hasOverride && <span className="text-amber-500 font-medium">⚡ изменено</span>}
                           </div>
                         </div>
-                        <div className="flex items-center gap-1.5 ml-3">
+                        <div className="flex items-center gap-1.5 ml-3 shrink-0">
                           <button
                             onClick={() => openOverrideModal(entry)}
-                            className="text-xs text-amber-600 border border-amber-200 bg-amber-50 px-2 py-0.5 rounded-lg hover:bg-amber-100"
+                            className="text-xs text-amber-600 border border-amber-400/60 bg-amber-400/20 px-2 py-1 rounded-lg hover:bg-amber-400/30 font-medium transition-colors"
                             title="Изменить на этой неделе"
                           >
                             ⚡
                           </button>
-                          <button onClick={() => startEdit(entry)} className="text-sm opacity-40 hover:opacity-70">✎</button>
-                          <button onClick={() => remove(entry.id)} className="text-sm opacity-40 hover:opacity-70">✕</button>
+                          <button
+                            onClick={() => startEdit(entry)}
+                            className={`text-xs px-2 py-1 rounded-lg border font-medium transition-colors ${dark ? 'border-[#48484A] bg-[#3A3A3C] text-[#8E8E93] hover:bg-[#48484A]' : 'border-gray-300 bg-white text-gray-600 hover:bg-gray-50'}`}
+                            title="Редактировать"
+                          >
+                            ✎
+                          </button>
+                          <button
+                            onClick={() => remove(entry.id)}
+                            className={`text-xs px-2 py-1 rounded-lg border font-medium transition-colors ${dark ? 'border-red-800/50 bg-red-900/30 text-red-400 hover:bg-red-900/60' : 'border-red-200 bg-red-50 text-red-500 hover:bg-red-100'}`}
+                            title="Удалить"
+                          >
+                            ✕
+                          </button>
                         </div>
                       </div>
                     )
@@ -432,34 +471,34 @@ export default function SchedulePage() {
 
       {/* Override Modal */}
       {overrideSlot && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 p-4">
-          <form onSubmit={saveOverride} className="bg-white rounded-2xl p-5 w-full max-w-sm shadow-xl space-y-3">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 p-4">
+          <form onSubmit={saveOverride} className={`rounded-2xl p-5 w-full max-w-sm shadow-xl space-y-3 ${dark ? 'bg-[#2C2C2E]' : 'bg-white'}`}>
             <div className="flex items-center justify-between mb-1">
-              <div className="font-semibold text-gray-800">Изменить на неделе</div>
-              <button type="button" onClick={() => setOverrideSlot(null)} className="text-gray-400 text-lg">✕</button>
+              <div className={`font-semibold ${textPrimary}`}>Изменить на неделе</div>
+              <button type="button" onClick={() => setOverrideSlot(null)} className={`text-lg ${textSecondary} hover:opacity-70`}>✕</button>
             </div>
-            <div className="text-sm text-gray-500">{overrideSlot.group_name} · {DAYS.find(d => d.num === overrideSlot.day_of_week)?.full}</div>
+            <div className={`text-sm ${textSecondary}`}>{overrideSlot.group_name} · {DAYS.find(d => d.num === overrideSlot.day_of_week)?.full}</div>
 
             <div>
-              <label className="text-xs text-gray-500 mb-1 block">Дата</label>
+              <label className={`text-xs mb-1 block ${textSecondary}`}>Дата</label>
               <input type="date" required value={overrideForm.date}
                 onChange={e => setOverrideForm({...overrideForm, date: e.target.value})}
-                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none" />
+                className={`w-full border rounded-xl px-3 py-2 text-sm outline-none ${inputCls}`} />
             </div>
 
             <label className="flex items-center gap-2 cursor-pointer">
               <input type="checkbox" checked={overrideForm.cancelled}
                 onChange={e => setOverrideForm({...overrideForm, cancelled: e.target.checked})}
                 className="w-4 h-4 rounded" />
-              <span className="text-sm text-red-600 font-medium">❌ Тренировка отменена</span>
+              <span className="text-sm text-red-500 font-medium">❌ Тренировка отменена</span>
             </label>
 
             {!overrideForm.cancelled && (
               <div>
-                <label className="text-xs text-gray-500 mb-1 block">Тренер (если замена)</label>
+                <label className={`text-xs mb-1 block ${textSecondary}`}>Тренер (если замена)</label>
                 <select value={overrideForm.trainer_name}
                   onChange={e => setOverrideForm({...overrideForm, trainer_name: e.target.value})}
-                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none bg-white">
+                  className={`w-full border rounded-xl px-3 py-2 text-sm outline-none ${selectCls}`}>
                   <option value="">Без изменений</option>
                   {trainers.map(t => <option key={t} value={t}>{t}</option>)}
                 </select>
@@ -467,11 +506,11 @@ export default function SchedulePage() {
             )}
 
             <div>
-              <label className="text-xs text-gray-500 mb-1 block">Комментарий (причина)</label>
+              <label className={`text-xs mb-1 block ${textSecondary}`}>Комментарий (причина)</label>
               <input type="text" value={overrideForm.note}
                 onChange={e => setOverrideForm({...overrideForm, note: e.target.value})}
                 placeholder="Например: болезнь тренера"
-                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none" />
+                className={`w-full border rounded-xl px-3 py-2 text-sm outline-none ${inputCls}`} />
             </div>
 
             <div className="flex gap-2 pt-1">
@@ -480,7 +519,7 @@ export default function SchedulePage() {
                 {savingOverride ? 'Сохранение...' : 'Сохранить изменение'}
               </button>
               <button type="button" onClick={() => setOverrideSlot(null)}
-                className="px-4 border border-gray-200 text-gray-500 py-2.5 rounded-xl text-sm">
+                className={`px-4 border py-2.5 rounded-xl text-sm ${dark ? 'border-[#3A3A3C] text-[#8E8E93]' : 'border-gray-200 text-gray-500'}`}>
                 Отмена
               </button>
             </div>
