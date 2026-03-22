@@ -15,7 +15,7 @@ type StaffUser = {
   created_at: string
 }
 
-type Trainer = { id: string; name: string }
+type Trainer = { id: string; name: string; phone: string | null; telegram_username: string | null }
 type Panel = 'permissions' | 'edit' | null
 
 export default function AdminUsersPage() {
@@ -33,14 +33,14 @@ export default function AdminUsersPage() {
   const [savingId, setSavingId] = useState<string | null>(null)
 
   // Форма редактирования сотрудника
-  const [editForm, setEditForm] = useState<Record<string, { name: string; email: string; password: string; trainer_id: string }>>({})
+  const [editForm, setEditForm] = useState<Record<string, { name: string; email: string; password: string; trainer_id: string; phone: string; telegram_username: string }>>({})
 
   useEffect(() => { loadAll() }, [])
 
   async function loadAll() {
     const [usersRes, trainersRes] = await Promise.all([
       fetch('/api/admin/users', { cache: 'no-store' }),
-      import('@/lib/supabase').then(m => m.supabase.from('trainers').select('id, name').order('name')),
+      import('@/lib/supabase').then(m => m.supabase.from('trainers').select('id, name, phone, telegram_username').order('name')),
     ])
     const usersData = await usersRes.json()
     const list: StaffUser[] = Array.isArray(usersData)
@@ -85,7 +85,17 @@ export default function AdminUsersPage() {
     // Инициализируем форму редактирования
     if (panel === 'edit') {
       const u = users.find(u => u.id === userId)
-      if (u) setEditForm(prev => ({ ...prev, [userId]: { name: u.name || '', email: u.email || '', password: '', trainer_id: u.trainer_id || '' } }))
+      if (u) {
+        const trainerData = u.trainer_id ? trainers.find(t => t.id === u.trainer_id) : null
+        setEditForm(prev => ({ ...prev, [userId]: {
+          name: u.name || '',
+          email: u.email || '',
+          password: '',
+          trainer_id: u.trainer_id || '',
+          phone: trainerData?.phone || '',
+          telegram_username: trainerData?.telegram_username || '',
+        } }))
+      }
     }
   }
 
@@ -144,11 +154,22 @@ export default function AdminUsersPage() {
     if (f.email && f.email !== currentUser?.email) body.email = f.email
     if (f.password) body.password = f.password
     body.trainer_id = f.trainer_id || null
-    const res = await fetch('/api/admin/users', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    })
+
+    const { supabase } = await import('@/lib/supabase')
+    await Promise.all([
+      fetch('/api/admin/users', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      }),
+      // Синхронизируем контакты в таблицу trainers
+      f.trainer_id
+        ? supabase.from('trainers').update({
+            phone: f.phone || null,
+            telegram_username: f.telegram_username || null,
+          }).eq('id', f.trainer_id)
+        : Promise.resolve(),
+    ])
     setOpenPanel(prev => ({ ...prev, [userId]: null }))
     loadAll()
     setSavingId(null)
@@ -366,6 +387,28 @@ export default function AdminUsersPage() {
                         </select>
                         <p className="text-xs text-gray-400 mt-1">Если выбрано — появится кабинет тренера</p>
                       </div>
+                    )}
+                    {ef.trainer_id && (
+                      <>
+                        <div>
+                          <label className="text-xs text-gray-500 block mb-1">Телефон тренера</label>
+                          <input
+                            value={ef.phone}
+                            onChange={e => setEditForm(prev => ({ ...prev, [u.id]: { ...ef, phone: e.target.value } }))}
+                            placeholder="+7 900 000 00 00"
+                            className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs text-gray-500 block mb-1">Telegram тренера (без @)</label>
+                          <input
+                            value={ef.telegram_username}
+                            onChange={e => setEditForm(prev => ({ ...prev, [u.id]: { ...ef, telegram_username: e.target.value.replace('@', '') } }))}
+                            placeholder="username"
+                            className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none"
+                          />
+                        </div>
+                      </>
                     )}
                     <div className="flex gap-2 pt-1">
                       <button onClick={() => saveEdit(u.id)} disabled={savingId === u.id}
