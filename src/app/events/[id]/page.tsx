@@ -31,6 +31,8 @@ type Event = {
   description: string | null
   bonus_type: string | null
   group_restriction: string | null
+  trainer_name: string | null
+  trainer_name_extra: string | null
 }
 
 const ATTENDANCE_LABELS: Record<string, { label: string; color: string }> = {
@@ -40,6 +42,9 @@ const ATTENDANCE_LABELS: Record<string, { label: string; color: string }> = {
   regular: { label: 'Участник', color: 'bg-gray-100 text-gray-500' },
 }
 
+const BONUS_TYPES = ['тренировка с оружием', 'мастер-класс', 'инд.тренировка']
+const GROUPS = ['Дети 4-9', 'Подростки (нач)', 'Подростки (оп)', 'Цигун', 'Индивидуальные']
+
 export default function EventDetailPage() {
   const { id } = useParams<{ id: string }>()
   const [event, setEvent] = useState<Event | null>(null)
@@ -48,26 +53,34 @@ export default function EventDetailPage() {
   const [subMap, setSubMap] = useState<Record<string, SubInfo>>({})
   const [showAdd, setShowAdd] = useState(false)
   const [selectedId, setSelectedId] = useState('')
+  const [trainers, setTrainers] = useState<string[]>([])
+
+  // Edit state
+  const [editing, setEditing] = useState(false)
+  const [editForm, setEditForm] = useState<Partial<Event & { price: string }>>({})
+  const [saving, setSaving] = useState(false)
+  const [notifying, setNotifying] = useState(false)
+  const [notifyResult, setNotifyResult] = useState<string | null>(null)
 
   async function load() {
-    const [{ data: ev }, { data: parts }, { data: students }, { data: subs }] = await Promise.all([
+    const [{ data: ev }, { data: parts }, { data: students }, { data: subs }, { data: tr }] = await Promise.all([
       supabase.from('events').select('*').eq('id', id).single(),
       supabase.from('event_participants').select('*, students(name, group_name)').eq('event_id', id),
       supabase.from('students').select('id, name, group_name').eq('status', 'active').order('name'),
       supabase.from('subscriptions').select('id, student_id, bonuses, bonuses_used, sessions_left').order('created_at', { ascending: false }),
+      supabase.from('trainers').select('name').order('name'),
     ])
 
     setEvent(ev)
+    setTrainers((tr || []).map(t => t.name))
     setParticipants(parts || [])
 
-    // Build latest subscription map per student
     const map: Record<string, SubInfo> = {}
     for (const sub of (subs || [])) {
       if (!map[sub.student_id]) map[sub.student_id] = sub
     }
     setSubMap(map)
 
-    // Filter students by group if restricted
     const filtered = ev?.group_restriction
       ? (students || []).filter(s => s.group_name === ev.group_restriction)
       : (students || [])
@@ -75,6 +88,57 @@ export default function EventDetailPage() {
   }
 
   useEffect(() => { load() }, [id])
+
+  function startEdit() {
+    if (!event) return
+    setEditForm({
+      name: event.name,
+      date: event.date,
+      price: event.price != null ? String(event.price) : '',
+      description: event.description || '',
+      bonus_type: event.bonus_type || '',
+      group_restriction: event.group_restriction || '',
+      trainer_name: event.trainer_name || '',
+      trainer_name_extra: event.trainer_name_extra || '',
+    })
+    setEditing(true)
+  }
+
+  async function saveEdit(e: React.FormEvent) {
+    e.preventDefault()
+    setSaving(true)
+    await supabase.from('events').update({
+      name: editForm.name,
+      date: editForm.date,
+      price: editForm.price ? parseFloat(editForm.price) : null,
+      description: editForm.description || null,
+      bonus_type: editForm.bonus_type || null,
+      group_restriction: editForm.group_restriction || null,
+      trainer_name: editForm.trainer_name || null,
+      trainer_name_extra: editForm.trainer_name_extra || null,
+    }).eq('id', id)
+    setSaving(false)
+    setEditing(false)
+    load()
+  }
+
+  async function notifyStudents() {
+    setNotifying(true)
+    setNotifyResult(null)
+    try {
+      const res = await fetch('/api/notify-event', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ event_id: id }),
+      })
+      const data = await res.json()
+      setNotifyResult(`✅ Отправлено ${data.sent} получателям`)
+    } catch {
+      setNotifyResult('❌ Ошибка отправки')
+    } finally {
+      setNotifying(false)
+    }
+  }
 
   function getBonusStatus(studentId: string): { hasBonusAvailable: boolean; bonusLeft: number } {
     if (!event?.bonus_type) return { hasBonusAvailable: false, bonusLeft: 0 }
@@ -97,7 +161,6 @@ export default function EventDetailPage() {
       attendance_type: attendanceType,
     })
 
-    // Deduct from subscription if applicable
     if (sub && attendanceType === 'bonus' && event?.bonus_type) {
       const currentUsed = sub.bonuses_used || {}
       const newUsed = { ...currentUsed, [event.bonus_type]: (currentUsed[event.bonus_type] || 0) + 1 }
@@ -135,7 +198,7 @@ export default function EventDetailPage() {
     <main className="max-w-lg mx-auto p-4">
       <div className="flex items-center gap-3 mb-4">
         <Link href="/events" className="text-gray-500 hover:text-black text-xl font-bold leading-none">←</Link>
-        <div>
+        <div className="flex-1">
           <h1 className="text-xl font-bold text-gray-800">{event.name}</h1>
           {event.bonus_type && (
             <div className="flex gap-2 mt-0.5">
@@ -146,14 +209,79 @@ export default function EventDetailPage() {
             </div>
           )}
         </div>
+        <button onClick={startEdit}
+          className="text-sm border border-gray-200 px-3 py-1.5 rounded-xl text-gray-600 hover:border-gray-400">
+          ✎ Изменить
+        </button>
       </div>
+
+      {/* Edit form */}
+      {editing && (
+        <form onSubmit={saveEdit} className="bg-white rounded-2xl p-4 border border-gray-200 shadow-sm mb-4 space-y-3">
+          <div className="flex items-center justify-between mb-1">
+            <div className="font-semibold text-gray-800 text-sm">Редактирование мероприятия</div>
+            <button type="button" onClick={() => setEditing(false)} className="text-gray-400 text-lg">✕</button>
+          </div>
+          <input required value={editForm.name || ''} onChange={e => setEditForm({...editForm, name: e.target.value})}
+            placeholder="Название *" className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none" />
+          <input required value={editForm.date || ''} onChange={e => setEditForm({...editForm, date: e.target.value})}
+            type="date" className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none" />
+          <select value={editForm.bonus_type || ''} onChange={e => setEditForm({...editForm, bonus_type: e.target.value})}
+            className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none bg-white">
+            <option value="">Тип бонуса</option>
+            {BONUS_TYPES.map(b => <option key={b} value={b}>{b}</option>)}
+          </select>
+          <input value={editForm.price || ''} onChange={e => setEditForm({...editForm, price: e.target.value})}
+            placeholder="Стоимость (₽)" type="number"
+            className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none" />
+          <select value={editForm.group_restriction || ''} onChange={e => setEditForm({...editForm, group_restriction: e.target.value})}
+            className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none bg-white">
+            <option value="">Все группы</option>
+            {GROUPS.map(g => <option key={g} value={g}>{g}</option>)}
+          </select>
+          <select value={editForm.trainer_name || ''} onChange={e => setEditForm({...editForm, trainer_name: e.target.value})}
+            className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none bg-white">
+            <option value="">Ответственный тренер</option>
+            {trainers.map(t => <option key={t} value={t}>{t}</option>)}
+          </select>
+          <select value={editForm.trainer_name_extra || ''} onChange={e => setEditForm({...editForm, trainer_name_extra: e.target.value})}
+            className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none bg-white">
+            <option value="">Доп. тренер (необязательно)</option>
+            {trainers.filter(t => t !== editForm.trainer_name).map(t => <option key={t} value={t}>{t}</option>)}
+          </select>
+          <textarea value={editForm.description || ''} onChange={e => setEditForm({...editForm, description: e.target.value})}
+            placeholder="Описание" rows={2}
+            className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none resize-none" />
+          <div className="flex gap-2">
+            <button type="submit" disabled={saving}
+              className="flex-1 bg-black text-white py-2 rounded-xl text-sm font-medium disabled:opacity-50">
+              {saving ? 'Сохранение...' : 'Сохранить'}
+            </button>
+            <button type="button" onClick={() => setEditing(false)}
+              className="px-4 border border-gray-200 text-gray-500 py-2 rounded-xl text-sm">
+              Отмена
+            </button>
+          </div>
+        </form>
+      )}
 
       {/* Event info */}
       <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm mb-4">
         <div className="space-y-1.5 text-sm">
           <div className="flex justify-between"><span className="text-gray-400">Дата</span><span>{event.date}</span></div>
+          {event.trainer_name && <div className="flex justify-between"><span className="text-gray-400">Тренер</span><span>👤 {event.trainer_name}</span></div>}
+          {event.trainer_name_extra && <div className="flex justify-between"><span className="text-gray-400">Доп. тренер</span><span>👤 {event.trainer_name_extra}</span></div>}
           {event.price && <div className="flex justify-between"><span className="text-gray-400">Стоимость</span><span>{event.price.toLocaleString()} ₽</span></div>}
-          {event.description && <div className="flex justify-between"><span className="text-gray-400">Описание</span><span>{event.description}</span></div>}
+          {event.description && <div className="flex justify-between"><span className="text-gray-400">Описание</span><span className="text-right max-w-[60%]">{event.description}</span></div>}
+        </div>
+
+        {/* Notify button */}
+        <div className="mt-3 pt-3 border-t border-gray-100">
+          <button onClick={notifyStudents} disabled={notifying}
+            className="w-full flex items-center justify-center gap-2 bg-black text-white py-2 rounded-xl text-sm font-medium disabled:opacity-50">
+            {notifying ? '...' : '📨 Уведомить учеников в Telegram'}
+          </button>
+          {notifyResult && <div className="text-xs text-center mt-2 text-gray-500">{notifyResult}</div>}
         </div>
       </div>
 
@@ -214,7 +342,6 @@ export default function EventDetailPage() {
                   {selectedSub?.sessions_left != null && ` · Занятий: ${selectedSub.sessions_left}`}
                 </div>
               )}
-
               <div className="flex flex-wrap gap-2">
                 {isBonusEvent && hasBonusAvailable && (
                   <button onClick={() => addParticipant('bonus')}
