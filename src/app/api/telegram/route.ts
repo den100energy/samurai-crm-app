@@ -224,58 +224,113 @@ export async function POST(req: NextRequest) {
 
   // ── Клиентский бот ───────────────────────────────────────────────────────────
 
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://samurai-crm-app.vercel.app'
+
+  function cabinetButton(url: string, label = '🎒 Открыть личный кабинет') {
+    return { inline_keyboard: [[{ text: label, url }]] }
+  }
+
   if (text.startsWith('/start')) {
     const token = text.split(' ')[1]?.trim()
 
     if (!token) {
-      await sendMessage(chat_id, `Привет, ${firstName}! 👋\n\nЭтот бот отправляет уведомления от Школы Самурая.\n\nДля привязки к карточке ученика используй ссылку от тренера.`)
+      // Уже привязан — показать кабинет
+      const { data: linked } = await supabase
+        .from('students').select('name, cabinet_token').eq('telegram_chat_id', chat_id).single()
+      if (linked?.cabinet_token) {
+        await sendMessage(chat_id,
+          `🥋 <b>${linked.name}</b>, добро пожаловать!\n\nШкола Самурая — ваш личный кабинет:`,
+          cabinetButton(`${appUrl}/cabinet/${linked.cabinet_token}`)
+        )
+        return NextResponse.json({ ok: true })
+      }
+      const { data: linkedContact } = await supabase
+        .from('student_contacts').select('name, students(name, cabinet_token)').eq('telegram_chat_id', chat_id).single()
+      if (linkedContact) {
+        const s = linkedContact.students as any
+        if (s?.cabinet_token) {
+          await sendMessage(chat_id,
+            `🥋 Добро пожаловать!\n\nЛичный кабинет <b>${s.name}</b>:`,
+            cabinetButton(`${appUrl}/cabinet/${s.cabinet_token}`)
+          )
+          return NextResponse.json({ ok: true })
+        }
+      }
+      await sendMessage(chat_id,
+        `Привет, ${firstName}! 👋\n\nЭтот бот отправляет уведомления от Школы Самурая.\n\nДля привязки к карточке ученика используй ссылку от тренера.`
+      )
       return NextResponse.json({ ok: true })
     }
 
     const { data: lead } = await supabase.from('leads').select('id, full_name').eq('invite_token', token).single()
     if (lead) {
       await supabase.from('leads').update({ telegram_chat_id: chat_id }).eq('id', lead.id)
-      await sendMessage(chat_id, `Привет, ${firstName}! 👋\n\nВы успешно подключены к карточке <b>${lead.full_name}</b>.\n\nТеперь вы будете получать уведомления о занятиях, абонементе и программах развития.`)
+      await sendMessage(chat_id,
+        `Привет, ${firstName}! 👋\n\nВы успешно подключены к карточке <b>${lead.full_name}</b>.\n\nТеперь вы будете получать уведомления о занятиях, абонементе и программах развития.`
+      )
       return NextResponse.json({ ok: true })
     }
 
-    const { data: student } = await supabase.from('students').select('id, name').eq('invite_token', token).single()
+    const { data: student } = await supabase
+      .from('students').select('id, name, cabinet_token').eq('invite_token', token).single()
     if (student) {
       await supabase.from('students').update({ telegram_chat_id: chat_id }).eq('id', student.id)
-      await sendMessage(chat_id, `Привет, ${firstName}! 👋\n\nВы успешно подключены к карточке <b>${student.name}</b>.\n\nТеперь вы будете получать уведомления о занятиях, абонементе и программах развития от Школы Самурая. 🥋`)
+      const markup = student.cabinet_token
+        ? cabinetButton(`${appUrl}/cabinet/${student.cabinet_token}`)
+        : undefined
+      await sendMessage(chat_id,
+        `Привет, ${firstName}! 👋\n\nВы успешно подключены к карточке <b>${student.name}</b>.\n\nТеперь вы будете получать уведомления о занятиях и абонементе. 🥋`,
+        markup
+      )
       return NextResponse.json({ ok: true })
     }
 
-    const { data: contact } = await supabase.from('student_contacts').select('id, name, student_id, students(name)').eq('invite_token', token).single()
+    const { data: contact } = await supabase
+      .from('student_contacts').select('id, name, student_id, students(name, cabinet_token)').eq('invite_token', token).single()
     if (contact) {
       await supabase.from('student_contacts').update({ telegram_chat_id: chat_id }).eq('id', contact.id)
-      const studentName = (contact.students as any)?.name || 'ученика'
-      await sendMessage(chat_id, `Привет, ${firstName}! 👋\n\nВы успешно подключены как контакт ученика <b>${studentName}</b>.\n\nТеперь вы будете получать уведомления об абонементе и занятиях от Школы Самурая. 🥋`)
+      const s = (contact.students as any)
+      const studentName = s?.name || 'ученика'
+      const markup = s?.cabinet_token
+        ? cabinetButton(`${appUrl}/cabinet/${s.cabinet_token}`, '🎒 Кабинет ученика')
+        : undefined
+      await sendMessage(chat_id,
+        `Привет, ${firstName}! 👋\n\nВы успешно подключены как контакт ученика <b>${studentName}</b>.\n\nТеперь вы будете получать уведомления от Школы Самурая. 🥋`,
+        markup
+      )
       return NextResponse.json({ ok: true })
     }
 
     await sendMessage(chat_id, `Ссылка не распознана или устарела. Попросите тренера отправить новую ссылку-приглашение.`)
+    return NextResponse.json({ ok: true })
   }
 
   if (text === '/cabinet' || text.toLowerCase().includes('кабинет')) {
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://samurai-crm-app.vercel.app'
-
-    const { data: student } = await supabase.from('students').select('name, cabinet_token').eq('telegram_chat_id', chat_id).single()
+    const { data: student } = await supabase
+      .from('students').select('name, cabinet_token').eq('telegram_chat_id', chat_id).single()
     if (student?.cabinet_token) {
-      await sendMessage(chat_id, `🎒 <b>Личный кабинет — ${student.name}</b>\n\n${appUrl}/cabinet/${student.cabinet_token}\n\nЗдесь вы найдёте:\n• Абонемент и посещаемость\n• Прогресс по качествам\n• Задания от тренера\n• Достижения и аттестации`)
+      await sendMessage(chat_id,
+        `🎒 <b>Личный кабинет — ${student.name}</b>\n\nАбонемент · Посещаемость · Прогресс · Задания`,
+        cabinetButton(`${appUrl}/cabinet/${student.cabinet_token}`)
+      )
       return NextResponse.json({ ok: true })
     }
 
-    const { data: contact } = await supabase.from('student_contacts').select('name, students(name, cabinet_token)').eq('telegram_chat_id', chat_id).single()
+    const { data: contact } = await supabase
+      .from('student_contacts').select('name, students(name, cabinet_token)').eq('telegram_chat_id', chat_id).single()
     if (contact) {
       const s = contact.students as any
       if (s?.cabinet_token) {
-        await sendMessage(chat_id, `🎒 <b>Личный кабинет — ${s.name}</b>\n\n${appUrl}/cabinet/${s.cabinet_token}\n\nЗдесь вы найдёте прогресс, задания и информацию об абонементе.`)
+        await sendMessage(chat_id,
+          `🎒 <b>Личный кабинет — ${s.name}</b>`,
+          cabinetButton(`${appUrl}/cabinet/${s.cabinet_token}`)
+        )
         return NextResponse.json({ ok: true })
       }
     }
 
     await sendMessage(chat_id, `Не удалось найти ваш кабинет. Попросите тренера привязать ваш Telegram к карточке ученика.`)
+    return NextResponse.json({ ok: true })
   }
 
   return NextResponse.json({ ok: true })
