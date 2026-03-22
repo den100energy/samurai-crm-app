@@ -48,6 +48,11 @@ export default function TrainerPage() {
   const [schedule, setSchedule] = useState<ScheduleSlot[]>([])
   const [overrides, setOverrides] = useState<Override[]>([])
   const [studentCount, setStudentCount] = useState(0)
+  const [trainerPhone, setTrainerPhone] = useState('')
+  const [trainerTg, setTrainerTg] = useState('')
+  const [showProfile, setShowProfile] = useState(false)
+  const [savingProfile, setSavingProfile] = useState(false)
+  const [profileSaved, setProfileSaved] = useState(false)
 
   const dark = theme === 'dark'
 
@@ -64,14 +69,19 @@ export default function TrainerPage() {
     const monday = weekDates[1]
     const sunday = weekDates[7]
 
-    const [{ data: slots }, { data: students }, { data: ovData }] = await Promise.all([
+    const [{ data: slots }, { data: students }, { data: ovData }, { data: trainerRow }] = await Promise.all([
       supabase.from('schedule').select('*').eq('trainer_name', userName).order('day_of_week').order('time_start'),
       supabase.from('students').select('id, group_name').eq('status', 'active'),
       supabase.from('schedule_overrides').select('date, group_name, trainer_name, cancelled')
         .gte('date', monday).lte('date', sunday),
+      supabase.from('trainers').select('phone, telegram_username').eq('name', userName).maybeSingle(),
     ])
     setSchedule(slots || [])
     setOverrides(ovData || [])
+    if (trainerRow) {
+      setTrainerPhone(trainerRow.phone || '')
+      setTrainerTg(trainerRow.telegram_username || '')
+    }
 
     const trainerGroups = [...new Set((slots || []).map(s => s.group_name))]
     const myStudents = (students || []).filter(s => s.group_name && trainerGroups.includes(s.group_name))
@@ -81,6 +91,18 @@ export default function TrainerPage() {
   async function signOut() {
     await supabase.auth.signOut()
     router.push('/login')
+  }
+
+  async function saveProfile() {
+    if (!userName) return
+    setSavingProfile(true)
+    await supabase.from('trainers')
+      .update({ phone: trainerPhone || null, telegram_username: trainerTg || null })
+      .eq('name', userName)
+    setSavingProfile(false)
+    setProfileSaved(true)
+    setShowProfile(false)
+    setTimeout(() => setProfileSaved(false), 2000)
   }
 
   if (loading) return <div className="min-h-screen flex items-center justify-center text-gray-400">Загрузка...</div>
@@ -162,6 +184,58 @@ export default function TrainerPage() {
           <div className={`text-2xl font-bold ${textPrimary}`}>{myGroups.length}</div>
           <div className={`text-xs mt-0.5 ${textSecondary}`}>групп</div>
         </div>
+      </div>
+
+      {/* Мой профиль */}
+      <div className={`rounded-2xl border mb-4 overflow-hidden ${card}`}>
+        <button onClick={() => setShowProfile(p => !p)}
+          className="w-full flex items-center justify-between px-4 py-3">
+          <div className="flex items-center gap-2">
+            <span className="text-lg">👤</span>
+            <span className={`text-sm font-medium ${textPrimary}`}>Мои контакты</span>
+            {(trainerPhone || trainerTg) && (
+              <span className="text-xs bg-green-500 text-white px-2 py-0.5 rounded-full">✓</span>
+            )}
+            {profileSaved && (
+              <span className="text-xs text-green-500 font-medium">Сохранено!</span>
+            )}
+          </div>
+          <span className={`text-sm ${textSecondary}`}>{showProfile ? '▲' : '▼'}</span>
+        </button>
+
+        {showProfile && (
+          <div className={`px-4 pb-4 space-y-3 border-t ${dark ? 'border-[#3A3A3C]' : 'border-gray-100'}`}>
+            <p className={`text-xs pt-3 ${textSecondary}`}>
+              Ученики увидят эти контакты в своём личном кабинете для связи с вами
+            </p>
+            <div>
+              <label className={`text-xs font-medium ${textSecondary}`}>Телефон</label>
+              <input
+                value={trainerPhone}
+                onChange={e => setTrainerPhone(e.target.value)}
+                placeholder="+7 900 000 00 00"
+                className={`mt-1 w-full rounded-xl px-3 py-2.5 text-sm outline-none border ${
+                  dark ? 'bg-[#1C1C1E] border-[#3A3A3C] text-[#E5E5E7]' : 'bg-white border-gray-200 text-gray-800'
+                }`}
+              />
+            </div>
+            <div>
+              <label className={`text-xs font-medium ${textSecondary}`}>Telegram (без @)</label>
+              <input
+                value={trainerTg}
+                onChange={e => setTrainerTg(e.target.value.replace('@', ''))}
+                placeholder="username"
+                className={`mt-1 w-full rounded-xl px-3 py-2.5 text-sm outline-none border ${
+                  dark ? 'bg-[#1C1C1E] border-[#3A3A3C] text-[#E5E5E7]' : 'bg-white border-gray-200 text-gray-800'
+                }`}
+              />
+            </div>
+            <button onClick={saveProfile} disabled={savingProfile}
+              className="w-full bg-black text-white py-2.5 rounded-xl text-sm font-medium disabled:opacity-50">
+              {savingProfile ? 'Сохранение...' : 'Сохранить'}
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Attendance — always visible */}
