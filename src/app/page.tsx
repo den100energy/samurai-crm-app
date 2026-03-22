@@ -147,13 +147,6 @@ export default function Home() {
               </p>
             </div>
             <div className="flex items-center gap-2">
-              {role === 'founder' && trainerId && (
-                <Link href="/trainer"
-                  className="text-xs text-white/70 border border-white/20 bg-black/25 backdrop-blur-sm
-                    px-2.5 py-1.5 rounded-lg hover:text-white transition-all duration-200">
-                  🥋
-                </Link>
-              )}
               <div className="relative group">
                 <button onClick={sendReport} disabled={notifying}
                   className="flex items-center gap-1.5 text-xs text-white/70 border border-white/20
@@ -187,6 +180,19 @@ export default function Home() {
           </div>
         </div>
       </div>
+
+      {/* Переключатель в кабинет тренера — только для основателя-тренера */}
+      {role === 'founder' && trainerId && (
+        <Link href="/trainer"
+          className="flex items-center justify-between px-4 py-3 border-b"
+          style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border)' }}>
+          <div className="flex items-center gap-2">
+            <span className="text-lg">🥋</span>
+            <span className="text-sm font-medium" style={{ color: 'var(--text-1)' }}>Кабинет тренера</span>
+          </div>
+          <span style={{ color: 'var(--text-2)' }}>›</span>
+        </Link>
+      )}
 
       {/* Метрики */}
       <div className="px-4 pt-4 grid grid-cols-2 gap-3 mb-5">

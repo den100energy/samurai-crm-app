@@ -194,13 +194,6 @@ export default function TrainerPage() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              {role === 'founder' && (
-                <Link href="/"
-                  className="text-sm text-white/70 border border-white/20 bg-black/25 backdrop-blur-sm
-                    px-2.5 py-1.5 rounded-lg hover:text-white transition-all duration-200">
-                  ← Главная
-                </Link>
-              )}
               <button onClick={toggleTheme}
                 className="text-sm text-white/70 border border-white/20 bg-black/25 backdrop-blur-sm
                   px-2.5 py-1.5 rounded-lg hover:text-white transition-all duration-200">
@@ -215,6 +208,16 @@ export default function TrainerPage() {
           </div>
         </div>
       </div>
+
+      {/* Переключатель в кабинет основателя — только для основателя-тренера */}
+      {role === 'founder' && (
+        <Link href="/"
+          className="flex items-center gap-2 px-4 py-3 border-b"
+          style={{ borderColor: dark ? '#3A3A3C' : '#E5E4E0', backgroundColor: dark ? '#2C2C2E' : '#F9F8F5' }}>
+          <span className="text-sm" style={{ color: dark ? '#8E8E93' : '#6B7280' }}>←</span>
+          <span className="text-sm font-medium" style={{ color: dark ? '#E5E5E7' : '#1C1C1E' }}>Кабинет основателя</span>
+        </Link>
+      )}
 
       <div className="p-4">
 
