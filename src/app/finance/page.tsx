@@ -13,7 +13,11 @@ type Payment = {
   description: string | null
   paid_at: string
   status: string | null
+  student_id: string | null
+  students: { name: string }[] | null
 }
+
+type Student = { id: string; name: string }
 
 const MONTHS = [
   'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
@@ -40,8 +44,10 @@ export default function FinancePage() {
   const [month, setMonth] = useState(now.getMonth())
   const [year] = useState(now.getFullYear())
   const [payments, setPayments] = useState<Payment[]>([])
+  const [students, setStudents] = useState<Student[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
+  const [studentSearch, setStudentSearch] = useState('')
   const [form, setForm] = useState({
     direction: 'income' as 'income' | 'expense',
     category: 'Абонементы',
@@ -49,6 +55,7 @@ export default function FinancePage() {
     payment_type: 'cash',
     description: '',
     paid_at: now.toISOString().split('T')[0],
+    student_id: '',
   })
 
   async function loadPayments(m: number) {
@@ -57,15 +64,19 @@ export default function FinancePage() {
     const lastDay = new Date(year, m + 1, 0).getDate()
     const to = `${year}-${String(m + 1).padStart(2, '0')}-${lastDay}`
 
-    const { data } = await supabase
-      .from('payments')
-      .select('id, amount, direction, category, payment_type, description, paid_at, status')
-      .gte('paid_at', from)
-      .lte('paid_at', to)
-      .neq('status', 'pending')
-      .order('paid_at', { ascending: false })
+    const [{ data }, { data: studs }] = await Promise.all([
+      supabase
+        .from('payments')
+        .select('id, amount, direction, category, payment_type, description, paid_at, status, student_id, students(name)')
+        .gte('paid_at', from)
+        .lte('paid_at', to)
+        .neq('status', 'pending')
+        .order('paid_at', { ascending: false }),
+      supabase.from('students').select('id, name').eq('status', 'active').order('name'),
+    ])
 
     setPayments(data || [])
+    setStudents(studs || [])
     setLoading(false)
   }
 
@@ -81,6 +92,8 @@ export default function FinancePage() {
     setForm(f => ({ ...f, direction: dir, category: defaultCat }))
   }
 
+  const emptyForm = { direction: 'income' as 'income' | 'expense', category: 'Абонементы', amount: '', payment_type: 'cash', description: '', paid_at: now.toISOString().split('T')[0], student_id: '' }
+
   async function addPayment(e: React.FormEvent) {
     e.preventDefault()
     const { data } = await supabase.from('payments').insert({
@@ -91,11 +104,13 @@ export default function FinancePage() {
       description: form.description || null,
       paid_at: form.paid_at,
       status: 'confirmed',
-    }).select('id, amount, direction, category, payment_type, description, paid_at, status').single()
+      student_id: form.student_id || null,
+    }).select('id, amount, direction, category, payment_type, description, paid_at, status, student_id, students(name)').single()
 
-    if (data) setPayments(prev => [data, ...prev].sort((a, b) => b.paid_at.localeCompare(a.paid_at)))
+    if (data) setPayments(prev => [data as any, ...prev].sort((a, b) => b.paid_at.localeCompare(a.paid_at)))
     setShowForm(false)
-    setForm({ direction: 'income', category: 'Абонементы', amount: '', payment_type: 'cash', description: '', paid_at: now.toISOString().split('T')[0] })
+    setStudentSearch('')
+    setForm(emptyForm)
   }
 
   async function deletePayment(id: string) {
@@ -233,9 +248,44 @@ export default function FinancePage() {
             </button>
           </div>
 
+          {/* Ученик (для доходов) */}
+          {form.direction === 'income' && (
+            <div>
+              <input
+                value={studentSearch}
+                onChange={e => setStudentSearch(e.target.value)}
+                placeholder="Поиск ученика (необязательно)..."
+                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none mb-1"
+              />
+              {studentSearch.length > 0 && (
+                <div className="border border-gray-200 rounded-xl overflow-hidden max-h-36 overflow-y-auto">
+                  {students
+                    .filter(s => s.name.toLowerCase().includes(studentSearch.toLowerCase()))
+                    .slice(0, 5)
+                    .map(s => (
+                      <button key={s.id} type="button"
+                        onClick={() => { setForm({...form, student_id: s.id}); setStudentSearch(s.name) }}
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 border-b border-gray-100 last:border-0">
+                        {s.name}
+                      </button>
+                    ))}
+                </div>
+              )}
+              {form.student_id && (
+                <div className="flex items-center gap-2 mt-1">
+                  <span className="text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
+                    👤 {studentSearch}
+                  </span>
+                  <button type="button" onClick={() => { setForm({...form, student_id: ''}); setStudentSearch('') }}
+                    className="text-xs text-gray-400 hover:text-red-400">✕</button>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Комментарий */}
           <input value={form.description} onChange={e => setForm({...form, description: e.target.value})}
-            placeholder="Комментарий (имя, назначение...)"
+            placeholder="Комментарий (назначение...)"
             className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none" />
 
           {/* Дата */}
@@ -272,6 +322,7 @@ export default function FinancePage() {
                 <div className="flex-1 min-w-0">
                   <div className="font-medium text-gray-800 text-sm">{p.category || '—'}</div>
                   <div className="text-xs text-gray-400 truncate">
+                    {p.students?.[0]?.name && <span className="text-blue-500">👤 {p.students[0].name} · </span>}
                     {p.description || ''}
                     {p.description ? ' · ' : ''}
                     {p.payment_type === 'cash' ? '💵' : '💳'} · {p.paid_at.slice(5).replace('-', '.')}

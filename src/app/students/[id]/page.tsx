@@ -118,10 +118,11 @@ export default function StudentPage() {
   const [studentProfile, setStudentProfile] = useState<any>(null)
   const [compareProgram, setCompareProgram] = useState('')
   const [generatingCompare, setGeneratingCompare] = useState(false)
+  const [payments, setPayments] = useState<{ id: string; amount: number; category: string | null; paid_at: string; payment_type: string; description: string | null }[]>([])
 
   useEffect(() => {
     async function load() {
-      const [{ data: s }, { data: sb }, { data: at }, { data: bl }, { data: st }, { data: ct }, { data: sv }, { data: ps }, { data: sp }] = await Promise.all([
+      const [{ data: s }, { data: sb }, { data: at }, { data: bl }, { data: st }, { data: ct }, { data: sv }, { data: ps }, { data: sp }, { data: py }] = await Promise.all([
         supabase.from('students').select('*').eq('id', id).single(),
         supabase.from('subscriptions').select('*').eq('student_id', id).order('created_at', { ascending: false }),
         supabase.from('attendance').select('*').eq('student_id', id).order('date', { ascending: false }).limit(20),
@@ -131,6 +132,7 @@ export default function StudentPage() {
         supabase.from('diagnostic_surveys').select('*').eq('student_id', id).maybeSingle(),
         supabase.from('progress_surveys').select('*').eq('student_id', id).order('created_at', { ascending: false }).limit(1).maybeSingle(),
         supabase.from('student_profiles').select('*').eq('student_id', id).maybeSingle(),
+        supabase.from('payments').select('id, amount, category, paid_at, payment_type, description').eq('student_id', id).order('paid_at', { ascending: false }).limit(20),
       ])
       if (s) { setStudent(s); setForm(s) }
       setSubs(sb || [])
@@ -147,6 +149,7 @@ export default function StudentPage() {
         setProgressTrainerForm(init)
       }
       if (sp) setStudentProfile(sp)
+      setPayments(py || [])
     }
     load()
   }, [id])
@@ -1408,6 +1411,33 @@ export default function StudentPage() {
             </p>
           )}
         </div>
+      </div>
+
+      {/* История платежей */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm mb-2 overflow-hidden">
+        <div className="flex items-center px-4 py-3 bg-gray-50 border-b border-gray-100">
+          <span className="flex-1 text-sm font-medium text-gray-800">💳 История платежей</span>
+          <Link href="/finance" className="text-xs text-gray-400 hover:text-gray-600">+ добавить →</Link>
+        </div>
+        {payments.length === 0 ? (
+          <div className="px-4 py-4 text-xs text-gray-400 text-center">Платежей не найдено</div>
+        ) : (
+          <div className="divide-y divide-gray-50">
+            {payments.map(p => (
+              <div key={p.id} className="flex items-center gap-3 px-4 py-2.5">
+                <div className="w-7 h-7 rounded-full bg-green-100 flex items-center justify-center text-xs font-bold text-green-700 shrink-0">+</div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium text-gray-800">{p.category || '—'}</div>
+                  <div className="text-xs text-gray-400">
+                    {p.payment_type === 'cash' ? '💵' : '💳'} · {new Date(p.paid_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    {p.description && <span> · {p.description}</span>}
+                  </div>
+                </div>
+                <div className="text-sm font-bold text-green-700 shrink-0">+{p.amount.toLocaleString()} ₽</div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {student.status === 'active' && (
