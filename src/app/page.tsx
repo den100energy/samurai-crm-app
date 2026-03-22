@@ -147,6 +147,13 @@ export default function Home() {
               </p>
             </div>
             <div className="flex items-center gap-2">
+              {role === 'founder' && trainerId && (
+                <Link href="/trainer"
+                  className="text-xs text-white/70 border border-white/20 bg-black/25 backdrop-blur-sm
+                    px-2.5 py-1.5 rounded-lg hover:text-white transition-all duration-200">
+                  🥋
+                </Link>
+              )}
               <div className="relative group">
                 <button onClick={sendReport} disabled={notifying}
                   className="flex items-center gap-1.5 text-xs text-white/70 border border-white/20
@@ -235,16 +242,6 @@ export default function Home() {
             <div className="text-sm font-medium" style={{ color: 'var(--text-1)' }}>{s.label}</div>
           </Link>
         ))}
-        {role === 'founder' && trainerId && (
-          <Link href="/trainer"
-            style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border)' }}
-            className="group relative border rounded-2xl p-4
-              active:scale-95 transition-all duration-200 overflow-hidden">
-            <div className="absolute top-0 left-0 right-0 h-0.5 bg-[#E8121E] scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-left rounded-t-2xl" />
-            <div className="text-3xl mb-2">🥋</div>
-            <div className="text-sm font-medium" style={{ color: 'var(--text-1)' }}>Кабинет тренера</div>
-          </Link>
-        )}
         {role === 'founder' && (
           <Link href="/admin-users"
             style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border)' }}

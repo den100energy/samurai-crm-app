@@ -194,6 +194,13 @@ export default function TrainerPage() {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              {role === 'founder' && (
+                <Link href="/"
+                  className="text-sm text-white/70 border border-white/20 bg-black/25 backdrop-blur-sm
+                    px-2.5 py-1.5 rounded-lg hover:text-white transition-all duration-200">
+                  ← Главная
+                </Link>
+              )}
               <button onClick={toggleTheme}
                 className="text-sm text-white/70 border border-white/20 bg-black/25 backdrop-blur-sm
                   px-2.5 py-1.5 rounded-lg hover:text-white transition-all duration-200">
