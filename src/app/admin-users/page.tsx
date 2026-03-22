@@ -15,7 +15,7 @@ type StaffUser = {
   created_at: string
 }
 
-type Trainer = { id: string; name: string; phone: string | null; telegram_username: string | null; vk_url: string | null }
+type Trainer = { id: string; name: string; phone: string | null; telegram_username: string | null; vk_url: string | null; photo_url: string | null }
 type Panel = 'permissions' | 'edit' | null
 
 export default function AdminUsersPage() {
