@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/components/AuthProvider'
+import { useTheme } from '@/components/ThemeProvider'
 
 type Student = {
   id: string
@@ -16,11 +17,20 @@ type Student = {
 
 export default function TrainerStudentsPage() {
   const { userName, loading } = useAuth()
+  const { theme } = useTheme()
   const [students, setStudents] = useState<Student[]>([])
   const [myGroups, setMyGroups] = useState<string[]>([])
   const [selectedGroup, setSelectedGroup] = useState('all')
   const [search, setSearch] = useState('')
   const [dataLoading, setDataLoading] = useState(true)
+
+  const dark = theme === 'dark'
+  const card = dark ? 'bg-[#2C2C2E] border-[#3A3A3C]' : 'bg-white border-gray-100 shadow-sm'
+  const textPrimary = dark ? 'text-[#E5E5E7]' : 'text-gray-800'
+  const textSecondary = dark ? 'text-[#8E8E93]' : 'text-gray-400'
+  const inputCls = dark
+    ? 'bg-[#2C2C2E] border-[#3A3A3C] text-[#E5E5E7] placeholder-[#636366]'
+    : 'bg-white border-gray-200 text-gray-800 placeholder-gray-400'
 
   useEffect(() => {
     if (!loading && userName) loadData()
@@ -31,7 +41,6 @@ export default function TrainerStudentsPage() {
     let groups = [...new Set((slots || []).map(s => s.group_name).filter(Boolean))] as string[]
 
     if (groups.length === 0) {
-      // Расписание не настроено — показываем всех учеников
       const { data: studs } = await supabase.from('students').select('group_name').eq('status', 'active')
       groups = [...new Set((studs || []).map(s => s.group_name).filter(Boolean))] as string[]
     }
@@ -63,35 +72,35 @@ export default function TrainerStudentsPage() {
   }
 
   if (loading || dataLoading) return (
-    <div className="min-h-screen flex items-center justify-center text-gray-400">Загрузка...</div>
+    <div className="min-h-screen flex items-center justify-center text-gray-400" style={{ background: 'var(--bg)' }}>Загрузка...</div>
   )
 
   return (
-    <main className="max-w-lg mx-auto p-4">
+    <main className="max-w-lg mx-auto p-4" style={{ background: 'var(--bg)', minHeight: '100vh' }}>
       <div className="flex items-center gap-3 mb-4">
-        <Link href="/trainer" className="text-gray-500 hover:text-black text-xl font-bold">←</Link>
-        <h1 className="text-xl font-bold text-gray-800">Мои ученики</h1>
-        <span className="ml-auto text-sm text-gray-400">{filtered.length} чел.</span>
+        <Link href="/trainer" className={`text-xl font-bold leading-none ${textSecondary} hover:opacity-70`}>←</Link>
+        <h1 className={`text-xl font-bold ${textPrimary}`}>Мои ученики</h1>
+        <span className={`ml-auto text-sm ${textSecondary}`}>{filtered.length} чел.</span>
       </div>
 
       <input
         value={search}
         onChange={e => setSearch(e.target.value)}
         placeholder="Поиск по имени..."
-        className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none mb-3"
+        className={`w-full border rounded-xl px-4 py-2.5 text-sm outline-none mb-3 ${inputCls}`}
       />
 
       {myGroups.length > 1 && (
         <div className="flex gap-2 mb-4 overflow-x-auto pb-1">
           <button onClick={() => setSelectedGroup('all')}
             className={`px-3 py-1.5 rounded-full text-xs font-medium shrink-0 transition-colors
-              ${selectedGroup === 'all' ? 'bg-black text-white' : 'bg-gray-100 text-gray-600'}`}>
+              ${selectedGroup === 'all' ? 'bg-black text-white' : dark ? 'bg-[#3A3A3C] text-[#8E8E93]' : 'bg-gray-100 text-gray-600'}`}>
             Все
           </button>
           {myGroups.map(g => (
             <button key={g} onClick={() => setSelectedGroup(g)}
               className={`px-3 py-1.5 rounded-full text-xs font-medium shrink-0 transition-colors
-                ${selectedGroup === g ? 'bg-black text-white' : 'bg-gray-100 text-gray-600'}`}>
+                ${selectedGroup === g ? 'bg-black text-white' : dark ? 'bg-[#3A3A3C] text-[#8E8E93]' : 'bg-gray-100 text-gray-600'}`}>
               {g}
             </button>
           ))}
@@ -99,27 +108,27 @@ export default function TrainerStudentsPage() {
       )}
 
       {filtered.length === 0 ? (
-        <div className="text-center text-gray-400 py-12">Нет учеников</div>
+        <div className={`text-center py-12 ${textSecondary}`}>Нет учеников</div>
       ) : (
         <div className="space-y-2">
           {filtered.map(s => {
             const age = getAge(s.birth_date)
             return (
               <Link key={s.id} href={`/trainer/students/${s.id}`}
-                className="flex items-center bg-white rounded-2xl border border-gray-100 shadow-sm px-4 py-3 hover:shadow-md transition-shadow">
-                <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-lg font-bold text-gray-400 overflow-hidden shrink-0 mr-3">
+                className={`flex items-center rounded-2xl border px-4 py-3 transition-opacity hover:opacity-80 ${card}`}>
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold overflow-hidden shrink-0 mr-3 ${dark ? 'bg-[#3A3A3C] text-[#636366]' : 'bg-gray-100 text-gray-400'}`}>
                   {s.photo_url
                     ? <img src={s.photo_url} alt={s.name} className="w-full h-full object-cover" />
                     : s.name[0]}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="font-medium text-gray-800">{s.name}</div>
-                  <div className="text-xs text-gray-400 mt-0.5">
+                  <div className={`font-medium ${textPrimary}`}>{s.name}</div>
+                  <div className={`text-xs mt-0.5 ${textSecondary}`}>
                     {s.group_name || '—'}{age ? ` · ${age} лет` : ''}
                     {s.health_notes && <span className="ml-1 text-orange-500">⚠️</span>}
                   </div>
                 </div>
-                <span className="text-gray-300 text-sm">›</span>
+                <span className={`text-sm ${textSecondary}`}>›</span>
               </Link>
             )
           })}

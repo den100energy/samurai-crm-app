@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
+import { useTheme } from '@/components/ThemeProvider'
 
 type Student = {
   id: string
@@ -38,10 +39,18 @@ function getAge(birthDate: string | null) {
 
 export default function TrainerStudentCard() {
   const { id } = useParams<{ id: string }>()
+  const { theme } = useTheme()
   const [student, setStudent] = useState<Student | null>(null)
   const [sub, setSub] = useState<Subscription | null>(null)
   const [attendance, setAttendance] = useState<Attendance[]>([])
   const [loading, setLoading] = useState(true)
+
+  const dark = theme === 'dark'
+  const card = dark ? 'bg-[#2C2C2E] border-[#3A3A3C]' : 'bg-white border-gray-100 shadow-sm'
+  const textPrimary = dark ? 'text-[#E5E5E7]' : 'text-gray-800'
+  const textSecondary = dark ? 'text-[#8E8E93]' : 'text-gray-400'
+  const textMuted = dark ? 'text-[#636366]' : 'text-gray-500'
+  const divider = dark ? 'border-[#3A3A3C]' : 'border-gray-100'
 
   useEffect(() => {
     if (id) loadData()
@@ -62,10 +71,10 @@ export default function TrainerStudentCard() {
   }
 
   if (loading) return (
-    <div className="min-h-screen flex items-center justify-center text-gray-400">Загрузка...</div>
+    <div className="min-h-screen flex items-center justify-center text-gray-400" style={{ background: 'var(--bg)' }}>Загрузка...</div>
   )
   if (!student) return (
-    <div className="min-h-screen flex items-center justify-center text-gray-400">Ученик не найден</div>
+    <div className="min-h-screen flex items-center justify-center text-gray-400" style={{ background: 'var(--bg)' }}>Ученик не найден</div>
   )
 
   const age = getAge(student.birth_date)
@@ -73,36 +82,36 @@ export default function TrainerStudentCard() {
   const totalCount = attendance.length
 
   function sessionsColor(left: number | null) {
-    if (left === null) return 'text-gray-500'
+    if (left === null) return textMuted
     if (left === 0) return 'text-red-500 font-bold'
     if (left <= 2) return 'text-orange-500 font-semibold'
-    return 'text-green-600 font-semibold'
+    return 'text-green-500 font-semibold'
   }
 
   return (
-    <main className="max-w-lg mx-auto p-4">
+    <main className="max-w-lg mx-auto p-4" style={{ background: 'var(--bg)', minHeight: '100vh' }}>
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
-        <Link href="/trainer/students" className="text-gray-500 hover:text-black text-xl font-bold leading-none">←</Link>
-        <h1 className="text-xl font-bold text-gray-800">Карточка ученика</h1>
+        <Link href="/trainer/students" className={`text-xl font-bold leading-none hover:opacity-70 ${textSecondary}`}>←</Link>
+        <h1 className={`text-xl font-bold ${textPrimary}`}>Карточка ученика</h1>
       </div>
 
       {/* Profile */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 mb-4">
+      <div className={`rounded-2xl border p-5 mb-4 ${card}`}>
         <div className="flex items-center gap-4">
-          <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center text-2xl font-bold text-gray-400 overflow-hidden shrink-0">
+          <div className={`w-16 h-16 rounded-full flex items-center justify-center text-2xl font-bold overflow-hidden shrink-0 ${dark ? 'bg-[#3A3A3C] text-[#636366]' : 'bg-gray-100 text-gray-400'}`}>
             {student.photo_url
               ? <img src={student.photo_url} alt={student.name} className="w-full h-full object-cover" />
               : student.name[0]}
           </div>
           <div>
-            <div className="text-lg font-bold text-gray-800">{student.name}</div>
-            <div className="text-sm text-gray-400 mt-0.5">
+            <div className={`text-lg font-bold ${textPrimary}`}>{student.name}</div>
+            <div className={`text-sm mt-0.5 ${textSecondary}`}>
               {student.group_name || '—'}
               {age ? ` · ${age} лет` : ''}
             </div>
             {student.birth_date && (
-              <div className="text-xs text-gray-400 mt-0.5">
+              <div className={`text-xs mt-0.5 ${textSecondary}`}>
                 {new Date(student.birth_date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}
               </div>
             )}
@@ -119,28 +128,28 @@ export default function TrainerStudentCard() {
       )}
 
       {/* Subscription */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-4">
-        <div className="text-xs font-semibold text-gray-500 mb-3 uppercase tracking-wide">Абонемент</div>
+      <div className={`rounded-2xl border p-4 mb-4 ${card}`}>
+        <div className={`text-xs font-semibold uppercase tracking-wide mb-3 ${textMuted}`}>Абонемент</div>
         {sub ? (
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-600">{sub.type}</span>
+              <span className={`text-sm ${textPrimary}`}>{sub.type}</span>
               {!sub.paid && (
                 <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full">Не оплачен</span>
               )}
             </div>
             {sub.sessions_total !== null && (
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-500">Занятий осталось</span>
+              <div className={`flex items-center justify-between border-t pt-2 ${divider}`}>
+                <span className={`text-sm ${textSecondary}`}>Занятий осталось</span>
                 <span className={`text-sm ${sessionsColor(sub.sessions_left)}`}>
                   {sub.sessions_left ?? '—'} / {sub.sessions_total}
                 </span>
               </div>
             )}
             {sub.end_date && (
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-500">Действует до</span>
-                <span className="text-sm text-gray-700">
+              <div className={`flex items-center justify-between border-t pt-2 ${divider}`}>
+                <span className={`text-sm ${textSecondary}`}>Действует до</span>
+                <span className={`text-sm ${textPrimary}`}>
                   {new Date(sub.end_date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}
                 </span>
               </div>
@@ -152,20 +161,20 @@ export default function TrainerStudentCard() {
       </div>
 
       {/* Attendance */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+      <div className={`rounded-2xl border p-4 ${card}`}>
         <div className="flex items-center justify-between mb-3">
-          <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Посещаемость</div>
+          <div className={`text-xs font-semibold uppercase tracking-wide ${textMuted}`}>Посещаемость</div>
           {totalCount > 0 && (
-            <span className="text-xs text-gray-400">{presentCount} из {totalCount}</span>
+            <span className={`text-xs ${textSecondary}`}>{presentCount} из {totalCount}</span>
           )}
         </div>
         {attendance.length === 0 ? (
-          <div className="text-sm text-gray-400">Нет записей</div>
+          <div className={`text-sm ${textSecondary}`}>Нет записей</div>
         ) : (
           <div className="flex gap-1.5 flex-wrap">
             {attendance.map(a => (
               <span key={a.date}
-                className={`text-xs px-2 py-1 rounded-lg ${a.present ? 'bg-green-100 text-green-700' : 'bg-red-50 text-red-400'}`}>
+                className={`text-xs px-2 py-1 rounded-lg ${a.present ? 'bg-green-100 text-green-700' : dark ? 'bg-red-900/30 text-red-400' : 'bg-red-50 text-red-400'}`}>
                 {new Date(a.date + 'T00:00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}
                 {a.present ? ' ✓' : ' —'}
               </span>

@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/components/AuthProvider'
+import { useTheme } from '@/components/ThemeProvider'
 
 type Student = {
   id: string
@@ -37,7 +38,18 @@ function sessionsColor(s: Student) {
 
 function AttendanceContent() {
   const { userName, loading } = useAuth()
+  const { theme } = useTheme()
   const searchParams = useSearchParams()
+
+  const dark = theme === 'dark'
+  const bg = dark ? 'bg-[#1C1C1E]' : 'bg-white'
+  const card = dark ? 'bg-[#2C2C2E] border-[#3A3A3C]' : 'bg-white border-gray-100'
+  const textPrimary = dark ? 'text-[#E5E5E7]' : 'text-gray-800'
+  const textSecondary = dark ? 'text-[#8E8E93]' : 'text-gray-400'
+  const inputCls = dark
+    ? 'bg-[#2C2C2E] border-[#3A3A3C] text-[#E5E5E7]'
+    : 'border-gray-200'
+  const divider = dark ? 'border-[#3A3A3C]' : 'border-gray-50'
   const [myGroups, setMyGroups] = useState<string[]>([])
   const [selectedGroup, setSelectedGroup] = useState('')
   const [date, setDate] = useState(new Date().toISOString().split('T')[0])
@@ -194,63 +206,66 @@ function AttendanceContent() {
 
   if (!selectedGroup) {
     return (
-      <main className="max-w-lg mx-auto p-4">
+      <main className="max-w-lg mx-auto p-4" style={{ background: 'var(--bg)', minHeight: '100vh' }}>
         <div className="flex items-center gap-3 mb-4">
-          <Link href="/trainer" className="text-gray-500 hover:text-black text-xl font-bold leading-none">←</Link>
-          <h1 className="text-xl font-bold text-gray-800">Посещаемость</h1>
+          <Link href="/trainer" className={`text-xl font-bold leading-none hover:opacity-70 ${textSecondary}`}>←</Link>
+          <h1 className={`text-xl font-bold ${textPrimary}`}>Посещаемость</h1>
         </div>
         <input type="date" value={date} onChange={e => setDate(e.target.value)}
-          className="w-full border border-gray-200 rounded-xl px-4 py-2.5 mb-3 outline-none focus:border-gray-400" />
+          className={`w-full border rounded-xl px-4 py-2.5 mb-3 outline-none ${inputCls}`} />
         <div className="flex gap-2 overflow-x-auto pb-2 mb-4">
           {myGroups.map(g => (
             <button key={g} onClick={() => setSelectedGroup(g)}
-              className="whitespace-nowrap px-3 py-1.5 rounded-full text-sm font-medium border border-gray-200 bg-white text-gray-600 hover:border-gray-400">
+              className={`whitespace-nowrap px-3 py-1.5 rounded-full text-sm font-medium border transition-colors
+                ${dark ? 'border-[#3A3A3C] bg-[#2C2C2E] text-[#8E8E93]' : 'border-gray-200 bg-white text-gray-600'}`}>
               {g}
             </button>
           ))}
         </div>
         {myGroups.length === 0 && (
-          <div className="text-center text-gray-400 py-12">Загрузка групп...</div>
+          <div className={`text-center py-12 ${textSecondary}`}>Загрузка групп...</div>
         )}
       </main>
     )
   }
 
   return (
-    <main className="max-w-lg mx-auto p-4">
+    <main className="max-w-lg mx-auto p-4" style={{ background: 'var(--bg)', minHeight: '100vh' }}>
       <div className="flex items-center gap-3 mb-4">
-        <Link href="/trainer" className="text-gray-500 hover:text-black text-xl font-bold leading-none">←</Link>
-        <h1 className="text-xl font-bold text-gray-800">Посещаемость</h1>
+        <Link href="/trainer" className={`text-xl font-bold leading-none hover:opacity-70 ${textSecondary}`}>←</Link>
+        <h1 className={`text-xl font-bold ${textPrimary}`}>Посещаемость</h1>
       </div>
 
       <input type="date" value={date} onChange={e => setDate(e.target.value)}
-        className="w-full border border-gray-200 rounded-xl px-4 py-2.5 mb-3 outline-none focus:border-gray-400" />
+        className={`w-full border rounded-xl px-4 py-2.5 mb-3 outline-none ${inputCls}`} />
 
       {/* Group tabs */}
       <div className="flex gap-2 overflow-x-auto pb-2 mb-4">
         {myGroups.map(g => (
           <button key={g} onClick={() => setSelectedGroup(g)}
             className={`whitespace-nowrap px-3 py-1.5 rounded-full text-sm font-medium transition-colors
-              ${selectedGroup === g ? 'bg-black text-white' : 'bg-white text-gray-600 border border-gray-200'}`}>
+              ${selectedGroup === g ? 'bg-black text-white' : dark ? 'bg-[#2C2C2E] text-[#8E8E93] border border-[#3A3A3C]' : 'bg-white text-gray-600 border border-gray-200'}`}>
             {g}
           </button>
         ))}
       </div>
 
       {students.length === 0 ? (
-        <div className="text-center text-gray-400 py-12">Нет учеников в этой группе</div>
+        <div className={`text-center py-12 ${textSecondary}`}>Нет учеников в этой группе</div>
       ) : (
         <>
           <div className="space-y-2 mb-4">
             {students.map(s => (
               <button key={s.id} onClick={() => toggle(s.id)}
                 className={`w-full flex items-center px-4 py-3 rounded-xl border transition-colors
-                  ${present.has(s.id) ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200'}`}>
+                  ${present.has(s.id)
+                    ? 'bg-green-50 border-green-200'
+                    : dark ? 'bg-[#2C2C2E] border-[#3A3A3C]' : 'bg-gray-50 border-gray-200'}`}>
                 <span className="text-xl mr-3">{present.has(s.id) ? '✅' : '⬜'}</span>
                 {s.photo_url && (
                   <img src={s.photo_url} alt={s.name} className="w-8 h-8 rounded-full object-cover mr-2 shrink-0" />
                 )}
-                <span className="font-medium text-gray-800 flex-1 text-left">{s.name}</span>
+                <span className={`font-medium flex-1 text-left ${textPrimary}`}>{s.name}</span>
                 {s.sub_id === null ? (
                   <span className="text-xs bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full ml-2">Нет абон.</span>
                 ) : s.sessions_left !== null && (
@@ -264,7 +279,8 @@ function AttendanceContent() {
 
           {/* Guests */}
           <button onClick={toggleGuests}
-            className="w-full border border-dashed border-gray-300 text-gray-500 py-2.5 rounded-xl text-sm mb-4 hover:border-gray-400 hover:text-gray-700 transition-colors">
+            className={`w-full border border-dashed py-2.5 rounded-xl text-sm mb-4 transition-colors
+              ${dark ? 'border-[#3A3A3C] text-[#8E8E93] hover:border-[#636366]' : 'border-gray-300 text-gray-500 hover:border-gray-400 hover:text-gray-700'}`}>
             {showGuests
               ? `▲ Скрыть гостей${guestsPresentCount > 0 ? ` (отмечено: ${guestsPresentCount})` : ''}`
               : `+ Гости из других групп${guestsPresentCount > 0 ? ` (${guestsPresentCount})` : ''}`}
@@ -273,22 +289,24 @@ function AttendanceContent() {
           {showGuests && (
             <div className="mb-4">
               {!guestsLoaded ? (
-                <div className="text-center text-gray-400 py-4 text-sm">Загрузка...</div>
+                <div className={`text-center py-4 text-sm ${textSecondary}`}>Загрузка...</div>
               ) : guests.length === 0 ? (
-                <div className="text-center text-gray-400 py-4 text-sm">Нет других учеников</div>
+                <div className={`text-center py-4 text-sm ${textSecondary}`}>Нет других учеников</div>
               ) : (
                 <div className="space-y-2">
                   {guests.map(g => (
                     <button key={g.id} onClick={() => toggle(g.id)}
                       className={`w-full flex items-center px-4 py-3 rounded-xl border transition-colors
-                        ${present.has(g.id) ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-200'}`}>
+                        ${present.has(g.id)
+                          ? 'bg-blue-50 border-blue-200'
+                          : dark ? 'bg-[#2C2C2E] border-[#3A3A3C]' : 'bg-gray-50 border-gray-200'}`}>
                       <span className="text-xl mr-3">{present.has(g.id) ? '✅' : '⬜'}</span>
                       {g.photo_url && (
                         <img src={g.photo_url} alt={g.name} className="w-8 h-8 rounded-full object-cover mr-2 shrink-0" />
                       )}
-                      <span className="font-medium text-gray-800 flex-1 text-left">{g.name}</span>
+                      <span className={`font-medium flex-1 text-left ${textPrimary}`}>{g.name}</span>
                       {g.group_name && (
-                        <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full mr-2">
+                        <span className={`text-xs px-2 py-0.5 rounded-full mr-2 ${dark ? 'bg-[#3A3A3C] text-[#8E8E93]' : 'bg-gray-100 text-gray-500'}`}>
                           {g.group_name}
                         </span>
                       )}
@@ -304,7 +322,7 @@ function AttendanceContent() {
             </div>
           )}
 
-          <div className="text-sm text-gray-500 text-center mb-3">
+          <div className={`text-sm text-center mb-3 ${textSecondary}`}>
             Присутствует: {mainPresentCount} из {students.length}
             {guestsPresentCount > 0 && ` + ${guestsPresentCount} гост.`}
           </div>
