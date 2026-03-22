@@ -1,328 +1,455 @@
 'use client'
 
 /**
- * FujiScene — японская пейзажная сцена с горой Фудзи и сакурой.
- * Используется как hero-заголовок в кабинетах (дашборд, тренер, ученик, родитель).
- *
- * Тёмная тема: ночь / сумерки, звёзды, луна.
- * Светлая тема: рассвет, розовое небо, тёплое солнце.
+ * FujiScene v2 — реалистичная гора Фудзи с сакурой.
+ * Пологие склоны на bezier-кривых, снежные полосы, облака у подножия,
+ * изящные ветки с мелкими лепестками вместо шаров.
  */
 export function FujiScene({ dark = true, bgColor }: { dark?: boolean; bgColor?: string }) {
   const fadeColor = bgColor ?? (dark ? '#1C1C1E' : '#F5F4F0')
 
   return (
     <svg
-      viewBox="0 0 400 180"
+      viewBox="0 0 400 185"
       className="w-full block"
       style={{ display: 'block' }}
       preserveAspectRatio="xMidYMax meet"
       aria-hidden
     >
       <defs>
-        {/* ——— Sky ——— */}
+        {/* Sky */}
         <linearGradient id="fj-sky" x1="0" y1="0" x2="0" y2="1">
           {dark ? (
             <>
-              <stop offset="0%"   stopColor="#04040F" />
-              <stop offset="35%"  stopColor="#0E0830" />
-              <stop offset="65%"  stopColor="#2A1048" />
-              <stop offset="100%" stopColor="#4A1C3A" />
+              <stop offset="0%"   stopColor="#010511" />
+              <stop offset="40%"  stopColor="#08082A" />
+              <stop offset="75%"  stopColor="#16103C" />
+              <stop offset="100%" stopColor="#2A1848" />
             </>
           ) : (
             <>
-              <stop offset="0%"   stopColor="#1A0530" />
-              <stop offset="30%"  stopColor="#7B2560" />
-              <stop offset="65%"  stopColor="#D4506A" />
-              <stop offset="100%" stopColor="#F0905A" />
+              <stop offset="0%"   stopColor="#1A3566" />
+              <stop offset="35%"  stopColor="#2C6AA0" />
+              <stop offset="70%"  stopColor="#82C4E8" />
+              <stop offset="100%" stopColor="#B8DCEE" />
             </>
           )}
         </linearGradient>
 
-        {/* ——— Horizon glow ——— */}
-        <radialGradient id="fj-hglow" cx="50%" cy="90%" r="60%">
-          <stop offset="0%"   stopColor={dark ? '#3A1060' : '#FFB060'} stopOpacity="0.6" />
+        {/* Horizon glow */}
+        <radialGradient id="fj-hglow" cx="50%" cy="100%" r="65%">
+          <stop offset="0%"   stopColor={dark ? '#2A0C50' : '#FFCC88'} stopOpacity="0.5" />
           <stop offset="100%" stopColor="transparent" stopOpacity="0" />
         </radialGradient>
 
-        {/* ——— Moon / Sun ——— */}
+        {/* Moon */}
         <radialGradient id="fj-moon" cx="50%" cy="50%" r="50%">
-          <stop offset="0%"   stopColor={dark ? '#FFF8E0' : '#FFEE80'} />
-          <stop offset="70%"  stopColor={dark ? '#FFE8A0' : '#FFD840'} />
-          <stop offset="100%" stopColor={dark ? '#DDB840' : '#FFB800'} stopOpacity="0.5" />
+          <stop offset="0%"   stopColor="#FFFDE8" />
+          <stop offset="65%"  stopColor="#FFE8A0" />
+          <stop offset="100%" stopColor="#FFD060" stopOpacity="0.1" />
         </radialGradient>
-        <filter id="fj-glow" x="-80%" y="-80%" width="260%" height="260%">
-          <feGaussianBlur stdDeviation="6" result="blur" />
-          <feMerge>
-            <feMergeNode in="blur" />
-            <feMergeNode in="SourceGraphic" />
-          </feMerge>
+        <filter id="fj-moonGlow" x="-120%" y="-120%" width="340%" height="340%">
+          <feGaussianBlur stdDeviation="6" result="blur"/>
+          <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
         </filter>
 
-        {/* ——— Far mountains ——— */}
+        {/* Far ridge */}
         <linearGradient id="fj-far" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%"   stopColor={dark ? '#6A4898' : '#9060B0'} stopOpacity={dark ? "0.55" : "0.3"} />
-          <stop offset="100%" stopColor={dark ? '#3A2860' : '#604880'} stopOpacity="0.05" />
+          <stop offset="0%"   stopColor={dark ? '#3A2E60' : '#7AA0C0'} stopOpacity={dark ? '0.65' : '0.5'} />
+          <stop offset="100%" stopColor={dark ? '#1E1840' : '#9AB8D0'} stopOpacity="0.05" />
         </linearGradient>
 
-        {/* ——— Fuji body ——— */}
-        <linearGradient id="fj-body" x1="0.2" y1="0" x2="0.8" y2="1">
-          <stop offset="0%"   stopColor="#7A90A8" />
-          <stop offset="50%"  stopColor="#587090" />
-          <stop offset="100%" stopColor="#3A5068" />
+        {/* Fuji rock */}
+        <linearGradient id="fj-rock" x1="0.25" y1="0" x2="0.8" y2="1">
+          {dark ? (
+            <>
+              <stop offset="0%"   stopColor="#6070880" />
+              <stop offset="0%"   stopColor="#607088" />
+              <stop offset="45%"  stopColor="#445868" />
+              <stop offset="100%" stopColor="#2C3C4C" />
+            </>
+          ) : (
+            <>
+              <stop offset="0%"   stopColor="#8898A8" />
+              <stop offset="45%"  stopColor="#6A7888" />
+              <stop offset="100%" stopColor="#4E5E6E" />
+            </>
+          )}
         </linearGradient>
-        <linearGradient id="fj-shadow" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%"   stopColor="#2A3A50" stopOpacity="0.5" />
-          <stop offset="100%" stopColor="#1A2A3A" stopOpacity="0.7" />
+        <linearGradient id="fj-rockShadow" x1="0" y1="0" x2="1" y2="0.3">
+          <stop offset="0%"   stopColor="#10202E" stopOpacity="0.7" />
+          <stop offset="55%"  stopColor="#10202E" stopOpacity="0.0" />
         </linearGradient>
-        <linearGradient id="fj-light" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%"   stopColor="#A8C0D8" stopOpacity="0.35" />
-          <stop offset="100%" stopColor="#D8EAF8" stopOpacity="0.1" />
+        <linearGradient id="fj-rockLight" x1="1" y1="0" x2="0.35" y2="0.5">
+          <stop offset="0%"   stopColor={dark ? '#A0B8CC' : '#C8D8E8'} stopOpacity="0.35" />
+          <stop offset="100%" stopColor="transparent" stopOpacity="0" />
         </linearGradient>
 
-        {/* ——— Snow cap ——— */}
-        <linearGradient id="fj-snow" x1="0.1" y1="0" x2="0.9" y2="1">
+        {/* Snow */}
+        <linearGradient id="fj-snow" x1="0.15" y1="0" x2="0.85" y2="1">
           <stop offset="0%"   stopColor="#FFFFFF" />
-          <stop offset="50%"  stopColor="#EEF4FF" />
-          <stop offset="100%" stopColor="#B8CCE8" />
+          <stop offset="55%"  stopColor="#EEF4FF" />
+          <stop offset="100%" stopColor={dark ? '#C0D0E4' : '#D0E0F0'} />
         </linearGradient>
 
-        {/* ——— Hills ——— */}
-        <linearGradient id="fj-hills" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%"   stopColor={dark ? '#1A3A20' : '#224A28'} />
-          <stop offset="100%" stopColor={dark ? '#0A1A0C' : '#122018'} />
+        {/* Cloud wisps */}
+        <radialGradient id="fj-cloudL" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="white" stopOpacity="0.85" />
+          <stop offset="100%" stopColor="white" stopOpacity="0" />
+        </radialGradient>
+
+        {/* Hills */}
+        <linearGradient id="fj-hill1" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%"   stopColor={dark ? '#1C3C22' : '#2A5230'} />
+          <stop offset="100%" stopColor={dark ? '#0A180C' : '#162018'} />
         </linearGradient>
+        <linearGradient id="fj-hill2" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%"   stopColor={dark ? '#152A18' : '#1E3A24'} />
+          <stop offset="100%" stopColor={dark ? '#060E06' : '#0E1610'} />
+        </linearGradient>
+
+        {/* Foreground */}
         <linearGradient id="fj-fg" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%"   stopColor={dark ? '#102010' : '#182818'} />
-          <stop offset="100%" stopColor={dark ? '#050D05' : '#0C1A0C'} />
+          <stop offset="0%"   stopColor={dark ? '#0C180E' : '#142018'} />
+          <stop offset="100%" stopColor={dark ? '#040804' : '#0A120A'} />
         </linearGradient>
 
-        {/* ——— Mist ——— */}
+        {/* Mist */}
         <linearGradient id="fj-mist" x1="0" y1="0" x2="1" y2="0">
           <stop offset="0%"   stopColor="white" stopOpacity="0" />
-          <stop offset="20%"  stopColor="white" stopOpacity="0.28" />
-          <stop offset="50%"  stopColor="white" stopOpacity="0.12" />
-          <stop offset="80%"  stopColor="white" stopOpacity="0.22" />
+          <stop offset="22%"  stopColor="white" stopOpacity="0.4" />
+          <stop offset="50%"  stopColor="white" stopOpacity="0.18" />
+          <stop offset="78%"  stopColor="white" stopOpacity="0.36" />
           <stop offset="100%" stopColor="white" stopOpacity="0" />
         </linearGradient>
 
-        {/* ——— Bottom page fade ——— */}
+        {/* Bottom fade */}
         <linearGradient id="fj-fade" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%"   stopColor="transparent" />
           <stop offset="100%" stopColor={fadeColor} />
         </linearGradient>
 
-        {/* ——— Soft atmospheric blur ——— */}
-        <filter id="fj-soft" x="-5%" y="-5%" width="110%" height="110%">
-          <feGaussianBlur stdDeviation="0.7" />
+        {/* Filters */}
+        <filter id="fj-atmo" x="-5%" y="-5%" width="110%" height="110%">
+          <feGaussianBlur stdDeviation="1.2" />
         </filter>
-
-        {/* ——— Tree shadow (subtle 3D depth) ——— */}
-        <filter id="fj-treeshadow" x="-20%" y="-10%" width="140%" height="130%">
-          <feDropShadow dx="2" dy="3" stdDeviation="2" floodColor="#000" floodOpacity="0.3" />
+        <filter id="fj-cloudBlur" x="-30%" y="-30%" width="160%" height="160%">
+          <feGaussianBlur stdDeviation="5" />
         </filter>
       </defs>
 
       {/* ═══ SKY ═══ */}
-      <rect width="400" height="180" fill="url(#fj-sky)" />
-
-      {/* Horizon glow */}
-      <rect width="400" height="180" fill="url(#fj-hglow)" />
+      <rect width="400" height="185" fill="url(#fj-sky)" />
+      <rect width="400" height="185" fill="url(#fj-hglow)" />
 
       {/* ═══ MOON / SUN ═══ */}
       {dark ? (
-        /* Moon with halo */
         <>
-          <circle cx="310" cy="32" r="22" fill="#FFF0A0" opacity="0.12" />
-          <circle cx="310" cy="32" r="16" fill="url(#fj-moon)" filter="url(#fj-glow)" />
+          <circle cx="306" cy="34" r="26" fill="#FFFAE0" opacity="0.07" />
+          <circle cx="306" cy="34" r="15" fill="url(#fj-moon)" filter="url(#fj-moonGlow)" />
           {/* Crescent shadow */}
-          <circle cx="316" cy="30" r="13" fill="#0E0830" opacity="0.55" />
+          <circle cx="315" cy="31" r="12.5" fill="#08082A" />
         </>
       ) : (
-        /* Sun */
         <>
-          <circle cx="310" cy="40" r="30" fill="#FFE080" opacity="0.18" />
-          <circle cx="310" cy="40" r="20" fill="url(#fj-moon)" filter="url(#fj-glow)" />
+          <circle cx="58" cy="36" r="30" fill="#FFDF80" opacity="0.13" />
+          <circle cx="58" cy="36" r="20" fill="#FFEE90" opacity="0.25" />
+          <circle cx="58" cy="36" r="13" fill="#FFF8B0" opacity="0.95" />
         </>
       )}
 
-      {/* ═══ STARS (dark only) ═══ */}
-      {dark && (
-        <>
-          {[
-            [22,16,0.8],[48,10,0.7],[82,20,0.9],[118,8,0.65],[155,18,0.75],
-            [190,6,0.8],[232,14,0.7],[268,22,0.85],[345,18,0.75],[372,9,0.7],
-            [35,32,0.5],[106,28,0.6],[270,8,0.8],[142,30,0.55],[200,26,0.6]
-          ].map(([x,y,o],i) => (
-            <circle key={i} cx={x} cy={y} r={i % 3 === 0 ? 1.1 : 0.7}
-              fill="white" opacity={o} />
-          ))}
-          {/* A couple slightly bigger twinkling stars */}
-          <circle cx="72" cy="14" r="1.4" fill="#E0E8FF" opacity="0.9" />
-          <circle cx="352" cy="26" r="1.3" fill="#FFE8E0" opacity="0.85" />
-        </>
-      )}
+      {/* ═══ STARS ═══ */}
+      {dark && [
+        [24,11,0.9],[55,7,0.75],[92,15,0.85],[128,5,0.7],[163,12,0.8],
+        [200,4,0.9],[238,10,0.78],[276,17,0.85],[338,12,0.72],[372,6,0.82],
+        [42,26,0.55],[114,22,0.62],[178,28,0.52],[250,7,0.88],[295,20,0.6],
+        [15,36,0.42],[148,19,0.72],[332,28,0.52],[382,18,0.66],[75,30,0.48],
+      ].map(([x,y,o],i) => (
+        <circle key={i} cx={x} cy={y} r={i % 5 === 0 ? 1.3 : 0.85} fill="white" opacity={o} />
+      ))}
 
-      {/* ═══ FAR DISTANT MOUNTAINS ═══ */}
+      {/* ═══ DISTANT RIDGE ═══ */}
       <path
-        d="M0 98 L28 74 L55 88 L88 62 L118 80 L152 56 L182 74 L212 60 L245 76 L275 62 L308 78 L338 64 L368 78 L400 68 L400 108 L0 108 Z"
+        d="M0 98 L20 78 L45 90 L72 66 L102 82 L132 60 L162 76 L190 64 L216 78 L246 62 L276 76 L303 66 L330 78 L356 67 L376 74 L400 70 L400 108 L0 108 Z"
         fill="url(#fj-far)"
-        filter="url(#fj-soft)"
+        filter="url(#fj-atmo)"
       />
 
-      {/* ═══ FUJI — main shape ═══ */}
-      {/* Base body */}
-      <path d="M200 22 L125 115 L275 115 Z" fill="url(#fj-body)" />
-
-      {/* Left face — shadow side */}
-      <path d="M200 22 L158 82 L125 115 Z" fill="url(#fj-shadow)" />
-
-      {/* Right face — lit side */}
-      <path d="M200 22 L242 80 L275 115 Z" fill="url(#fj-light)" />
+      {/* ═══ FUJI — pологий конус на bezier-кривых ═══ */}
+      {/* Main body */}
+      <path
+        d="M200 10
+           C 188 28, 164 56, 142 80
+           C 114 110, 58 118, 0 120
+           L 400 120
+           C 342 118, 286 110, 258 80
+           C 236 56, 212 28, 200 10 Z"
+        fill="url(#fj-rock)"
+      />
+      {/* Shadow — left face */}
+      <path
+        d="M200 10
+           C 188 28, 164 56, 142 80
+           C 114 110, 58 118, 0 120
+           L 110 120
+           C 140 114, 168 100, 183 82
+           C 191 66, 196 40, 200 10 Z"
+        fill="url(#fj-rockShadow)"
+      />
+      {/* Highlight — right face */}
+      <path
+        d="M200 10
+           C 212 28, 236 56, 258 80
+           C 286 110, 342 118, 400 120
+           L 295 120
+           C 264 112, 238 98, 220 82
+           C 208 66, 203 40, 200 10 Z"
+        fill="url(#fj-rockLight)"
+      />
 
       {/* ═══ SNOW CAP ═══ */}
-      {/* Main snow */}
+      {/* Main snow body */}
       <path
-        d="M200 22
-           L178 58
-           Q181 53 185 59
-           Q188 52 192 59
-           Q195 51 198 57
-           Q200 50 202 57
-           Q205 51 208 59
-           Q212 52 215 59
-           Q219 53 222 58
-           L200 22 Z"
+        d="M200 10
+           C 196 20, 190 32, 183 44
+           Q 186 41, 189 45
+           Q 192 39, 195 44
+           Q 197 37, 200 42
+           Q 203 37, 205 44
+           Q 208 39, 211 45
+           Q 214 41, 217 44
+           C 210 32, 204 20, 200 10 Z"
         fill="url(#fj-snow)"
       />
-
-      {/* Snow ridges — 3D texture */}
-      <path d="M192 59 Q195 50 198 57" stroke="#C8DCFF" strokeWidth="0.7" fill="none" opacity="0.9" />
-      <path d="M208 59 Q205 50 202 57" stroke="#C8DCFF" strokeWidth="0.7" fill="none" opacity="0.9" />
-      <path d="M185 59 Q188 51 192 59" stroke="#B0CCEE" strokeWidth="0.55" fill="none" opacity="0.7" />
-      <path d="M215 59 Q212 51 208 59" stroke="#B0CCEE" strokeWidth="0.55" fill="none" opacity="0.7" />
-      <path d="M178 58 L174 64 L179 68" stroke="white" strokeWidth="0.7" fill="none" opacity="0.45" />
-      <path d="M222 58 L226 64 L221 68" stroke="white" strokeWidth="0.7" fill="none" opacity="0.45" />
-
-      {/* Crater suggestion */}
-      <ellipse cx="200" cy="23" rx="5" ry="2" fill="#3A5068" opacity="0.5" />
-      <ellipse cx="200" cy="23" rx="3" ry="1.2" fill="#28384A" opacity="0.6" />
-
-      {/* ═══ MID HILLS ═══ */}
+      {/* Snow spreading down left slope */}
       <path
-        d="M0 114 Q25 100 62 112 Q100 96 138 110 Q162 102 200 114 Q238 104 272 110 Q308 96 348 112 Q372 102 400 114 L400 132 L0 132 Z"
-        fill="url(#fj-hills)"
+        d="M183 44 C 177 54, 170 60, 165 65
+           Q 168 62, 171 65
+           Q 174 60, 177 64
+           Q 180 57, 182 61
+           C 183 52, 183 48, 183 44 Z"
+        fill="#EEF4FF" opacity="0.82"
+      />
+      {/* Snow spreading down right slope */}
+      <path
+        d="M217 44 C 223 54, 230 60, 235 65
+           Q 232 62, 229 65
+           Q 226 60, 223 64
+           Q 220 57, 218 61
+           C 217 52, 217 48, 217 44 Z"
+        fill="#EEF4FF" opacity="0.82"
+      />
+      {/* Snow streaks — реалистичные потоки */}
+      <path d="M187 46 C 182 57, 175 67, 169 74" stroke="white" strokeWidth="0.9" fill="none" opacity="0.55" strokeLinecap="round"/>
+      <path d="M193 43 C 191 54, 188 64, 184 72" stroke="white" strokeWidth="0.7" fill="none" opacity="0.4"  strokeLinecap="round"/>
+      <path d="M197 41 C 196 52, 195 62, 193 70" stroke="white" strokeWidth="0.65" fill="none" opacity="0.35" strokeLinecap="round"/>
+      <path d="M213 46 C 218 57, 225 67, 231 74" stroke="white" strokeWidth="0.9" fill="none" opacity="0.55" strokeLinecap="round"/>
+      <path d="M207 43 C 209 54, 212 64, 216 72" stroke="white" strokeWidth="0.7" fill="none" opacity="0.4"  strokeLinecap="round"/>
+      <path d="M203 41 C 204 52, 205 62, 207 70" stroke="white" strokeWidth="0.65" fill="none" opacity="0.35" strokeLinecap="round"/>
+
+      {/* Crater */}
+      <ellipse cx="200" cy="11" rx="3.5" ry="1.5" fill="#253848" opacity="0.55" />
+
+      {/* ═══ ОБЛАКА у подножия снега ═══ */}
+      <ellipse cx="200" cy="88" rx="80" ry="10" fill="url(#fj-cloudL)" filter="url(#fj-cloudBlur)" opacity="0.55" />
+      <ellipse cx="158" cy="94" rx="52" ry="7"  fill="white" filter="url(#fj-cloudBlur)" opacity="0.28" />
+      <ellipse cx="242" cy="94" rx="52" ry="7"  fill="white" filter="url(#fj-cloudBlur)" opacity="0.28" />
+      <ellipse cx="200" cy="92" rx="50" ry="5"  fill="white" filter="url(#fj-cloudBlur)" opacity="0.22" />
+
+      {/* ═══ HILLS ═══ */}
+      <path
+        d="M0 114 Q32 102 72 112 Q112 98 152 110 Q178 102 200 112 Q222 104 260 110 Q298 98 340 112 Q368 104 400 114 L400 134 L0 134 Z"
+        fill="url(#fj-hill1)"
+      />
+      <path
+        d="M0 124 Q42 116 84 126 Q128 116 170 124 Q200 118 232 124 Q272 116 318 124 Q358 118 400 124 L400 142 L0 142 Z"
+        fill="url(#fj-hill2)"
       />
 
-      {/* ═══ MIST BAND ═══ */}
-      <ellipse cx="200" cy="114" rx="200" ry="10" fill="url(#fj-mist)" opacity="0.9" />
-      {/* Second thinner mist band for depth */}
-      <ellipse cx="200" cy="122" rx="200" ry="6" fill="url(#fj-mist)" opacity="0.4" />
+      {/* ═══ MIST ═══ */}
+      <ellipse cx="200" cy="116" rx="200" ry="8" fill="url(#fj-mist)" opacity="0.85" />
+      <ellipse cx="200" cy="124" rx="200" ry="5" fill="url(#fj-mist)" opacity="0.42" />
 
-      {/* ═══ FOREGROUND GROUND ═══ */}
+      {/* ═══ FOREGROUND ═══ */}
       <path
-        d="M0 130 Q80 124 160 130 Q240 124 320 128 Q365 124 400 130 L400 180 L0 180 Z"
+        d="M0 136 Q55 128 124 136 Q188 128 258 134 Q322 128 400 136 L400 185 L0 185 Z"
         fill="url(#fj-fg)"
       />
 
-      {/* ═══ CHERRY BLOSSOM TREES ═══ */}
+      {/* ═══ САКУРА — изящные ветки с мелкими лепестками ═══ */}
 
-      {/* — Tree FAR LEFT (tall) — */}
-      <g filter="url(#fj-treeshadow)">
-        {/* Trunk */}
-        <path d="M58 180 Q56 162 54 148 Q52 134 56 124" stroke="#1E0E04" strokeWidth="3.5" fill="none" strokeLinecap="round" />
-        {/* Branches */}
-        <path d="M56 124 Q48 112 38 106"    stroke="#1E0E04" strokeWidth="2.5" fill="none" strokeLinecap="round" />
-        <path d="M56 124 Q62 112 72 108"    stroke="#1E0E04" strokeWidth="2.5" fill="none" strokeLinecap="round" />
-        <path d="M56 132 Q46 124 37 126"    stroke="#1E0E04" strokeWidth="2"   fill="none" strokeLinecap="round" />
-        <path d="M56 132 Q66 124 76 128"    stroke="#1E0E04" strokeWidth="2"   fill="none" strokeLinecap="round" />
-        <path d="M56 140 Q48 134 42 136"    stroke="#1E0E04" strokeWidth="1.5" fill="none" strokeLinecap="round" />
-        <path d="M38 106 Q32 100 26 103"    stroke="#1E0E04" strokeWidth="1.5" fill="none" strokeLinecap="round" />
-        {/* Blossom clouds — layered circles for volume */}
-        <circle cx="37"  cy="101" r="14" fill="#FF8FAD" opacity="0.8" />
-        <circle cx="52"  cy="95"  r="13" fill="#FFAAC0" opacity="0.85" />
-        <circle cx="68"  cy="103" r="13" fill="#FF8FAD" opacity="0.8" />
-        <circle cx="30"  cy="114" r="10" fill="#FFB8CC" opacity="0.7" />
-        <circle cx="51"  cy="90"  r="10" fill="#FFCCD8" opacity="0.8" />
-        <circle cx="75"  cy="116" r="10" fill="#FF90B0" opacity="0.7" />
-        <circle cx="44"  cy="114" r="9"  fill="#FF9AB8" opacity="0.75" />
-        <circle cx="64"  cy="113" r="9"  fill="#FFAAC0" opacity="0.75" />
-        <circle cx="25"  cy="103" r="8"  fill="#FFB0C5" opacity="0.65" />
-        {/* Highlight dots */}
-        <circle cx="48"  cy="92"  r="4"  fill="#FFECF2" opacity="0.6" />
-        <circle cx="65"  cy="100" r="3"  fill="#FFECF2" opacity="0.5" />
+      {/* ── Дерево ЛЕВОЕ (высокое) ── */}
+      <g>
+        {/* Ствол */}
+        <path d="M64 185 Q62 170 61 160 Q60 150 61 142 Q62 135 61 126"
+          stroke="#1E0C06" strokeWidth="3.2" fill="none" strokeLinecap="round"/>
+        {/* Главные ветки */}
+        <path d="M61 126 Q51 116 40 111" stroke="#1E0C06" strokeWidth="2.2" fill="none" strokeLinecap="round"/>
+        <path d="M61 126 Q70 114 80 110" stroke="#1E0C06" strokeWidth="2.2" fill="none" strokeLinecap="round"/>
+        <path d="M61 132 Q47 124 34 123" stroke="#1E0C06" strokeWidth="1.8" fill="none" strokeLinecap="round"/>
+        <path d="M61 132 Q75 125 88 125" stroke="#1E0C06" strokeWidth="1.8" fill="none" strokeLinecap="round"/>
+        {/* Вторичные ветки */}
+        <path d="M40 111 Q33 105 26 107" stroke="#1E0C06" strokeWidth="1.3" fill="none" strokeLinecap="round"/>
+        <path d="M40 111 Q37 105 34 101" stroke="#1E0C06" strokeWidth="1.2" fill="none" strokeLinecap="round"/>
+        <path d="M80 110 Q86 104 92 106" stroke="#1E0C06" strokeWidth="1.3" fill="none" strokeLinecap="round"/>
+        <path d="M80 110 Q82 104 84 100" stroke="#1E0C06" strokeWidth="1.2" fill="none" strokeLinecap="round"/>
+        <path d="M34 123 Q26 118 19 120" stroke="#1E0C06" strokeWidth="1.2" fill="none" strokeLinecap="round"/>
+        <path d="M88 125 Q95 119 101 121" stroke="#1E0C06" strokeWidth="1.2" fill="none" strokeLinecap="round"/>
+        {/* Поникающие веточки */}
+        <path d="M36 104 Q30 114 26 122" stroke="#1E0C06" strokeWidth="0.9" fill="none" strokeLinecap="round"/>
+        <path d="M80 107 Q87 117 90 125" stroke="#1E0C06" strokeWidth="0.9" fill="none" strokeLinecap="round"/>
+        <path d="M24 107 Q18 115 15 123" stroke="#1E0C06" strokeWidth="0.8" fill="none" strokeLinecap="round"/>
+        <path d="M92 106 Q98 114 100 122" stroke="#1E0C06" strokeWidth="0.8" fill="none" strokeLinecap="round"/>
+        <path d="M26 120 Q22 126 20 132" stroke="#1E0C06" strokeWidth="0.7" fill="none" strokeLinecap="round"/>
+        <path d="M19 120 Q14 126 12 132" stroke="#1E0C06" strokeWidth="0.7" fill="none" strokeLinecap="round"/>
+        {/* Мелкие лепестки — плотные кластеры */}
+        {[
+          [37,100],[33,97],[40,95],[36,93],[43,98],[29,103],[31,98],
+          [82,101],[85,97],[80,95],[87,100],[84,94],[78,98],[90,104],
+          [52,91],[56,88],[48,90],[53,86],[58,92],[47,93],[62,89],[66,92],
+          [70,88],[64,93],[68,91],[73,89],[63,86],[75,92],[59,85],
+          [25,106],[22,110],[18,112],[27,112],[16,116],
+          [97,108],[100,112],[103,114],[95,112],[104,116],
+          [29,120],[24,124],[21,128],[27,126],
+          [91,122],[96,126],[99,128],[93,126],
+        ].map(([x,y],i) => (
+          <ellipse key={i}
+            cx={x} cy={y}
+            rx={2.2 + (i % 3) * 0.5}
+            ry={2.0 + (i % 4) * 0.4}
+            fill={['#FF5C80','#FF7A9E','#FF9AB8','#FF6A90','#FFB0C8','#FF4E74'][i % 6]}
+            opacity={0.72 + (i % 5) * 0.04}
+          />
+        ))}
+        {/* Совсем мелкие — рассеяны среди веток */}
+        {[
+          [44,102],[50,96],[57,93],[65,90],[72,95],[79,103],[86,107],
+          [30,110],[23,115],[19,118],[97,110],[102,115],[105,118],
+        ].map(([x,y],i) => (
+          <circle key={`s${i}`} cx={x} cy={y} r={1.4} fill="#FFCCDA" opacity={0.65} />
+        ))}
       </g>
 
-      {/* — Tree FAR RIGHT (tall) — */}
-      <g filter="url(#fj-treeshadow)">
-        <path d="M342 180 Q344 162 346 148 Q348 134 344 124" stroke="#1E0E04" strokeWidth="3.5" fill="none" strokeLinecap="round" />
-        <path d="M344 124 Q352 112 362 106"  stroke="#1E0E04" strokeWidth="2.5" fill="none" strokeLinecap="round" />
-        <path d="M344 124 Q338 112 328 108"  stroke="#1E0E04" strokeWidth="2.5" fill="none" strokeLinecap="round" />
-        <path d="M344 132 Q354 124 363 126"  stroke="#1E0E04" strokeWidth="2"   fill="none" strokeLinecap="round" />
-        <path d="M344 132 Q334 124 324 128"  stroke="#1E0E04" strokeWidth="2"   fill="none" strokeLinecap="round" />
-        <path d="M344 140 Q352 134 358 136"  stroke="#1E0E04" strokeWidth="1.5" fill="none" strokeLinecap="round" />
-        <path d="M362 106 Q368 100 374 103"  stroke="#1E0E04" strokeWidth="1.5" fill="none" strokeLinecap="round" />
-        <circle cx="363" cy="101" r="14" fill="#FF8FAD" opacity="0.8" />
-        <circle cx="348" cy="95"  r="13" fill="#FFAAC0" opacity="0.85" />
-        <circle cx="332" cy="103" r="13" fill="#FF8FAD" opacity="0.8" />
-        <circle cx="370" cy="114" r="10" fill="#FFB8CC" opacity="0.7" />
-        <circle cx="349" cy="90"  r="10" fill="#FFCCD8" opacity="0.8" />
-        <circle cx="325" cy="116" r="10" fill="#FF90B0" opacity="0.7" />
-        <circle cx="356" cy="114" r="9"  fill="#FF9AB8" opacity="0.75" />
-        <circle cx="336" cy="113" r="9"  fill="#FFAAC0" opacity="0.75" />
-        <circle cx="375" cy="103" r="8"  fill="#FFB0C5" opacity="0.65" />
-        <circle cx="352" cy="92"  r="4"  fill="#FFECF2" opacity="0.6" />
-        <circle cx="335" cy="100" r="3"  fill="#FFECF2" opacity="0.5" />
+      {/* ── Дерево ПРАВОЕ (высокое, зеркальное) ── */}
+      <g>
+        <path d="M336 185 Q338 170 339 160 Q340 150 339 142 Q338 135 339 126"
+          stroke="#1E0C06" strokeWidth="3.2" fill="none" strokeLinecap="round"/>
+        <path d="M339 126 Q349 116 360 111" stroke="#1E0C06" strokeWidth="2.2" fill="none" strokeLinecap="round"/>
+        <path d="M339 126 Q330 114 320 110" stroke="#1E0C06" strokeWidth="2.2" fill="none" strokeLinecap="round"/>
+        <path d="M339 132 Q353 124 366 123" stroke="#1E0C06" strokeWidth="1.8" fill="none" strokeLinecap="round"/>
+        <path d="M339 132 Q325 125 312 125" stroke="#1E0C06" strokeWidth="1.8" fill="none" strokeLinecap="round"/>
+        <path d="M360 111 Q367 105 374 107" stroke="#1E0C06" strokeWidth="1.3" fill="none" strokeLinecap="round"/>
+        <path d="M360 111 Q363 105 366 101" stroke="#1E0C06" strokeWidth="1.2" fill="none" strokeLinecap="round"/>
+        <path d="M320 110 Q314 104 308 106" stroke="#1E0C06" strokeWidth="1.3" fill="none" strokeLinecap="round"/>
+        <path d="M320 110 Q318 104 316 100" stroke="#1E0C06" strokeWidth="1.2" fill="none" strokeLinecap="round"/>
+        <path d="M366 123 Q374 118 381 120" stroke="#1E0C06" strokeWidth="1.2" fill="none" strokeLinecap="round"/>
+        <path d="M312 125 Q305 119 299 121" stroke="#1E0C06" strokeWidth="1.2" fill="none" strokeLinecap="round"/>
+        <path d="M364 104 Q370 114 374 122" stroke="#1E0C06" strokeWidth="0.9" fill="none" strokeLinecap="round"/>
+        <path d="M320 107 Q313 117 310 125" stroke="#1E0C06" strokeWidth="0.9" fill="none" strokeLinecap="round"/>
+        <path d="M376 107 Q382 115 385 123" stroke="#1E0C06" strokeWidth="0.8" fill="none" strokeLinecap="round"/>
+        <path d="M308 106 Q302 114 300 122" stroke="#1E0C06" strokeWidth="0.8" fill="none" strokeLinecap="round"/>
+        <path d="M374 120 Q378 126 380 132" stroke="#1E0C06" strokeWidth="0.7" fill="none" strokeLinecap="round"/>
+        <path d="M381 120 Q386 126 388 132" stroke="#1E0C06" strokeWidth="0.7" fill="none" strokeLinecap="round"/>
+        {[
+          [363,100],[367,97],[360,95],[364,93],[357,98],[371,103],[369,98],
+          [318,101],[315,97],[320,95],[313,100],[316,94],[322,98],[310,104],
+          [348,91],[344,88],[352,90],[347,86],[342,92],[353,93],[338,89],[334,92],
+          [330,88],[336,93],[332,91],[327,89],[337,86],[325,92],[341,85],
+          [375,106],[378,110],[382,112],[373,112],[384,116],
+          [303,108],[300,112],[297,114],[305,112],[296,116],
+          [371,120],[376,124],[379,128],[373,126],
+          [309,122],[304,126],[301,128],[307,126],
+        ].map(([x,y],i) => (
+          <ellipse key={i}
+            cx={x} cy={y}
+            rx={2.2 + (i % 3) * 0.5}
+            ry={2.0 + (i % 4) * 0.4}
+            fill={['#FF5C80','#FF7A9E','#FF9AB8','#FF6A90','#FFB0C8','#FF4E74'][i % 6]}
+            opacity={0.72 + (i % 5) * 0.04}
+          />
+        ))}
+        {[
+          [356,102],[350,96],[343,93],[335,90],[328,95],[321,103],[314,107],
+          [370,110],[377,115],[381,118],[303,110],[298,115],[295,118],
+        ].map(([x,y],i) => (
+          <circle key={`s${i}`} cx={x} cy={y} r={1.4} fill="#FFCCDA" opacity={0.65} />
+        ))}
       </g>
 
-      {/* — Tree CENTER-LEFT (medium) — */}
-      <g filter="url(#fj-treeshadow)">
-        <path d="M148 180 Q146 166 145 155 Q144 146 146 140" stroke="#1E0E04" strokeWidth="2.5" fill="none" strokeLinecap="round" />
-        <path d="M146 140 Q140 132 133 129"  stroke="#1E0E04" strokeWidth="2" fill="none" strokeLinecap="round" />
-        <path d="M146 140 Q152 132 160 130"  stroke="#1E0E04" strokeWidth="2" fill="none" strokeLinecap="round" />
-        <path d="M146 147 Q140 142 134 143"  stroke="#1E0E04" strokeWidth="1.5" fill="none" strokeLinecap="round" />
-        <circle cx="133" cy="126" r="11" fill="#FF9AB8" opacity="0.82" />
-        <circle cx="146" cy="121" r="10" fill="#FFAAC0" opacity="0.88" />
-        <circle cx="160" cy="127" r="11" fill="#FFB8CC" opacity="0.82" />
-        <circle cx="140" cy="118" r="8"  fill="#FFCCD8" opacity="0.78" />
-        <circle cx="154" cy="118" r="8"  fill="#FF90B0" opacity="0.75" />
-        <circle cx="128" cy="134" r="7"  fill="#FFB0C5" opacity="0.65" />
-        <circle cx="165" cy="135" r="7"  fill="#FF9AB8" opacity="0.65" />
+      {/* ── Дерево ЦЕНТР-ЛЕВОЕ (среднее) ── */}
+      <g>
+        <path d="M150 185 Q149 173 149 165 Q148 157 149 150"
+          stroke="#1E0C06" strokeWidth="2.2" fill="none" strokeLinecap="round"/>
+        <path d="M149 150 Q142 142 135 139" stroke="#1E0C06" strokeWidth="1.7" fill="none" strokeLinecap="round"/>
+        <path d="M149 150 Q156 142 164 139" stroke="#1E0C06" strokeWidth="1.7" fill="none" strokeLinecap="round"/>
+        <path d="M149 154 Q141 148 133 149" stroke="#1E0C06" strokeWidth="1.4" fill="none" strokeLinecap="round"/>
+        <path d="M149 154 Q157 149 165 150" stroke="#1E0C06" strokeWidth="1.4" fill="none" strokeLinecap="round"/>
+        <path d="M135 139 Q128 134 122 136" stroke="#1E0C06" strokeWidth="1.1" fill="none" strokeLinecap="round"/>
+        <path d="M164 139 Q171 134 177 136" stroke="#1E0C06" strokeWidth="1.1" fill="none" strokeLinecap="round"/>
+        <path d="M133 149 Q126 145 120 147" stroke="#1E0C06" strokeWidth="1.0" fill="none" strokeLinecap="round"/>
+        {[
+          [134,135],[130,132],[137,130],[128,130],[135,127],[131,128],
+          [165,135],[169,132],[163,130],[171,130],[165,127],[170,128],
+          [149,134],[146,131],[152,130],[149,128],[154,132],[144,131],
+          [122,133],[118,130],[125,129],[120,136],[116,134],
+          [177,133],[180,130],[175,129],[178,136],[184,134],
+        ].map(([x,y],i) => (
+          <ellipse key={i}
+            cx={x} cy={y}
+            rx={2.0 + (i % 3) * 0.45}
+            ry={1.8 + (i % 4) * 0.35}
+            fill={['#FF5C80','#FF7A9E','#FF9AB8','#FF6A90','#FFB0C8'][i % 5]}
+            opacity={0.7 + (i % 5) * 0.04}
+          />
+        ))}
       </g>
 
-      {/* — Tree CENTER-RIGHT (medium) — */}
-      <g filter="url(#fj-treeshadow)">
-        <path d="M252 180 Q254 166 255 155 Q256 146 254 140" stroke="#1E0E04" strokeWidth="2.5" fill="none" strokeLinecap="round" />
-        <path d="M254 140 Q260 132 267 129"  stroke="#1E0E04" strokeWidth="2" fill="none" strokeLinecap="round" />
-        <path d="M254 140 Q248 132 240 130"  stroke="#1E0E04" strokeWidth="2" fill="none" strokeLinecap="round" />
-        <path d="M254 147 Q260 142 266 143"  stroke="#1E0E04" strokeWidth="1.5" fill="none" strokeLinecap="round" />
-        <circle cx="267" cy="126" r="11" fill="#FF9AB8" opacity="0.82" />
-        <circle cx="254" cy="121" r="10" fill="#FFAAC0" opacity="0.88" />
-        <circle cx="240" cy="127" r="11" fill="#FFB8CC" opacity="0.82" />
-        <circle cx="260" cy="118" r="8"  fill="#FFCCD8" opacity="0.78" />
-        <circle cx="246" cy="118" r="8"  fill="#FF90B0" opacity="0.75" />
-        <circle cx="272" cy="134" r="7"  fill="#FFB0C5" opacity="0.65" />
-        <circle cx="235" cy="135" r="7"  fill="#FF9AB8" opacity="0.65" />
+      {/* ── Дерево ЦЕНТР-ПРАВОЕ ── */}
+      <g>
+        <path d="M250 185 Q251 173 251 165 Q252 157 251 150"
+          stroke="#1E0C06" strokeWidth="2.2" fill="none" strokeLinecap="round"/>
+        <path d="M251 150 Q258 142 265 139" stroke="#1E0C06" strokeWidth="1.7" fill="none" strokeLinecap="round"/>
+        <path d="M251 150 Q244 142 236 139" stroke="#1E0C06" strokeWidth="1.7" fill="none" strokeLinecap="round"/>
+        <path d="M251 154 Q259 148 267 149" stroke="#1E0C06" strokeWidth="1.4" fill="none" strokeLinecap="round"/>
+        <path d="M251 154 Q243 149 235 150" stroke="#1E0C06" strokeWidth="1.4" fill="none" strokeLinecap="round"/>
+        <path d="M265 139 Q272 134 278 136" stroke="#1E0C06" strokeWidth="1.1" fill="none" strokeLinecap="round"/>
+        <path d="M236 139 Q229 134 223 136" stroke="#1E0C06" strokeWidth="1.1" fill="none" strokeLinecap="round"/>
+        <path d="M267 149 Q274 145 280 147" stroke="#1E0C06" strokeWidth="1.0" fill="none" strokeLinecap="round"/>
+        {[
+          [266,135],[270,132],[263,130],[272,130],[265,127],[270,128],
+          [235,135],[231,132],[237,130],[229,130],[235,127],[230,128],
+          [251,134],[254,131],[248,130],[251,128],[246,132],[256,131],
+          [278,133],[282,130],[275,129],[280,136],[284,134],
+          [223,133],[220,130],[225,129],[222,136],[216,134],
+        ].map(([x,y],i) => (
+          <ellipse key={i}
+            cx={x} cy={y}
+            rx={2.0 + (i % 3) * 0.45}
+            ry={1.8 + (i % 4) * 0.35}
+            fill={['#FF5C80','#FF7A9E','#FF9AB8','#FF6A90','#FFB0C8'][i % 5]}
+            opacity={0.7 + (i % 5) * 0.04}
+          />
+        ))}
       </g>
 
-      {/* ═══ FALLING PETALS ═══ */}
+      {/* ═══ ЛЕПЕСТКИ В ВОЗДУХЕ ═══ */}
       {[
-        [90, 130, 18],  [112, 124, -22], [138, 140, 38],
-        [172, 134, -12], [210, 138, 28], [258, 126, -32],
-        [282, 140, 16], [312, 132, -18], [96, 148, 42],
-        [188, 146, -36], [224, 136, 24], [270, 145, -28],
-        [130, 128, -8], [195, 152, 35], [240, 130, -20],
-        [302, 148, 30], [80, 142, -25], [355, 138, 15],
-      ].map(([x, y, rot], i) => (
+        [96,132,18],[110,124,-22],[137,140,38],[172,133,-12],[220,136,28],
+        [257,126,-32],[282,140,16],[313,131,-18],[93,148,42],[187,145,-36],
+        [230,134,24],[270,143,-28],[130,127,-8],[200,151,35],[244,129,-20],
+        [307,146,30],[78,141,-25],[360,137,15],[167,156,22],[287,152,-15],
+        [118,143,28],[195,128,-18],[248,158,12],[145,136,-30],[330,154,25],
+      ].map(([x,y,rot],i) => (
         <ellipse key={i}
-          cx={x} cy={y} rx="2.2" ry="3.2"
-          fill={['#FFB7C5','#FF90B0','#FFCCD8','#FF9AB8'][i % 4]}
-          opacity={0.5 + (i % 4) * 0.12}
-          transform={`rotate(${rot}, ${x}, ${y})`}
+          cx={x} cy={y} rx="1.8" ry="2.8"
+          fill={['#FF9AB8','#FF7090','#FFCCD8','#FF85A8'][i % 4]}
+          opacity={0.45 + (i % 4) * 0.1}
+          transform={`rotate(${rot},${x},${y})`}
         />
       ))}
 
-      {/* ═══ BOTTOM FADE into page ═══ */}
-      <rect x="0" y="140" width="400" height="40" fill="url(#fj-fade)" />
+      {/* ═══ BOTTOM FADE ═══ */}
+      <rect x="0" y="135" width="400" height="50" fill="url(#fj-fade)" />
     </svg>
   )
 }
