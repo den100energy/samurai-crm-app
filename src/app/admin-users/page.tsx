@@ -31,6 +31,8 @@ export default function AdminUsersPage() {
   // Открытая панель на карточке: { userId -> 'permissions' | 'edit' | null }
   const [openPanel, setOpenPanel] = useState<Record<string, Panel>>({})
   const [savingId, setSavingId] = useState<string | null>(null)
+  const [uploadingPhotoId, setUploadingPhotoId] = useState<string | null>(null)
+  const [trainerPhotos, setTrainerPhotos] = useState<Record<string, string>>({})
 
   // Форма редактирования сотрудника
   const [editForm, setEditForm] = useState<Record<string, { name: string; email: string; password: string; trainer_id: string; phone: string; telegram_username: string; vk_url: string }>>({})
@@ -47,7 +49,13 @@ export default function AdminUsersPage() {
       ? usersData.map(u => ({ ...u, permissions: u.permissions || [] }))
       : []
     setUsers(list)
-    setTrainers(trainersRes.data || [])
+    const trainersList = trainersRes.data || []
+    setTrainers(trainersList)
+    const photos: Record<string, string> = {}
+    for (const t of trainersList) {
+      if (t.photo_url) photos[t.id] = t.photo_url
+    }
+    setTrainerPhotos(photos)
     setLoading(false)
   }
 
@@ -182,6 +190,20 @@ export default function AdminUsersPage() {
     await loadAll()
   }
 
+  async function uploadTrainerPhoto(e: React.ChangeEvent<HTMLInputElement>, trainerId: string) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploadingPhotoId(trainerId)
+    const fd = new FormData()
+    fd.append('file', file)
+    fd.append('trainer_id', trainerId)
+    const res = await fetch('/api/upload-trainer-photo', { method: 'POST', body: fd })
+    const data = await res.json()
+    if (data.url) setTrainerPhotos(prev => ({ ...prev, [trainerId]: data.url }))
+    setUploadingPhotoId(null)
+    e.target.value = ''
+  }
+
   if (role !== 'founder') {
     return <div className="p-8 text-center text-gray-400">Нет доступа</div>
   }
@@ -267,6 +289,26 @@ export default function AdminUsersPage() {
               <div key={u.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
                 {/* Шапка карточки */}
                 <div className="flex items-center gap-3 px-4 py-3">
+                  {u.trainer_id ? (
+                    <label className="relative cursor-pointer shrink-0">
+                      <div className="w-11 h-11 rounded-full overflow-hidden bg-gray-100 flex items-center justify-center text-lg font-bold text-gray-500 border border-gray-200">
+                        {trainerPhotos[u.trainer_id]
+                          ? <img src={trainerPhotos[u.trainer_id]} alt={u.name} className="w-full h-full object-cover" />
+                          : <span>{(u.name || '?')[0]}</span>
+                        }
+                      </div>
+                      <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-white rounded-full flex items-center justify-center shadow border border-gray-100">
+                        <span className="text-[9px]">{uploadingPhotoId === u.trainer_id ? '…' : '📷'}</span>
+                      </div>
+                      <input type="file" accept="image/*" className="hidden"
+                        onChange={e => uploadTrainerPhoto(e, u.trainer_id!)}
+                        disabled={uploadingPhotoId === u.trainer_id} />
+                    </label>
+                  ) : (
+                    <div className="w-11 h-11 rounded-full bg-gray-100 flex items-center justify-center text-lg font-bold text-gray-400 shrink-0">
+                      {(u.name || '?')[0]}
+                    </div>
+                  )}
                   <div className="flex-1 min-w-0">
                     <div className="font-medium text-gray-800">{u.name || '—'}</div>
                     <div className="text-xs text-gray-400 truncate">{u.email}</div>

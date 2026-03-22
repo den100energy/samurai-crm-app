@@ -48,9 +48,12 @@ export default function TrainerPage() {
   const [schedule, setSchedule] = useState<ScheduleSlot[]>([])
   const [overrides, setOverrides] = useState<Override[]>([])
   const [studentCount, setStudentCount] = useState(0)
+  const [trainerDbId, setTrainerDbId] = useState<string | null>(null)
   const [trainerPhone, setTrainerPhone] = useState('')
   const [trainerTg, setTrainerTg] = useState('')
   const [trainerVk, setTrainerVk] = useState('')
+  const [trainerPhoto, setTrainerPhoto] = useState<string | null>(null)
+  const [uploadingPhoto, setUploadingPhoto] = useState(false)
   const [showProfile, setShowProfile] = useState(false)
   const [savingProfile, setSavingProfile] = useState(false)
   const [profileSaved, setProfileSaved] = useState(false)
@@ -75,19 +78,35 @@ export default function TrainerPage() {
       supabase.from('students').select('id, group_name').eq('status', 'active'),
       supabase.from('schedule_overrides').select('date, group_name, trainer_name, cancelled')
         .gte('date', monday).lte('date', sunday),
-      supabase.from('trainers').select('phone, telegram_username, vk_url').eq('name', userName).maybeSingle(),
+      supabase.from('trainers').select('id, phone, telegram_username, vk_url, photo_url').eq('name', userName).maybeSingle(),
     ])
     setSchedule(slots || [])
     setOverrides(ovData || [])
     if (trainerRow) {
+      setTrainerDbId(trainerRow.id)
       setTrainerPhone(trainerRow.phone || '')
       setTrainerTg(trainerRow.telegram_username || '')
       setTrainerVk(trainerRow.vk_url || '')
+      setTrainerPhoto(trainerRow.photo_url || null)
     }
 
     const trainerGroups = [...new Set((slots || []).map(s => s.group_name))]
     const myStudents = (students || []).filter(s => s.group_name && trainerGroups.includes(s.group_name))
     setStudentCount(myStudents.length)
+  }
+
+  async function uploadPhoto(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file || !trainerDbId) return
+    setUploadingPhoto(true)
+    const fd = new FormData()
+    fd.append('file', file)
+    fd.append('trainer_id', trainerDbId)
+    const res = await fetch('/api/upload-trainer-photo', { method: 'POST', body: fd })
+    const data = await res.json()
+    if (data.url) setTrainerPhoto(data.url)
+    setUploadingPhoto(false)
+    e.target.value = ''
   }
 
   async function signOut() {
@@ -152,11 +171,27 @@ export default function TrainerPage() {
         <FujiScene dark={dark} bgColor={dark ? '#1C1C1E' : '#F5F4F0'} />
         <div className="absolute inset-x-0 top-0 px-5 pt-8 z-10">
           <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-white text-xl font-bold leading-tight drop-shadow-lg">
-                🥋 {userName || 'Тренер'}
-              </h1>
-              <p className="text-white/60 text-xs mt-0.5">Кабинет тренера</p>
+            <div className="flex items-center gap-3">
+              <label className="relative cursor-pointer shrink-0">
+                <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-white/30 bg-black/30 flex items-center justify-center text-xl font-bold text-white">
+                  {trainerPhoto
+                    ? <img src={trainerPhoto} alt={userName || ''} className="w-full h-full object-cover" />
+                    : <span>{(userName || 'Т')[0]}</span>
+                  }
+                </div>
+                {trainerDbId && (
+                  <div className="absolute -bottom-0.5 -right-0.5 w-5 h-5 bg-white rounded-full flex items-center justify-center shadow">
+                    <span className="text-[10px]">{uploadingPhoto ? '…' : '📷'}</span>
+                  </div>
+                )}
+                <input type="file" accept="image/*" className="hidden" onChange={uploadPhoto} disabled={uploadingPhoto} />
+              </label>
+              <div>
+                <h1 className="text-white text-xl font-bold leading-tight drop-shadow-lg">
+                  {userName || 'Тренер'}
+                </h1>
+                <p className="text-white/60 text-xs mt-0.5">Кабинет тренера</p>
+              </div>
             </div>
             <div className="flex items-center gap-2">
               <button onClick={toggleTheme}
