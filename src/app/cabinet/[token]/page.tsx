@@ -20,7 +20,8 @@ const QUALITY_LABELS: Record<string,string> = {
   goal_orientation:'Целеустремлённость', activity:'Активность', self_defense:'Самозащита',
 }
 
-type Student = { id: string; name: string; group_name: string | null; birth_date: string | null }
+type Student = { id: string; name: string; group_name: string | null; birth_date: string | null; photo_url: string | null }
+type TrainerInfo = { name: string; phone: string | null; telegram_username: string | null }
 type Subscription = { sessions_left: number | null; sessions_total: number | null; end_date: string | null; type: string }
 type Survey = { id: string; filled_at: string | null; created_at: string } & Record<string, number | null | string>
 type Task = { id: string; title: string; description: string | null; due_date: string | null; completed: boolean }
@@ -264,6 +265,7 @@ export default function CabinetPage() {
   const [aiProgram, setAiProgram] = useState<string | null>(null)
   const [scheduleSlots, setScheduleSlots] = useState<ScheduleSlot[]>([])
   const [scheduleOverrides, setScheduleOverrides] = useState<ScheduleOverride[]>([])
+  const [trainerInfo, setTrainerInfo] = useState<TrainerInfo | null>(null)
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<'home' | 'progress' | 'tasks' | 'achievements'>('home')
   const [togglingTask, setTogglingTask] = useState<string | null>(null)
@@ -276,7 +278,7 @@ export default function CabinetPage() {
     // Найти ученика по токену
     const { data: studentData } = await supabase
       .from('students')
-      .select('id, name, group_name, birth_date')
+      .select('id, name, group_name, birth_date, photo_url')
       .eq('cabinet_token', token)
       .single()
 
@@ -318,8 +320,18 @@ export default function CabinetPage() {
     setCerts(certsRes.data || [])
     setAttendance(attRes.data || [])
     setAiProgram(diagRes.data?.ai_program || null)
-    setScheduleSlots((schedRes.data as ScheduleSlot[]) || [])
+    const slots = (schedRes.data as ScheduleSlot[]) || []
+    setScheduleSlots(slots)
     setScheduleOverrides((ovRes.data as ScheduleOverride[]) || [])
+
+    // Загрузить контакт тренера
+    const trainerName = slots[0]?.trainer_name
+    if (trainerName) {
+      const { data: tr } = await supabase
+        .from('trainers').select('name, phone, telegram_username').eq('name', trainerName).maybeSingle()
+      if (tr) setTrainerInfo(tr)
+    }
+
     setLoading(false)
   }
 
@@ -382,6 +394,25 @@ export default function CabinetPage() {
 
   const colors = ['#3B82F6', '#10B981', '#F59E0B']
 
+  // Сегодняшняя тренировка
+  const todayIso = new Date().toISOString().split('T')[0]
+  const todayNum = new Date().getDay() === 0 ? 7 : new Date().getDay()
+  const todaySlot = scheduleSlots.find(s => s.day_of_week === todayNum)
+  const todayOverride = scheduleOverrides.find(o => o.date === todayIso)
+  const todayCancelled = todaySlot && todayOverride?.cancelled
+  const todayTrainer = todayOverride?.trainer_name ?? todaySlot?.trainer_name ?? null
+  const hasTodayTraining = !!todaySlot && !todayCancelled
+
+  // Милстоуны
+  const milestones = [
+    { count: 1,   icon: '🌱', label: 'Первая тренировка' },
+    { count: 5,   icon: '⭐', label: '5 тренировок' },
+    { count: 10,  icon: '🔥', label: '10 тренировок' },
+    { count: 25,  icon: '💪', label: '25 тренировок' },
+    { count: 50,  icon: '🥋', label: '50 тренировок' },
+    { count: 100, icon: '🏆', label: '100 тренировок' },
+  ].map(m => ({ ...m, achieved: totalAttendance >= m.count }))
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Шапка */}
@@ -389,11 +420,23 @@ export default function CabinetPage() {
         <FujiScene dark={true} bgColor="#111827" />
         <div className="absolute inset-x-0 bottom-0 px-4 pb-5 z-10">
           <div className="max-w-lg mx-auto">
-            <div className="text-xs text-white/50 mb-0.5">Личный кабинет</div>
-            <h1 className="text-2xl font-bold text-white drop-shadow-lg">{student.name}</h1>
-            {student.group_name && (
-              <div className="text-sm text-white/60 mt-0.5">{student.group_name}</div>
-            )}
+            <div className="flex items-end gap-3 mb-3">
+              {student.photo_url ? (
+                <img src={student.photo_url} alt={student.name}
+                  className="w-16 h-16 rounded-2xl object-cover border-2 border-white/30 shadow-lg shrink-0" />
+              ) : (
+                <div className="w-16 h-16 rounded-2xl bg-white/20 backdrop-blur-sm border border-white/30 flex items-center justify-center text-2xl font-bold text-white shrink-0">
+                  {student.name[0]}
+                </div>
+              )}
+              <div>
+                <div className="text-xs text-white/50 mb-0.5">Личный кабинет</div>
+                <h1 className="text-2xl font-bold text-white drop-shadow-lg">{student.name}</h1>
+                {student.group_name && (
+                  <div className="text-sm text-white/60 mt-0.5">{student.group_name}</div>
+                )}
+              </div>
+            </div>
             {/* Быстрые показатели */}
             <div className="grid grid-cols-3 gap-3 mt-4">
               <div className="bg-black/30 backdrop-blur-sm border border-white/10 rounded-2xl p-3 text-center">
@@ -440,6 +483,32 @@ export default function CabinetPage() {
         {/* ── ГЛАВНАЯ ── */}
         {tab === 'home' && (
           <>
+            {/* Сегодняшняя тренировка */}
+            {todaySlot && (
+              <div className={`rounded-2xl p-4 border ${todayCancelled ? 'bg-red-50 border-red-200' : 'bg-black border-black text-white'}`}>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className={`text-xs font-medium mb-1 ${todayCancelled ? 'text-red-400' : 'text-white/60'}`}>
+                      {todayCancelled ? '❌ Сегодня' : '⚡ Сегодня тренировка'}
+                    </div>
+                    {todayCancelled ? (
+                      <div className="font-semibold text-red-700">Тренировка отменена</div>
+                    ) : (
+                      <div className="font-bold text-xl">{todaySlot.time_start?.slice(0,5)}</div>
+                    )}
+                    {!todayCancelled && todayTrainer && (
+                      <div className="text-sm text-white/70 mt-0.5">
+                        {todayOverride?.trainer_name ? '🔄 ' : ''}{todayTrainer}
+                      </div>
+                    )}
+                  </div>
+                  {!todayCancelled && (
+                    <div className="text-4xl opacity-20">🥋</div>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* Абонемент */}
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
               <div className="flex items-center justify-between mb-3">
@@ -484,7 +553,19 @@ export default function CabinetPage() {
                   )}
                   {(subscription.sessions_left ?? 0) <= 2 && (
                     <div className="mt-3 bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-600">
-                      ⚠️ Заканчиваются занятия — обратитесь к администратору для продления
+                      ⚠️ Заканчиваются занятия — пора продлить абонемент
+                      {trainerInfo?.phone && (
+                        <a href={`tel:${trainerInfo.phone}`}
+                          className="block mt-2 text-center bg-red-600 text-white rounded-lg py-1.5 font-medium text-sm">
+                          📞 Позвонить тренеру
+                        </a>
+                      )}
+                      {trainerInfo?.telegram_username && (
+                        <a href={`https://t.me/${trainerInfo.telegram_username}`} target="_blank"
+                          className="block mt-1.5 text-center bg-white border border-red-200 text-red-600 rounded-lg py-1.5 font-medium text-sm">
+                          ✈️ Написать в Telegram
+                        </a>
+                      )}
                     </div>
                   )}
                 </>
@@ -549,6 +630,33 @@ export default function CabinetPage() {
               )
             })()}
 
+            {/* Кнопка связи с тренером */}
+            {trainerInfo && (trainerInfo.phone || trainerInfo.telegram_username) && (
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+                <div className="text-xs text-gray-400 mb-3 uppercase tracking-wide">Тренер</div>
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-lg font-bold text-gray-500">
+                    {trainerInfo.name[0]}
+                  </div>
+                  <div className="font-medium text-gray-800">{trainerInfo.name}</div>
+                </div>
+                <div className="flex gap-2">
+                  {trainerInfo.phone && (
+                    <a href={`tel:${trainerInfo.phone}`}
+                      className="flex-1 text-center border border-gray-200 text-gray-700 text-sm py-2 rounded-xl">
+                      📞 Позвонить
+                    </a>
+                  )}
+                  {trainerInfo.telegram_username && (
+                    <a href={`https://t.me/${trainerInfo.telegram_username}`} target="_blank"
+                      className="flex-1 text-center border border-blue-200 bg-blue-50 text-blue-700 text-sm py-2 rounded-xl">
+                      ✈️ Telegram
+                    </a>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* Календарь посещений */}
             <AttendanceCalendar attendance={attendance} />
 
@@ -569,8 +677,17 @@ export default function CabinetPage() {
             {aiProgram && (
               <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
                 <h2 className="font-semibold text-gray-800 mb-3">🗺 Программа развития</h2>
-                <div className="text-sm text-gray-600 whitespace-pre-line leading-relaxed">
-                  {aiProgram}
+                <div className="space-y-2">
+                  {aiProgram.split('\n').filter(l => l.trim()).map((line, i) => {
+                    const isHeader = line.trim().match(/^[\d]+\.|^[-•]|^[А-ЯA-Z].*:$/)
+                    return (
+                      <div key={i} className={`text-sm leading-relaxed ${
+                        isHeader ? 'font-medium text-gray-800 mt-1' : 'text-gray-500 pl-2'
+                      }`}>
+                        {line}
+                      </div>
+                    )
+                  })}
                 </div>
               </div>
             )}
@@ -730,6 +847,33 @@ export default function CabinetPage() {
                 })}
               </>
             )}
+
+            {/* Милстоуны */}
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+              <h2 className="font-semibold text-gray-800 mb-3">🎯 Ступени мастерства</h2>
+              <div className="grid grid-cols-3 gap-2">
+                {milestones.map(m => (
+                  <div key={m.count} className={`rounded-xl p-3 text-center transition-all ${
+                    m.achieved ? 'bg-black text-white' : 'bg-gray-50 text-gray-300'
+                  }`}>
+                    <div className={`text-2xl mb-1 ${m.achieved ? '' : 'grayscale opacity-40'}`}>{m.icon}</div>
+                    <div className={`text-xs font-medium leading-tight ${m.achieved ? 'text-white' : 'text-gray-400'}`}>
+                      {m.label}
+                    </div>
+                    {m.achieved && <div className="text-xs text-white/60 mt-0.5">✓</div>}
+                  </div>
+                ))}
+              </div>
+              {totalAttendance > 0 && (
+                <div className="mt-3 text-xs text-gray-400 text-center">
+                  Всего тренировок: <span className="font-semibold text-gray-700">{totalAttendance}</span>
+                  {totalAttendance < 100 && (() => {
+                    const next = milestones.find(m => !m.achieved)
+                    return next ? ` · до «${next.label}»: ${next.count - totalAttendance}` : null
+                  })()}
+                </div>
+              )}
+            </div>
 
             {/* Статистика */}
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
