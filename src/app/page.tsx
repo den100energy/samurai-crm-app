@@ -10,7 +10,7 @@ import { useTheme } from '@/components/ThemeProvider'
 import { FujiScene } from '@/components/FujiScene'
 
 export default function Home() {
-  const { role, userName, permissions } = useAuth()
+  const { role, userName, trainerId, permissions } = useAuth()
   const { theme, toggle: toggleTheme } = useTheme()
   const router = useRouter()
   const [expiring, setExpiring] = useState<{ id: string; name: string }[]>([])
@@ -235,6 +235,16 @@ export default function Home() {
             <div className="text-sm font-medium" style={{ color: 'var(--text-1)' }}>{s.label}</div>
           </Link>
         ))}
+        {role === 'founder' && trainerId && (
+          <Link href="/trainer"
+            style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border)' }}
+            className="group relative border rounded-2xl p-4
+              active:scale-95 transition-all duration-200 overflow-hidden">
+            <div className="absolute top-0 left-0 right-0 h-0.5 bg-[#E8121E] scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-left rounded-t-2xl" />
+            <div className="text-3xl mb-2">🥋</div>
+            <div className="text-sm font-medium" style={{ color: 'var(--text-1)' }}>Кабинет тренера</div>
+          </Link>
+        )}
         {role === 'founder' && (
           <Link href="/admin-users"
             style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border)' }}

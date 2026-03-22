@@ -42,7 +42,7 @@ function getWeekDates(): Record<number, string> {
 }
 
 export default function TrainerPage() {
-  const { userName, role, permissions, loading } = useAuth()
+  const { userName, role, trainerId, permissions, loading } = useAuth()
   const { theme, toggle: toggleTheme } = useTheme()
   const router = useRouter()
   const [schedule, setSchedule] = useState<ScheduleSlot[]>([])
@@ -57,7 +57,7 @@ export default function TrainerPage() {
   const dark = theme === 'dark'
 
   useEffect(() => {
-    if (!loading && role !== 'trainer') {
+    if (!loading && role !== 'trainer' && !(role === 'founder' && trainerId)) {
       router.replace('/')
       return
     }
