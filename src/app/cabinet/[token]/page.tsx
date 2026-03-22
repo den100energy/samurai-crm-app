@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
+import { FujiScene } from '@/components/FujiScene'
 
 const supabase = createBrowserClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -384,26 +385,29 @@ export default function CabinetPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Шапка */}
-      <div className="bg-black text-white px-4 pt-8 pb-6">
-        <div className="max-w-lg mx-auto">
-          <div className="text-xs text-gray-400 mb-1">Личный кабинет</div>
-          <h1 className="text-2xl font-bold">{student.name}</h1>
-          {student.group_name && (
-            <div className="text-sm text-gray-400 mt-0.5">{student.group_name}</div>
-          )}
-          {/* Быстрые показатели */}
-          <div className="grid grid-cols-3 gap-3 mt-5">
-            <div className="bg-white/10 rounded-2xl p-3 text-center">
-              <div className="text-xl font-bold">{totalAttendance}</div>
-              <div className="text-xs text-gray-400 mt-0.5">тренировок</div>
-            </div>
-            <div className="bg-white/10 rounded-2xl p-3 text-center">
-              <div className="text-xl font-bold">{streak}</div>
-              <div className="text-xs text-gray-400 mt-0.5">серия 🔥</div>
-            </div>
-            <div className="bg-white/10 rounded-2xl p-3 text-center">
-              <div className="text-xl font-bold">{latestScore ?? '—'}</div>
-              <div className="text-xs text-gray-400 mt-0.5">балл {scoreDiff !== null && scoreDiff > 0 ? `↑${scoreDiff}` : ''}</div>
+      <div className="relative overflow-hidden">
+        <FujiScene dark={true} bgColor="#111827" />
+        <div className="absolute inset-x-0 bottom-0 px-4 pb-5 z-10">
+          <div className="max-w-lg mx-auto">
+            <div className="text-xs text-white/50 mb-0.5">Личный кабинет</div>
+            <h1 className="text-2xl font-bold text-white drop-shadow-lg">{student.name}</h1>
+            {student.group_name && (
+              <div className="text-sm text-white/60 mt-0.5">{student.group_name}</div>
+            )}
+            {/* Быстрые показатели */}
+            <div className="grid grid-cols-3 gap-3 mt-4">
+              <div className="bg-black/30 backdrop-blur-sm border border-white/10 rounded-2xl p-3 text-center">
+                <div className="text-xl font-bold text-white">{totalAttendance}</div>
+                <div className="text-xs text-white/50 mt-0.5">тренировок</div>
+              </div>
+              <div className="bg-black/30 backdrop-blur-sm border border-white/10 rounded-2xl p-3 text-center">
+                <div className="text-xl font-bold text-white">{streak}</div>
+                <div className="text-xs text-white/50 mt-0.5">серия 🔥</div>
+              </div>
+              <div className="bg-black/30 backdrop-blur-sm border border-white/10 rounded-2xl p-3 text-center">
+                <div className="text-xl font-bold text-white">{latestScore ?? '—'}</div>
+                <div className="text-xs text-white/50 mt-0.5">балл {scoreDiff !== null && scoreDiff > 0 ? `↑${scoreDiff}` : ''}</div>
+              </div>
             </div>
           </div>
         </div>

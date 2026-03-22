@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/components/AuthProvider'
 import { useTheme } from '@/components/ThemeProvider'
 import { hasAccess } from '@/lib/auth'
+import { FujiScene } from '@/components/FujiScene'
 
 type ScheduleSlot = {
   id: string
@@ -120,25 +121,36 @@ export default function TrainerPage() {
   const textSecondary = dark ? 'text-[#8E8E93]' : 'text-gray-400'
 
   return (
-    <main className="max-w-lg mx-auto p-4" style={{ background: 'var(--bg)', minHeight: '100vh' }}>
+    <main className="max-w-lg mx-auto" style={{ background: 'var(--bg)', minHeight: '100vh' }}>
 
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className={`text-xl font-bold ${textPrimary}`}>🥋 {userName || 'Тренер'}</h1>
-          <p className={`text-sm ${textSecondary}`}>Кабинет тренера</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button onClick={toggleTheme}
-            className={`text-lg border rounded-xl px-3 py-1.5 ${card} ${textSecondary} border-opacity-50`}>
-            {dark ? '☀' : '🌙'}
-          </button>
-          <button onClick={signOut}
-            className={`text-sm border rounded-xl px-3 py-1.5 ${card} ${textSecondary}`}>
-            Выйти
-          </button>
+      {/* Hero: FujiScene + header overlay */}
+      <div className="relative overflow-hidden">
+        <FujiScene dark={dark} bgColor={dark ? '#1C1C1E' : '#F5F4F0'} />
+        <div className="absolute inset-x-0 top-0 px-5 pt-8 z-10">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-white text-xl font-bold leading-tight drop-shadow-lg">
+                🥋 {userName || 'Тренер'}
+              </h1>
+              <p className="text-white/60 text-xs mt-0.5">Кабинет тренера</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button onClick={toggleTheme}
+                className="text-sm text-white/70 border border-white/20 bg-black/25 backdrop-blur-sm
+                  px-2.5 py-1.5 rounded-lg hover:text-white transition-all duration-200">
+                {dark ? '☀' : '🌙'}
+              </button>
+              <button onClick={signOut}
+                className="text-sm text-white/70 border border-white/20 bg-black/25 backdrop-blur-sm
+                  px-3 py-1.5 rounded-lg hover:text-white transition-all duration-200">
+                Выйти
+              </button>
+            </div>
+          </div>
         </div>
       </div>
+
+      <div className="p-4">
 
       {/* Stats */}
       <div className="grid grid-cols-2 gap-3 mb-4">
@@ -221,6 +233,7 @@ export default function TrainerPage() {
           </div>
         </>
       )}
+      </div>
     </main>
   )
 }

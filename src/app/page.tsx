@@ -7,32 +7,7 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '@/components/AuthProvider'
 import { SECTIONS, hasAccess } from '@/lib/auth'
 import { useTheme } from '@/components/ThemeProvider'
-
-// Mountain silhouette SVG
-function MountainDivider() {
-  return (
-    <svg viewBox="0 0 400 48" className="w-full" preserveAspectRatio="none" aria-hidden>
-      <path
-        d="M0 48 L0 36 L40 18 L80 30 L130 8 L180 26 L220 4 L270 22 L310 12 L360 28 L400 16 L400 48 Z"
-        fill="#2C2C2E"
-      />
-      <path
-        d="M0 48 L0 40 L50 28 L100 38 L150 20 L200 34 L250 16 L300 30 L350 22 L400 32 L400 48 Z"
-        fill="#1C1C1E"
-        opacity="0.7"
-      />
-    </svg>
-  )
-}
-
-// Red sun
-function RedSun() {
-  return (
-    <div className="sun-pulse flex items-center justify-center w-10 h-10 rounded-full"
-      style={{ background: 'radial-gradient(circle, #FF2A2A 0%, #E8121E 60%, #8B0000 100%)' }}>
-    </div>
-  )
-}
+import { FujiScene } from '@/components/FujiScene'
 
 export default function Home() {
   const { role, userName, permissions } = useAuth()
@@ -156,56 +131,54 @@ export default function Home() {
   return (
     <main className="min-h-screen overflow-x-hidden" style={{ backgroundColor: 'var(--bg)' }}>
 
-      {/* Hero header с красным солнцем */}
-      <div className="relative px-5 pt-10 pb-0"
-        style={{ background: theme === 'dark' ? 'linear-gradient(180deg, #0A0A0A 0%, #1C1C1E 100%)' : 'linear-gradient(180deg, #E8E6E0 0%, #F5F4F0 100%)' }}>
+      {/* Hero: FujiScene background with header overlaid */}
+      <div className="relative overflow-hidden">
+        <FujiScene dark={theme === 'dark'} bgColor={theme === 'dark' ? '#1C1C1E' : '#F5F4F0'} />
 
-        {/* Верхняя строка */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
-            <RedSun />
+        {/* Header overlay */}
+        <div className="absolute inset-x-0 top-0 px-5 pt-8 z-10">
+          <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-white text-xl font-bold leading-tight tracking-wide">
+              <h1 className="text-white text-xl font-bold leading-tight tracking-wide drop-shadow-lg">
                 Школа Самурая
               </h1>
-              <p className="text-[#8E8E93] text-[10px] tracking-[0.2em] uppercase mt-0.5">
+              <p className="text-white/60 text-[10px] tracking-[0.2em] uppercase mt-0.5">
                 武道 · Путь воина
               </p>
             </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="relative group">
-              <button onClick={sendReport} disabled={notifying}
-                className="flex items-center gap-1.5 text-xs text-[#8E8E93] border border-[#3A3A3C]
-                  px-3 py-1.5 rounded-lg hover:border-[#E8121E]/50 hover:text-[#E8121E]
-                  disabled:opacity-40 transition-all duration-200">
-                <span>📨</span>
-                <span>{notifying ? 'Отправка...' : 'Отчёт'}</span>
-              </button>
-              <div className="absolute right-0 top-full mt-2 w-52 bg-[#2C2C2E] border border-[#3A3A3C]
-                rounded-xl px-3 py-2 text-xs text-[#8E8E93] leading-relaxed
-                opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-10 shadow-xl">
-                Отправить сводку (без занятий, истекающие абонементы) в Telegram
+            <div className="flex items-center gap-2">
+              <div className="relative group">
+                <button onClick={sendReport} disabled={notifying}
+                  className="flex items-center gap-1.5 text-xs text-white/70 border border-white/20
+                    bg-black/25 backdrop-blur-sm px-3 py-1.5 rounded-lg
+                    hover:border-[#E8121E]/60 hover:text-[#E8121E]
+                    disabled:opacity-40 transition-all duration-200">
+                  <span>📨</span>
+                  <span>{notifying ? 'Отправка...' : 'Отчёт'}</span>
+                </button>
+                <div className="absolute right-0 top-full mt-2 w-52 bg-[#2C2C2E] border border-[#3A3A3C]
+                  rounded-xl px-3 py-2 text-xs text-[#8E8E93] leading-relaxed
+                  opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-10 shadow-xl">
+                  Отправить сводку (без занятий, истекающие абонементы) в Telegram
+                </div>
               </div>
-            </div>
-            <button onClick={toggleTheme}
-              title={theme === 'dark' ? 'Светлая тема' : 'Тёмная тема'}
-              className="text-xs text-[#8E8E93] border border-[#3A3A3C] px-2.5 py-1.5 rounded-lg
-                hover:border-[#E8121E]/50 hover:text-[#E8121E] transition-all duration-200">
-              {theme === 'dark' ? '☀' : '🌙'}
-            </button>
-            {userName && (
-              <button onClick={signOut}
-                className="text-xs text-[#8E8E93] border border-[#3A3A3C] px-3 py-1.5 rounded-lg
-                  hover:border-[#3A3A3C] hover:text-white transition-all duration-200">
-                Выйти
+              <button onClick={toggleTheme}
+                title={theme === 'dark' ? 'Светлая тема' : 'Тёмная тема'}
+                className="text-xs text-white/70 border border-white/20 bg-black/25 backdrop-blur-sm
+                  px-2.5 py-1.5 rounded-lg hover:border-[#E8121E]/60 hover:text-[#E8121E]
+                  transition-all duration-200">
+                {theme === 'dark' ? '☀' : '🌙'}
               </button>
-            )}
+              {userName && (
+                <button onClick={signOut}
+                  className="text-xs text-white/70 border border-white/20 bg-black/25 backdrop-blur-sm
+                    px-3 py-1.5 rounded-lg hover:text-white transition-all duration-200">
+                  Выйти
+                </button>
+              )}
+            </div>
           </div>
         </div>
-
-        {/* Горный силуэт */}
-        <MountainDivider />
       </div>
 
       {/* Метрики */}

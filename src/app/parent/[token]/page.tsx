@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import { FujiScene } from '@/components/FujiScene'
 
 type Student = {
   id: string
@@ -83,15 +84,20 @@ export default function ParentPage() {
 
   return (
     <main className="min-h-screen bg-gray-50">
-      <div className="max-w-sm mx-auto p-4">
-        {/* Header */}
-        <div className="text-center py-6">
-          <div className="w-16 h-16 rounded-full bg-black text-white flex items-center justify-center text-2xl font-bold mx-auto mb-3">
-            {student.name[0]}
+      <div className="max-w-sm mx-auto">
+        {/* Hero */}
+        <div className="relative overflow-hidden">
+          <FujiScene dark={false} bgColor="#F9FAFB" />
+          <div className="absolute inset-x-0 bottom-0 pb-4 flex flex-col items-center z-10">
+            <div className="w-16 h-16 rounded-full bg-white/90 text-gray-800 flex items-center justify-center text-2xl font-bold shadow-lg border-2 border-white mb-2">
+              {student.name[0]}
+            </div>
+            <div className="text-white text-lg font-bold drop-shadow-lg">{student.name}</div>
+            <div className="text-white/70 text-sm drop-shadow">{student.group_name || 'Группа не указана'}</div>
           </div>
-          <div className="text-xl font-bold text-gray-800">{student.name}</div>
-          <div className="text-sm text-gray-400 mt-1">{student.group_name || 'Группа не указана'}</div>
         </div>
+
+        <div className="p-4">
 
         {/* Active subscription */}
         <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm mb-3">
@@ -162,6 +168,7 @@ export default function ParentPage() {
         </div>
 
         <div className="text-center text-xs text-gray-300">Школа Самурая</div>
+        </div>
       </div>
     </main>
   )
