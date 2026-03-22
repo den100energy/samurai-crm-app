@@ -1,9 +1,10 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { Roboto_Slab } from 'next/font/google'
 import './globals.css'
 import FloatingBack from '@/components/FloatingBack'
 import { AuthProvider } from '@/components/AuthProvider'
 import { ThemeProvider } from '@/components/ThemeProvider'
+import { InstallPrompt } from '@/components/InstallPrompt'
 
 const robotoSlab = Roboto_Slab({
   subsets: ['latin', 'cyrillic'],
@@ -15,6 +16,15 @@ const robotoSlab = Roboto_Slab({
 export const metadata: Metadata = {
   title: 'Школа Самурая — CRM',
   description: 'Управление школой боевых искусств',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'Самурай',
+  },
+}
+
+export const viewport: Viewport = {
+  themeColor: '#1C1C1E',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -25,6 +35,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <AuthProvider>
             {children}
             <FloatingBack />
+            <InstallPrompt />
           </AuthProvider>
         </ThemeProvider>
       </body>
