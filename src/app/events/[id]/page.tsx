@@ -57,7 +57,7 @@ export default function EventDetailPage() {
 
   // Edit state
   const [editing, setEditing] = useState(false)
-  const [editForm, setEditForm] = useState<Partial<Event & { price: string }>>({})
+  const [editForm, setEditForm] = useState<{ name: string; date: string; price: string; description: string; bonus_type: string; group_restriction: string; trainer_name: string; trainer_name_extra: string }>({ name: '', date: '', price: '', description: '', bonus_type: '', group_restriction: '', trainer_name: '', trainer_name_extra: '' })
   const [saving, setSaving] = useState(false)
   const [notifying, setNotifying] = useState(false)
   const [notifyResult, setNotifyResult] = useState<string | null>(null)
