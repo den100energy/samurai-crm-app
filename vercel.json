@@ -7,6 +7,10 @@
     {
       "path": "/api/cron/weekly-schedule-reminder",
       "schedule": "0 9 * * 6"
+    },
+    {
+      "path": "/api/cron/notify-repeat-survey",
+      "schedule": "0 10 * * 1"
     }
   ]
 }
