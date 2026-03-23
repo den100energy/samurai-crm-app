@@ -104,12 +104,12 @@ function AttendanceContent() {
 
     const withSubs = await loadWithSub(data || [])
     setStudents(withSubs)
-    setPresent(new Set(withSubs.map(s => s.id)))
+    setPresent(new Set())  // по умолчанию никто не отмечен
     setGuests([])
     setGuestsLoaded(false)
     setShowGuests(false)
 
-    // Load existing attendance for this date
+    // Загрузить уже сохранённые отметки за эту дату (если есть)
     if (withSubs.length > 0) {
       const { data: attData } = await supabase
         .from('attendance')
