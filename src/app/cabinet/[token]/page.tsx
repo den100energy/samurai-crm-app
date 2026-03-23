@@ -152,6 +152,42 @@ function AttendanceCalendar({ attendance }: { attendance: { date: string; presen
 }
 
 // SVG радарная диаграмма
+const SURVEY_COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16']
+
+function ProgressLineChart({ surveys }: { surveys: Survey[] }) {
+  const filled = surveys.filter(s => s.trainer_filled_at)
+  if (filled.length < 2) return (
+    <div className="text-sm text-gray-400 text-center py-4">Нужно минимум 2 среза для отображения динамики</div>
+  )
+  const W = 90, H = 28, PAD = 4
+  return (
+    <div className="space-y-2.5">
+      {QUALITIES.map(k => {
+        const values = filled.map(s => (s[`trainer_${k}`] as number) || 0)
+        const xStep = (W - PAD * 2) / (values.length - 1)
+        const pts = values.map((v, i) => ({ x: PAD + i * xStep, y: H - PAD - (v / 10) * (H - PAD * 2) }))
+        const pathD = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')
+        const diff = values[values.length - 1] - values[0]
+        return (
+          <div key={k} className="flex items-center gap-2">
+            <span className="text-xs text-gray-500 w-28 shrink-0">{QUALITY_LABELS[k]}</span>
+            <svg width={W} height={H} className="shrink-0 overflow-visible">
+              <path d={pathD} fill="none" stroke="#3B82F6" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              {pts.map((p, i) => <circle key={i} cx={p.x} cy={p.y} r="2.5" fill={SURVEY_COLORS[i % SURVEY_COLORS.length]} />)}
+            </svg>
+            <span className="text-xs text-gray-400 shrink-0">{values.join(' → ')}</span>
+            {diff !== 0 && (
+              <span className={`text-xs font-bold shrink-0 ${diff > 0 ? 'text-green-500' : 'text-red-400'}`}>
+                {diff > 0 ? `+${diff}` : diff}
+              </span>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 function RadarChart({ surveys }: { surveys: Survey[] }) {
   if (surveys.length === 0) return (
     <div className="text-center text-gray-400 text-sm py-8">Данных пока нет — заполните анкету прогресса</div>
@@ -162,7 +198,7 @@ function RadarChart({ surveys }: { surveys: Survey[] }) {
   const cy = size / 2
   const r = 100
   const n = QUALITIES.length
-  const colors = ['#3B82F6', '#10B981', '#F59E0B']
+  const colors = SURVEY_COLORS
 
   function getPoint(i: number, val: number) {
     const angle = (Math.PI * 2 * i) / n - Math.PI / 2
@@ -193,14 +229,14 @@ function RadarChart({ surveys }: { surveys: Survey[] }) {
           const p = getPoint(i, 10)
           return <line key={i} x1={cx} y1={cy} x2={p.x} y2={p.y} stroke="#E5E7EB" strokeWidth="1" />
         })}
-        {/* Данные по каждому срезу */}
-        {surveys.slice(0, 3).map((survey, si) => {
+        {/* Данные по каждому срезу (последние 4) */}
+        {surveys.slice(-4).map((survey, si) => {
           const pts = QUALITIES.map((k, i) => getPoint(i, (survey[`trainer_${k}`] as number) || 0))
           const d = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ') + 'Z'
           return (
             <path key={si} d={d}
-              fill={colors[si]} fillOpacity="0.15"
-              stroke={colors[si]} strokeWidth="2" />
+              fill={colors[si % colors.length]} fillOpacity="0.15"
+              stroke={colors[si % colors.length]} strokeWidth="2" />
           )
         })}
         {/* Подписи */}
@@ -218,16 +254,17 @@ function RadarChart({ surveys }: { surveys: Survey[] }) {
       </svg>
       {/* Легенда */}
       {surveys.length > 0 && (
-        <div className="flex gap-4 flex-wrap justify-center mt-1">
-          {surveys.slice(0, 3).map((s, i) => (
+        <div className="flex gap-3 flex-wrap justify-center mt-1">
+          {surveys.slice(-4).map((s, i) => (
             <div key={i} className="flex items-center gap-1.5">
-              <div className="w-3 h-3 rounded-full" style={{ background: colors[i] }} />
+              <div className="w-3 h-3 rounded-full" style={{ background: colors[i % colors.length] }} />
               <span className="text-xs text-gray-500">
-                {i === 0 ? 'Старт' : `Срез ${i}`}
+                {s.title || (i === 0 ? 'Старт' : `Срез ${i + 1}`)}
                 {s.filled_at ? ` (${new Date(s.filled_at).toLocaleDateString('ru-RU', { month: 'short', year: '2-digit' })})` : ''}
               </span>
             </div>
           ))}
+          {surveys.length > 4 && <span className="text-xs text-gray-400">+{surveys.length - 4} ранее</span>}
         </div>
       )}
     </div>
@@ -744,26 +781,57 @@ export default function CabinetPage() {
                   <RadarChart surveys={surveys} />
                 </div>
 
-                {/* Подробно по качествам */}
+                {/* Динамика по качествам — линейный график */}
                 <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-                  <h2 className="font-semibold text-gray-800 mb-4">Динамика по качествам</h2>
-                  <div className="space-y-3">
-                    {QUALITIES.map(k => {
-                      const vals = surveys.slice(0, 3).map(s => (s[`trainer_${k}`] as number) || 0)
-                      return <QualityBar key={k} label={QUALITY_LABELS[k]} values={vals} colors={colors} />
-                    })}
-                  </div>
-                  <div className="flex gap-3 mt-4 flex-wrap">
-                    {surveys.slice(0, 3).map((s, i) => (
-                      <div key={i} className="flex items-center gap-1.5">
-                        <div className="w-2.5 h-2.5 rounded-full" style={{ background: colors[i] }} />
-                        <span className="text-xs text-gray-400">
-                          {i === 0 ? 'Старт' : `Срез ${i}`}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
+                  <h2 className="font-semibold text-gray-800 mb-1">Динамика по качествам</h2>
+                  <p className="text-xs text-gray-400 mb-4">Оценки тренера по всем срезам</p>
+                  <ProgressLineChart surveys={surveys} />
+                  {surveys.filter(s => s.trainer_filled_at).length >= 2 && (
+                    <div className="flex gap-3 mt-4 flex-wrap border-t border-gray-50 pt-3">
+                      {surveys.filter(s => s.trainer_filled_at).map((s, i) => (
+                        <div key={i} className="flex items-center gap-1.5">
+                          <div className="w-2.5 h-2.5 rounded-full" style={{ background: SURVEY_COLORS[i % SURVEY_COLORS.length] }} />
+                          <span className="text-xs text-gray-400">
+                            {s.title || (i === 0 ? 'Старт' : `Срез ${i + 1}`)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
+
+                {/* История срезов */}
+                {surveys.length > 1 && (
+                  <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+                    <h2 className="font-semibold text-gray-800 mb-3">История срезов</h2>
+                    <div className="space-y-2">
+                      {Object.entries(
+                        surveys.reduce((acc, s) => {
+                          const y = new Date(s.created_at || s.filled_at || '').getFullYear() || 'Неизвестно'
+                          if (!acc[y]) acc[y] = []
+                          acc[y].push(s)
+                          return acc
+                        }, {} as Record<string | number, Survey[]>)
+                      ).sort(([a], [b]) => Number(b) - Number(a)).map(([year, sList]) => (
+                        <div key={year}>
+                          {surveys.length > 3 && (
+                            <div className="text-xs text-gray-400 font-medium mb-1.5">{year}</div>
+                          )}
+                          {sList.map((s, i) => (
+                            <div key={s.id} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
+                              <span className="text-sm text-gray-700">{s.title || `Срез ${i + 1}`}</span>
+                              <span className="text-xs text-gray-400">
+                                {s.filled_at
+                                  ? new Date(s.filled_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' })
+                                  : '⏳ ожидается'}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </>
             )}
           </>
