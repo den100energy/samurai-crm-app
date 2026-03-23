@@ -57,6 +57,8 @@ export default function TrainerPage() {
   const [showProfile, setShowProfile] = useState(false)
   const [savingProfile, setSavingProfile] = useState(false)
   const [profileSaved, setProfileSaved] = useState(false)
+  const [needSurveyStudents, setNeedSurveyStudents] = useState<{ id: string; name: string }[]>([])
+  const [showSurveyList, setShowSurveyList] = useState(false)
 
   const dark = theme === 'dark'
 
@@ -93,6 +95,32 @@ export default function TrainerPage() {
     const trainerGroups = [...new Set((slots || []).map(s => s.group_name))]
     const myStudents = (students || []).filter(s => s.group_name && trainerGroups.includes(s.group_name))
     setStudentCount(myStudents.length)
+
+    // Срезы — ученики которым пора (3+ мес. с последнего)
+    if (myStudents.length > 0) {
+      const myIds = myStudents.map(s => s.id)
+      const threeMonthsAgo = new Date()
+      threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3)
+      const { data: latestSurveys } = await supabase
+        .from('progress_surveys')
+        .select('student_id, filled_at, created_at')
+        .in('student_id', myIds)
+        .order('created_at', { ascending: false })
+
+      const latestMap = new Map<string, { filled_at: string | null; created_at: string }>()
+      for (const s of (latestSurveys || [])) {
+        if (!latestMap.has(s.student_id)) latestMap.set(s.student_id, s)
+      }
+      const needSurvey = myStudents.filter(st => {
+        const latest = latestMap.get(st.id)
+        if (!latest) return true // никогда не было среза
+        if (!latest.filled_at) return false // есть незаполненный — не беспокоим
+        return new Date(latest.filled_at) < threeMonthsAgo
+      })
+      const { data: studentNames } = await supabase
+        .from('students').select('id, name').in('id', needSurvey.map(s => s.id))
+      setNeedSurveyStudents(studentNames || [])
+    }
   }
 
   async function uploadPhoto(e: React.ChangeEvent<HTMLInputElement>) {
@@ -295,6 +323,42 @@ export default function TrainerPage() {
           </div>
         )}
       </div>
+
+      {/* Срезы прогресса — уведомление */}
+      {needSurveyStudents.length > 0 && (
+        <div className={`rounded-2xl border mb-4 overflow-hidden ${card}`}>
+          <button onClick={() => setShowSurveyList(p => !p)}
+            className="w-full flex items-center justify-between px-4 py-3">
+            <div className="flex items-center gap-2">
+              <span className="text-lg">📊</span>
+              <span className={`text-sm font-medium ${textPrimary}`}>Срезы прогресса</span>
+              <span className="text-xs bg-amber-500 text-white px-2 py-0.5 rounded-full font-medium">
+                {needSurveyStudents.length}
+              </span>
+            </div>
+            <span className={`text-sm ${textSecondary}`}>{showSurveyList ? '▲' : '▼'}</span>
+          </button>
+
+          {showSurveyList && (
+            <div className={`border-t ${dark ? 'border-[#3A3A3C]' : 'border-gray-100'}`}>
+              <p className={`text-xs px-4 pt-3 pb-2 ${textSecondary}`}>
+                Этим ученикам пора пройти повторный срез (3+ месяца с последнего)
+              </p>
+              <div className="px-4 pb-4 space-y-2">
+                {needSurveyStudents.map(st => (
+                  <Link key={st.id} href={`/students/${st.id}`}
+                    className={`flex items-center justify-between rounded-xl px-3 py-2.5 border ${
+                      dark ? 'bg-[#1C1C1E] border-[#3A3A3C]' : 'bg-gray-50 border-gray-100'
+                    }`}>
+                    <span className={`text-sm ${textPrimary}`}>{st.name}</span>
+                    <span className={`text-xs ${textSecondary}`}>→</span>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Attendance — always visible */}
       <Link href="/trainer/attendance"

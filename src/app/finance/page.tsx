@@ -15,7 +15,7 @@ type Payment = {
   paid_at: string
   status: string | null
   student_id: string | null
-  students: { name: string }[] | null
+  students: { name: string } | { name: string }[] | null
 }
 
 type Student = { id: string; name: string }
@@ -51,6 +51,9 @@ export default function FinancePage() {
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [studentSearch, setStudentSearch] = useState('')
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editForm, setEditForm] = useState<typeof form | null>(null)
+  const [editStudentSearch, setEditStudentSearch] = useState('')
   const [form, setForm] = useState({
     direction: 'income' as 'income' | 'expense',
     category: 'Абонементы',
@@ -120,6 +123,45 @@ export default function FinancePage() {
     if (!confirm('Удалить запись?')) return
     await supabase.from('payments').delete().eq('id', id)
     setPayments(prev => prev.filter(p => p.id !== id))
+  }
+
+  function startEdit(p: Payment) {
+    const studentName = Array.isArray(p.students) ? p.students[0]?.name : (p.students as any)?.name
+    setEditingId(p.id)
+    setEditForm({
+      direction: p.direction ?? 'income',
+      category: p.category ?? 'Абонементы',
+      amount: String(p.amount),
+      payment_type: p.payment_type,
+      description: p.description ?? '',
+      paid_at: p.paid_at,
+      student_id: p.student_id ?? '',
+    })
+    setEditStudentSearch(studentName ?? '')
+  }
+
+  async function saveEdit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!editingId || !editForm) return
+    const { data } = await supabase.from('payments')
+      .update({
+        amount: parseFloat(editForm.amount),
+        direction: editForm.direction,
+        category: editForm.category,
+        payment_type: editForm.payment_type,
+        description: editForm.description || null,
+        paid_at: editForm.paid_at,
+        student_id: editForm.student_id || null,
+      })
+      .eq('id', editingId)
+      .select('id, amount, direction, category, payment_type, description, paid_at, status, student_id, students(name)')
+      .single()
+    if (data) {
+      setPayments(prev => prev.map(p => p.id === editingId ? data as any : p))
+    }
+    setEditingId(null)
+    setEditForm(null)
+    setEditStudentSearch('')
   }
 
   function exportCSV() {
@@ -321,6 +363,95 @@ export default function FinancePage() {
         <div className="space-y-2">
           {payments.map(p => {
             const isIncome = p.direction === 'income' || p.direction === null
+
+            // Инлайн-форма редактирования
+            if (editingId === p.id && editForm) {
+              const editCats = editForm.direction === 'income' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES
+              const editStudents = students.filter(s =>
+                editStudentSearch.length < 2 ? false : s.name.toLowerCase().includes(editStudentSearch.toLowerCase())
+              )
+              return (
+                <form key={p.id} onSubmit={saveEdit}
+                  className="bg-white rounded-xl border border-blue-200 shadow-sm p-3 space-y-2">
+                  {/* Направление */}
+                  <div className="flex gap-2">
+                    {(['income', 'expense'] as const).map(d => (
+                      <button key={d} type="button"
+                        onClick={() => setEditForm(f => f ? { ...f, direction: d, category: d === 'income' ? 'Абонементы' : 'Аренда' } : f)}
+                        className={`flex-1 py-1.5 rounded-lg text-xs font-medium border transition-colors
+                          ${editForm.direction === d
+                            ? d === 'income' ? 'bg-green-600 text-white border-green-600' : 'bg-red-600 text-white border-red-600'
+                            : 'bg-white text-gray-500 border-gray-200'}`}>
+                        {d === 'income' ? '+ Доход' : '− Расход'}
+                      </button>
+                    ))}
+                  </div>
+                  {/* Категория */}
+                  <select value={editForm.category}
+                    onChange={e => setEditForm(f => f ? { ...f, category: e.target.value } : f)}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none">
+                    {editCats.map(c => <option key={c}>{c}</option>)}
+                  </select>
+                  {/* Сумма + тип */}
+                  <div className="flex gap-2">
+                    <input type="number" required placeholder="Сумма ₽"
+                      value={editForm.amount}
+                      onChange={e => setEditForm(f => f ? { ...f, amount: e.target.value } : f)}
+                      className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none" />
+                    <select value={editForm.payment_type}
+                      onChange={e => setEditForm(f => f ? { ...f, payment_type: e.target.value } : f)}
+                      className="border border-gray-200 rounded-lg px-2 py-2 text-sm outline-none">
+                      <option value="cash">💵 Нал</option>
+                      <option value="transfer">💳 Перевод</option>
+                    </select>
+                  </div>
+                  {/* Дата */}
+                  <input type="date" required value={editForm.paid_at}
+                    onChange={e => setEditForm(f => f ? { ...f, paid_at: e.target.value } : f)}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none" />
+                  {/* Ученик */}
+                  <div className="relative">
+                    <input placeholder="Ученик (необязательно)"
+                      value={editStudentSearch}
+                      onChange={e => { setEditStudentSearch(e.target.value); if (!e.target.value) setEditForm(f => f ? { ...f, student_id: '' } : f) }}
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none" />
+                    {editStudents.length > 0 && (
+                      <div className="absolute z-10 left-0 right-0 bg-white border border-gray-200 rounded-xl shadow-lg mt-1 max-h-40 overflow-y-auto">
+                        {editStudents.map(s => (
+                          <button key={s.id} type="button"
+                            onClick={() => { setEditForm(f => f ? { ...f, student_id: s.id } : f); setEditStudentSearch(s.name) }}
+                            className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50">{s.name}</button>
+                        ))}
+                      </div>
+                    )}
+                    {editForm.student_id && (
+                      <button type="button"
+                        onClick={() => { setEditForm(f => f ? { ...f, student_id: '' } : f); setEditStudentSearch('') }}
+                        className="absolute right-2 top-2 text-gray-400 hover:text-red-400 text-xs">✕</button>
+                    )}
+                  </div>
+                  {/* Описание */}
+                  <input placeholder="Комментарий"
+                    value={editForm.description}
+                    onChange={e => setEditForm(f => f ? { ...f, description: e.target.value } : f)}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none" />
+                  {/* Кнопки */}
+                  <div className="flex gap-2 pt-1">
+                    <button type="submit"
+                      className="flex-1 bg-black text-white py-2 rounded-xl text-sm font-medium">
+                      Сохранить
+                    </button>
+                    <button type="button"
+                      onClick={() => { setEditingId(null); setEditForm(null); setEditStudentSearch('') }}
+                      className="px-4 border border-gray-200 text-gray-500 py-2 rounded-xl text-sm">
+                      Отмена
+                    </button>
+                  </div>
+                </form>
+              )
+            }
+
+            // Обычный вид карточки
             return (
               <div key={p.id} className="bg-white rounded-xl px-4 py-3 border border-gray-100 shadow-sm flex items-center gap-3">
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0
@@ -330,7 +461,7 @@ export default function FinancePage() {
                 <div className="flex-1 min-w-0">
                   <div className="font-medium text-gray-800 text-sm">{p.category || '—'}</div>
                   <div className="text-xs text-gray-400 truncate">
-                    {p.students?.[0]?.name && <span className="text-blue-500">👤 {p.students[0].name} · </span>}
+                    {(() => { const n = Array.isArray(p.students) ? p.students[0]?.name : (p.students as any)?.name; return n ? <span className="text-blue-500">👤 {n} · </span> : null })()}
                     {p.description || ''}
                     {p.description ? ' · ' : ''}
                     {p.payment_type === 'cash' ? '💵' : '💳'} · {p.paid_at.slice(5).replace('-', '.')}
@@ -339,7 +470,14 @@ export default function FinancePage() {
                 <div className={`font-bold text-sm shrink-0 ${isIncome ? 'text-green-700' : 'text-red-500'}`}>
                   {isIncome ? '+' : '−'}{p.amount.toLocaleString()} ₽
                 </div>
-                <button onClick={() => deletePayment(p.id)} className="text-gray-300 hover:text-red-400 text-lg shrink-0">×</button>
+                <div className="flex gap-1 shrink-0">
+                  <button onClick={() => startEdit(p)}
+                    className="text-xs px-2 py-1 rounded-lg border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 transition-colors"
+                    title="Редактировать">✎</button>
+                  <button onClick={() => deletePayment(p.id)}
+                    className="text-xs px-2 py-1 rounded-lg border border-red-200 bg-red-50 text-red-500 hover:bg-red-100 transition-colors"
+                    title="Удалить">✕</button>
+                </div>
               </div>
             )
           })}

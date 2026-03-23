@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-const QUALITIES = [
+const QUALITIES: [string, string][] = [
   ['strength','Сила'],['speed','Быстрота'],['endurance','Выносливость'],
   ['agility','Ловкость'],['coordination','Координация'],['posture','Осанка'],
   ['flexibility','Гибкость'],['discipline','Дисциплина'],['sociability','Общительность'],
@@ -9,58 +9,133 @@ const QUALITIES = [
   ['activity','Активность'],['self_defense','Самозащита'],
 ]
 
-export async function POST(req: NextRequest) {
-  const { survey1, survey2, studentName } = await req.json()
-
-  // Build comparison table: before (survey1 parent) vs after (survey2 parent)
-  const qualitiesTable = QUALITIES
+function qualityRows(
+  a: Record<string, any>,
+  b: Record<string, any>,
+  prefix: 'q_' | 'trainer_'
+): string {
+  return QUALITIES
     .map(([k, lbl]) => {
-      const before = survey1[`q_${k}`] ?? null
-      const after = survey2[`q_${k}`] ?? null
+      const before = a[`${prefix}${k}`] ?? null
+      const after  = b[`${prefix}${k}`] ?? null
       if (before == null && after == null) return null
       const diff = before != null && after != null ? after - before : null
       const arrow = diff == null ? '' : diff > 0 ? ` ↑+${diff}` : diff < 0 ? ` ↓${diff}` : ' ='
-      return `  ${lbl}: до=${before ?? '—'}/10, после=${after ?? '—'}/10${arrow}`
+      return `  ${lbl}: ${before ?? '—'} → ${after ?? '—'}${arrow}`
     })
     .filter(Boolean)
     .join('\n')
+}
 
-  const trainerBefore = QUALITIES
-    .map(([k, lbl]) => survey1[`trainer_${k}`] != null ? `  ${lbl}: ${survey1[`trainer_${k}`]}/10` : null)
-    .filter(Boolean).join('\n')
+function singleSnapshot(s: Record<string, any>, prefix: 'q_' | 'trainer_'): string {
+  return QUALITIES
+    .map(([k, lbl]) => {
+      const v = s[`${prefix}${k}`]
+      return v != null ? `  ${lbl}: ${v}/10` : null
+    })
+    .filter(Boolean)
+    .join('\n')
+}
 
-  const trainerAfter = QUALITIES
-    .map(([k, lbl]) => survey2[`trainer_${k}`] != null ? `  ${lbl}: ${survey2[`trainer_${k}`]}/10` : null)
-    .filter(Boolean).join('\n')
+function surveyLabel(s: Record<string, any>, idx: number): string {
+  return s.title || (idx === 0 ? 'Срез 1' : `Срез ${idx + 1}`)
+}
+
+export async function POST(req: NextRequest) {
+  // New signature: { survey1, surveys, studentName }
+  // survey1 = initial diagnostic (анкета 1)
+  // surveys  = array of filled progress surveys, sorted asc by filled_at/created_at
+  // Legacy: { survey1, survey2, studentName } also supported
+  const body = await req.json()
+  const { survey1, studentName } = body
+
+  // Normalise: accept either `surveys` array or legacy `survey2`
+  const surveys: Record<string, any>[] = Array.isArray(body.surveys)
+    ? body.surveys
+    : body.survey2
+      ? [body.survey2]
+      : []
+
+  if (!surveys.length) {
+    return NextResponse.json({ error: 'Нет данных срезов' }, { status: 400 })
+  }
+
+  const first  = surveys[0]
+  const latest = surveys[surveys.length - 1]
+  const prev   = surveys.length >= 2 ? surveys[surveys.length - 2] : null
+
+  // ── Section 1: Диагностика → Первый срез (parent + trainer) ─────────────
+  const diagToFirstParent  = qualityRows(survey1, first, 'q_')
+  const diagToFirstTrainer = qualityRows(survey1, first, 'trainer_')
+
+  // ── Section 2: Последние два среза (если их > 1) ─────────────────────────
+  let recentBlock = ''
+  if (prev) {
+    const prevLabel   = surveyLabel(prev, surveys.length - 2)
+    const latestLabel = surveyLabel(latest, surveys.length - 1)
+    const recentParent  = qualityRows(prev, latest, 'q_')
+    const recentTrainer = qualityRows(prev, latest, 'trainer_')
+    recentBlock = `
+## НЕДАВНЯЯ ДИНАМИКА: ${prevLabel} → ${latestLabel}
+
+Оценки родителя:
+${recentParent || '— нет данных —'}
+
+Оценки тренера:
+${recentTrainer || '— нет данных —'}
+`
+  }
+
+  // ── Section 3: Общая динамика (первый срез → последний) ──────────────────
+  let overallBlock = ''
+  if (surveys.length >= 2) {
+    const overallParent  = qualityRows(first, latest, 'q_')
+    const overallTrainer = qualityRows(first, latest, 'trainer_')
+    overallBlock = `
+## ОБЩАЯ ДИНАМИКА: ${surveyLabel(first, 0)} → ${surveyLabel(latest, surveys.length - 1)} (всего ${surveys.length} среза)
+
+Оценки родителя:
+${overallParent || '— нет данных —'}
+
+Оценки тренера:
+${overallTrainer || '— нет данных —'}
+`
+  }
+
+  // ── Build prompt ──────────────────────────────────────────────────────────
+  const hasManySlices = surveys.length >= 2
 
   const prompt = `Ты опытный тренер по айкидо айкикай в клубе "Школа Самурая".
 
 Ученик: ${studentName}
-Прошёл первый месяц занятий. Сравни две анкеты: начальную диагностику и срез через месяц.
+Количество срезов прогресса: ${surveys.length}
 
-ОЦЕНКИ РОДИТЕЛЯ — ДО и ПОСЛЕ (16 качеств):
-${qualitiesTable || '— нет данных —'}
+## НАЧАЛЬНАЯ ДИАГНОСТИКА → ПЕРВЫЙ СРЕЗ
 
-ОЦЕНКИ ТРЕНЕРА ДО (с пробного занятия):
-${trainerBefore || '— нет данных —'}
+Оценки родителя:
+${diagToFirstParent || '— нет данных —'}
 
-ОЦЕНКИ ТРЕНЕРА ПОСЛЕ (через месяц):
-${trainerAfter || '— нет данных —'}
+Оценки тренера:
+${diagToFirstTrainer || '— нет данных —'}
 
-Ожидания семьи в начале: ${survey1.how_can_help_text || '—'}
-Заметки тренера до: ${survey1.trainer_notes || '—'}
-Заметки тренера после: ${survey2.trainer_notes || '—'}
-
+Ожидания семьи: ${survey1.how_can_help_text || '—'}
+Заметки тренера (начало): ${survey1.trainer_notes || '—'}
+Заметки тренера (первый срез): ${first.trainer_notes || '—'}
+${recentBlock}${overallBlock}
 Составь анализ прогресса в формате:
 
-**Что изменилось за месяц**
+**Что изменилось${hasManySlices ? ' в последнее время' : ' за первый месяц'}**
 (3-4 конкретных наблюдения с опорой на цифры — что выросло, что осталось, что снизилось)
 
-**Главные достижения**
+${hasManySlices ? `**Общий путь за всё время**
+(2-3 наблюдения о долгосрочной динамике от начала до сейчас)
+
+` : ''
+}**Главные достижения**
 (2-3 пункта — что реально получилось)
 
 **На что обратить внимание**
-(2-3 зоны, требующие работы в следующем месяце)
+(2-3 зоны, требующие работы в следующем периоде)
 
 **Программа на следующий месяц**
 Неделя 1: (фокус и задачи)
@@ -84,7 +159,7 @@ ${trainerAfter || '— нет данных —'}
     body: JSON.stringify({
       model: 'anthropic/claude-haiku-3-5',
       messages: [{ role: 'user', content: prompt }],
-      max_tokens: 1500,
+      max_tokens: 1800,
     }),
   })
 
