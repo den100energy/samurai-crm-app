@@ -80,6 +80,39 @@ const BELT_COLORS: Record<string, string> = {
   'Чёрный': 'bg-gray-800 text-white',
 }
 
+function SurveySummaryRow({ s, qualities, labels }: { s: any; qualities: string[]; labels: Record<string, string> }) {
+  const [open, setOpen] = useState(false)
+  const avgTrainer = qualities.reduce((sum, k) => sum + (s[`trainer_${k}`] ?? 0), 0) / qualities.filter(k => s[`trainer_${k}`] != null).length || null
+  const avgParent = qualities.reduce((sum, k) => sum + (s[`q_${k}`] ?? 0), 0) / qualities.filter(k => s[`q_${k}`] != null).length || null
+  return (
+    <div className="border border-gray-100 rounded-xl overflow-hidden">
+      <button className="w-full flex items-center px-3 py-2 text-left hover:bg-gray-50" onClick={() => setOpen(v => !v)}>
+        <span className="flex-1 text-xs font-medium text-gray-700">{s.title || `Срез ${s.survey_number || ''}`}</span>
+        {s.filled_at
+          ? <span className="text-xs text-green-600 mr-2">✓</span>
+          : <span className="text-xs text-gray-400 mr-2">—</span>
+        }
+        {avgTrainer != null && <span className="text-xs text-gray-500 mr-1">т:{avgTrainer.toFixed(1)}</span>}
+        {avgParent != null && <span className="text-xs text-gray-500 mr-2">р:{avgParent.toFixed(1)}</span>}
+        <span className="text-xs text-gray-300">{open ? '▲' : '▼'}</span>
+      </button>
+      {open && s.filled_at && (
+        <div className="px-3 pb-2.5 text-xs grid grid-cols-2 gap-x-4 gap-y-1">
+          {qualities.map(k => {
+            const t = s[`trainer_${k}`]; const r = s[`q_${k}`]
+            return t != null || r != null ? (
+              <div key={k} className="flex justify-between">
+                <span className="text-gray-500">{labels[k]}</span>
+                <span className="font-medium text-gray-700">{t ?? '—'} / {r ?? '—'}</span>
+              </div>
+            ) : null
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function StudentPage() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
@@ -111,7 +144,7 @@ export default function StudentPage() {
   const [showSurvey, setShowSurvey] = useState(false)
   const [editingSurvey, setEditingSurvey] = useState(false)
   const [surveyForm, setSurveyForm] = useState<any>({})
-  const [progressSurvey, setProgressSurvey] = useState<any>(null)
+  const [progressSurveys, setProgressSurveys] = useState<any[]>([])
   const [showProgressTrainer, setShowProgressTrainer] = useState(false)
   const [editingProgressTrainer, setEditingProgressTrainer] = useState(false)
   const [progressTrainerForm, setProgressTrainerForm] = useState<Record<string, any>>({})
@@ -132,7 +165,7 @@ export default function StudentPage() {
         supabase.from('subscription_types').select('id, name, group_type, sessions_count, price, bonuses, duration_months').order('created_at'),
         supabase.from('student_contacts').select('*').eq('student_id', id).order('created_at'),
         supabase.from('diagnostic_surveys').select('*').eq('student_id', id).maybeSingle(),
-        supabase.from('progress_surveys').select('*').eq('student_id', id).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+        supabase.from('progress_surveys').select('*').eq('student_id', id).order('created_at', { ascending: false }),
         supabase.from('student_profiles').select('*').eq('student_id', id).maybeSingle(),
         supabase.from('payments').select('id, amount, category, paid_at, payment_type, description').eq('student_id', id).order('paid_at', { ascending: false }).limit(20),
       ])
@@ -143,11 +176,13 @@ export default function StudentPage() {
       setSubTypes(st || [])
       setContacts(ct || [])
       setSurvey(sv || null)
-      if (ps) {
-        setProgressSurvey(ps)
-        const init: Record<string, any> = { trainer_notes: ps.trainer_notes || '' }
+      const surveys = ps || []
+      setProgressSurveys(surveys)
+      if (surveys[0]) {
+        const latest = surveys[0]
+        const init: Record<string, any> = { trainer_notes: latest.trainer_notes || '' }
         const PQ = ['strength','speed','endurance','agility','coordination','posture','flexibility','discipline','sociability','confidence','learnability','attentiveness','emotional_balance','goal_orientation','activity','self_defense']
-        PQ.forEach(k => { init[`trainer_${k}`] = ps[`trainer_${k}`] ?? 5 })
+        PQ.forEach(k => { init[`trainer_${k}`] = latest[`trainer_${k}`] ?? 5 })
         setProgressTrainerForm(init)
       }
       if (sp) setStudentProfile(sp)
@@ -430,9 +465,17 @@ export default function StudentPage() {
   const PROGRESS_QUALITY_LABELS: Record<string, string> = { strength:'Сила',speed:'Быстрота',endurance:'Выносливость',agility:'Ловкость',coordination:'Координация',posture:'Осанка',flexibility:'Гибкость',discipline:'Дисциплина',sociability:'Общительность',confidence:'Уверенность',learnability:'Обучаемость',attentiveness:'Внимательность',emotional_balance:'Уравновешенность',goal_orientation:'Целеустремлённость',activity:'Активность',self_defense:'Самозащита' }
 
   async function createProgressSurvey() {
-    const { data } = await supabase.from('progress_surveys').insert({ student_id: id }).select().single()
-    if (data) {
-      setProgressSurvey(data)
+    const res = await fetch('/api/create-repeat-survey', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ student_id: id, initiated_by: 'trainer' }),
+    })
+    const data = await res.json()
+    if (res.status === 409) { alert('Уже есть незаполненный срез'); return }
+    if (data.ok) {
+      // Перезагружаем список срезов
+      const { data: fresh } = await supabase.from('progress_surveys').select('*').eq('student_id', id).order('created_at', { ascending: false })
+      setProgressSurveys(fresh || [])
       const init: Record<string, any> = { trainer_notes: '' }
       PROGRESS_QUALITIES.forEach(k => { init[`trainer_${k}`] = 5 })
       setProgressTrainerForm(init)
@@ -441,29 +484,32 @@ export default function StudentPage() {
   }
 
   async function saveProgressTrainer() {
-    if (!progressSurvey) return
+    const activeSurvey = progressSurveys[0]
+    if (!activeSurvey) return
     setSavingProgressTrainer(true)
     const payload = { ...progressTrainerForm, trainer_filled_at: new Date().toISOString() }
-    const { data } = await supabase.from('progress_surveys').update(payload).eq('id', progressSurvey.id).select().single()
-    if (data) setProgressSurvey(data)
+    const { data } = await supabase.from('progress_surveys').update(payload).eq('id', activeSurvey.id).select().single()
+    if (data) setProgressSurveys(prev => [data, ...prev.slice(1)])
     setEditingProgressTrainer(false)
     setSavingProgressTrainer(false)
   }
 
   async function copyProgressLink(forWho: 'parent' | 'student') {
-    if (!progressSurvey) return
-    const url = `${window.location.origin}/survey2/${progressSurvey.survey_token}`
+    const activeSurvey = progressSurveys[0]
+    if (!activeSurvey) return
+    const url = `${window.location.origin}/survey2/${activeSurvey.survey_token}`
     const studentName = student?.name || 'ученика'
+    const surveyTitle = activeSurvey.title || 'срез прогресса'
 
     let message = ''
     if (forWho === 'parent') {
-      message = `Здравствуйте!\n\nПрошёл первый месяц занятий ${studentName} в Школе Самурая 🥋\n\nТренер подготовил персональную программу — но сначала нам важно узнать ваш взгляд на прогресс. Это займёт 3–4 минуты.\n\nВаши ответы помогут:\n✅ Скорректировать программу под цели именно вашего ребёнка\n📊 Увидеть прогресс в цифрах\n🎯 Сфокусироваться на том, что важно для вас\n\nЗаполните анкету:\n${url}`
-      await supabase.from('progress_surveys').update({ parent_sent_at: new Date().toISOString() }).eq('id', progressSurvey.id)
-      setProgressSurvey((p: any) => ({ ...p, parent_sent_at: new Date().toISOString() }))
+      message = `Здравствуйте!\n\nДля ${studentName} в Школе Самурая подготовлен новый срез прогресса — "${surveyTitle}" 🥋\n\nТренер хочет узнать ваш взгляд. Это займёт 3–4 минуты.\n\nВаши ответы помогут:\n✅ Скорректировать программу под цели вашего ребёнка\n📊 Увидеть рост в цифрах\n🎯 Сфокусироваться на главном\n\nЗаполните анкету:\n${url}`
+      await supabase.from('progress_surveys').update({ parent_sent_at: new Date().toISOString() }).eq('id', activeSurvey.id)
+      setProgressSurveys(prev => [{ ...prev[0], parent_sent_at: new Date().toISOString() }, ...prev.slice(1)])
     } else {
-      message = `Привет!\n\nПрошёл твой первый месяц в Школе Самурая 🥋 Это серьёзно — мало кто доходит до этого момента.\n\nХотим знать твоё мнение о своём прогрессе — твои ощущения важны для тренера так же, как и результаты на занятиях.\n\n💪 Программа на следующие 3 месяца будет построена с учётом твоего мнения\n\nЗаполни анкету:\n${url}`
-      await supabase.from('progress_surveys').update({ student_sent_at: new Date().toISOString() }).eq('id', progressSurvey.id)
-      setProgressSurvey((p: any) => ({ ...p, student_sent_at: new Date().toISOString() }))
+      message = `Привет!\n\nДля тебя в Школе Самурая подготовлен новый срез — "${surveyTitle}" 🥋\n\nТренер хочет знать твоё мнение о своём прогрессе. Твои ощущения важны!\n\n💪 Программа будет скорректирована под твои цели\n\nЗаполни анкету:\n${url}`
+      await supabase.from('progress_surveys').update({ student_sent_at: new Date().toISOString() }).eq('id', activeSurvey.id)
+      setProgressSurveys(prev => [{ ...prev[0], student_sent_at: new Date().toISOString() }, ...prev.slice(1)])
     }
 
     navigator.clipboard.writeText(message)
@@ -1233,157 +1279,201 @@ export default function StudentPage() {
 
       {/* Анкета прогресса (Анкета 2) */}
       {(() => {
+        const activeSurvey = progressSurveys[0] ?? null
         const firstAttendance = attendance.length > 0 ? attendance[attendance.length - 1].date : null
         const daysSinceCreated = firstAttendance ? Math.floor((Date.now() - new Date(firstAttendance).getTime()) / 86400000) : 0
-        const waitingParent = progressSurvey?.parent_sent_at && !progressSurvey?.filled_at
-        const daysSinceSent = progressSurvey?.parent_sent_at ? Math.floor((Date.now() - new Date(progressSurvey.parent_sent_at).getTime()) / 86400000) : 0
+        const waitingParent = activeSurvey?.parent_sent_at && !activeSurvey?.filled_at
+        const daysSinceSent = activeSurvey?.parent_sent_at ? Math.floor((Date.now() - new Date(activeSurvey.parent_sent_at).getTime()) / 86400000) : 0
         const isOverdue = waitingParent && daysSinceSent >= 3
+        const canCreateNew = !activeSurvey || !!activeSurvey.filled_at
+
+        // Группировка по годам для предыдущих срезов
+        const prevSurveys = progressSurveys.slice(1)
+        const groupByYear = prevSurveys.length > 3
+        const byYear: Record<number, any[]> = {}
+        for (const s of prevSurveys) {
+          const y = new Date(s.created_at).getFullYear()
+          if (!byYear[y]) byYear[y] = []
+          byYear[y].push(s)
+        }
 
         return (
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm mb-2 overflow-hidden">
+            {/* Шапка */}
             <div className="flex items-center px-4 py-3 bg-gray-50 border-b border-gray-100">
               <span className="flex-1 text-sm font-medium text-gray-800">
-                📈 Срез прогресса (Анкета 2)
-                {progressSurvey?.filled_at && <span className="ml-2 text-green-600 text-xs">✓ Заполнена</span>}
-                {isOverdue && <span className="ml-2 text-orange-500 text-xs font-semibold">⏰ Нет ответа {daysSinceSent}д</span>}
-                {progressSurvey?.parent_sent_at && !progressSurvey?.filled_at && !isOverdue && <span className="ml-2 text-blue-500 text-xs">⏳ Ожидаем</span>}
+                📈 Срезы прогресса
+                {progressSurveys.length > 0 && <span className="ml-2 text-gray-400 text-xs font-normal">{progressSurveys.length} шт.</span>}
               </span>
-              {progressSurvey && !editingProgressTrainer && (
-                <button onClick={() => setShowProgressTrainer(v => !v)}
-                  className="text-xs text-gray-400 border border-gray-200 px-2 py-0.5 rounded-lg">
-                  {showProgressTrainer ? '▲' : '▼'}
+              {canCreateNew && (
+                <button onClick={createProgressSurvey}
+                  className="text-xs bg-black text-white px-3 py-1.5 rounded-lg">
+                  + Новый срез
                 </button>
               )}
             </div>
 
-            <div className="px-4 py-3">
-              {/* Нет анкеты — показываем подсказку если пора */}
-              {!progressSurvey && (
+            <div className="px-4 py-3 space-y-3">
+              {/* Нет срезов */}
+              {progressSurveys.length === 0 && (
                 <div>
                   {daysSinceCreated >= 28 && (
                     <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-3 text-xs text-amber-700">
-                      ⏰ Прошло {daysSinceCreated} дней с начала занятий — пора сделать срез прогресса!
+                      ⏰ Прошло {daysSinceCreated} дней с начала занятий — пора сделать первый срез!
                     </div>
                   )}
-                  <button onClick={createProgressSurvey}
-                    className="w-full border border-gray-200 text-gray-600 text-sm py-2.5 rounded-xl">
-                    + Начать срез прогресса
-                  </button>
+                  <p className="text-xs text-gray-400 text-center py-2">Срезов ещё нет. Нажмите «+ Новый срез»</p>
                 </div>
               )}
 
-              {/* Шаг 1: оценки тренера */}
-              {progressSurvey && !progressSurvey.trainer_filled_at && (
-                <div>
-                  <div className="text-xs text-gray-500 mb-2">
-                    <span className="font-medium text-gray-700">Шаг 1 из 2:</span> Сначала оцените прогресс ученика сами — до того как родитель заполнит анкету
-                  </div>
-                  {!editingProgressTrainer ? (
-                    <button onClick={() => setEditingProgressTrainer(true)}
-                      className="w-full bg-black text-white text-xs py-2.5 rounded-xl">
-                      🥋 Заполнить оценки тренера
-                    </button>
-                  ) : (
-                    <div className="space-y-3">
-                      <textarea value={progressTrainerForm.trainer_notes || ''}
-                        onChange={e => setProgressTrainerForm(p => ({ ...p, trainer_notes: e.target.value }))}
-                        placeholder="Заметки о прогрессе ученика за месяц..." rows={3}
-                        className="w-full border border-gray-200 rounded-xl px-3 py-2 text-xs outline-none resize-none" />
-                      <div className="space-y-2.5">
-                        {PROGRESS_QUALITIES.map(k => (
-                          <div key={k} className="flex items-center gap-2">
-                            <span className="text-xs text-gray-500 w-28 shrink-0">{PROGRESS_QUALITY_LABELS[k]}</span>
-                            <input type="range" min={1} max={10}
-                              value={progressTrainerForm[`trainer_${k}`] ?? 5}
-                              onChange={e => setProgressTrainerForm(p => ({ ...p, [`trainer_${k}`]: parseInt(e.target.value) }))}
-                              className="flex-1 accent-black" />
-                            <span className="text-xs font-bold text-gray-800 w-4">{progressTrainerForm[`trainer_${k}`] ?? 5}</span>
-                            {progressSurvey?.[`q_${k}`] != null && (
-                              <span className="text-xs text-gray-400 w-8">р:{progressSurvey[`q_${k}`]}</span>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                      <div className="flex gap-2">
-                        <button onClick={saveProgressTrainer} disabled={savingProgressTrainer}
-                          className="flex-1 bg-black text-white py-2 rounded-xl text-xs font-medium disabled:opacity-50">
-                          {savingProgressTrainer ? 'Сохраняю...' : 'Сохранить оценки'}
-                        </button>
-                        <button onClick={() => setEditingProgressTrainer(false)}
-                          className="px-3 border border-gray-200 text-gray-500 py-2 rounded-xl text-xs">
-                          Отмена
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Шаг 2: отправить ссылку */}
-              {progressSurvey?.trainer_filled_at && !progressSurvey?.filled_at && (
-                <div className="space-y-2">
-                  <div className="text-xs text-gray-500 mb-1">
-                    <span className="font-medium text-gray-700">Шаг 2 из 2:</span> Отправьте анкету родителю
-                    {student?.birth_date && (() => {
-                      const age = Math.floor((Date.now() - new Date(student.birth_date).getTime()) / (365.25 * 86400000))
-                      return age >= 11 ? ' и ученику (11+)' : ''
-                    })()}
-                  </div>
-                  <button onClick={() => copyProgressLink('parent')}
-                    className={`w-full text-xs py-2.5 rounded-xl border font-medium
-                      ${progressSurvey.parent_sent_at ? 'border-green-200 bg-green-50 text-green-700' : 'border-blue-200 bg-blue-50 text-blue-700'}`}>
-                    {progressSurvey.parent_sent_at ? '✓ Родителю отправлено — скопировать снова' : '📨 Скопировать текст для родителя'}
-                  </button>
-                  {student?.birth_date && (() => {
-                    const age = Math.floor((Date.now() - new Date(student.birth_date).getTime()) / (365.25 * 86400000))
-                    return age >= 11 ? (
-                      <button onClick={() => copyProgressLink('student')}
-                        className={`w-full text-xs py-2.5 rounded-xl border font-medium
-                          ${progressSurvey.student_sent_at ? 'border-green-200 bg-green-50 text-green-700' : 'border-purple-200 bg-purple-50 text-purple-700'}`}>
-                        {progressSurvey.student_sent_at ? '✓ Ученику отправлено — скопировать снова' : '📨 Скопировать текст для ученика'}
+              {/* Активный срез (последний) */}
+              {activeSurvey && (
+                <div className="border border-gray-100 rounded-xl overflow-hidden">
+                  <div className="flex items-center px-3 py-2 bg-gray-50">
+                    <span className="flex-1 text-xs font-semibold text-gray-700">
+                      {activeSurvey.title || `Срез ${activeSurvey.survey_number || 1}`}
+                    </span>
+                    {activeSurvey.filled_at
+                      ? <span className="text-xs text-green-600 font-medium">✓ Заполнен</span>
+                      : isOverdue
+                        ? <span className="text-xs text-orange-500 font-semibold">⏰ {daysSinceSent}д без ответа</span>
+                        : activeSurvey.parent_sent_at
+                          ? <span className="text-xs text-blue-500">⏳ Ожидаем</span>
+                          : <span className="text-xs text-gray-400">Новый</span>
+                    }
+                    {activeSurvey.filled_at && (
+                      <button onClick={() => setShowProgressTrainer(v => !v)}
+                        className="ml-2 text-xs text-gray-400 border border-gray-200 px-2 py-0.5 rounded-lg">
+                        {showProgressTrainer ? '▲' : '▼'}
                       </button>
-                    ) : null
-                  })()}
-                  {isOverdue && (
-                    <div className="bg-orange-50 border border-orange-200 rounded-xl p-2.5 text-xs text-orange-700">
-                      ⏰ Анкета отправлена {daysSinceSent} дн. назад — нет ответа. Напомните родителю лично.
-                    </div>
-                  )}
+                    )}
+                  </div>
+
+                  <div className="px-3 py-2.5">
+                    {/* Шаг 1: оценки тренера */}
+                    {!activeSurvey.trainer_filled_at && (
+                      <div>
+                        <div className="text-xs text-gray-500 mb-2">
+                          <span className="font-medium text-gray-700">Шаг 1 из 2:</span> Оцените прогресс ученика до отправки анкеты
+                        </div>
+                        {!editingProgressTrainer ? (
+                          <button onClick={() => setEditingProgressTrainer(true)}
+                            className="w-full bg-black text-white text-xs py-2.5 rounded-xl">
+                            🥋 Заполнить оценки тренера
+                          </button>
+                        ) : (
+                          <div className="space-y-3">
+                            <textarea value={progressTrainerForm.trainer_notes || ''}
+                              onChange={e => setProgressTrainerForm(p => ({ ...p, trainer_notes: e.target.value }))}
+                              placeholder="Заметки о прогрессе..." rows={3}
+                              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-xs outline-none resize-none" />
+                            <div className="space-y-2.5">
+                              {PROGRESS_QUALITIES.map(k => (
+                                <div key={k} className="flex items-center gap-2">
+                                  <span className="text-xs text-gray-500 w-28 shrink-0">{PROGRESS_QUALITY_LABELS[k]}</span>
+                                  <input type="range" min={1} max={10}
+                                    value={progressTrainerForm[`trainer_${k}`] ?? 5}
+                                    onChange={e => setProgressTrainerForm(p => ({ ...p, [`trainer_${k}`]: parseInt(e.target.value) }))}
+                                    className="flex-1 accent-black" />
+                                  <span className="text-xs font-bold text-gray-800 w-4">{progressTrainerForm[`trainer_${k}`] ?? 5}</span>
+                                </div>
+                              ))}
+                            </div>
+                            <div className="flex gap-2">
+                              <button onClick={saveProgressTrainer} disabled={savingProgressTrainer}
+                                className="flex-1 bg-black text-white py-2 rounded-xl text-xs font-medium disabled:opacity-50">
+                                {savingProgressTrainer ? 'Сохраняю...' : 'Сохранить оценки'}
+                              </button>
+                              <button onClick={() => setEditingProgressTrainer(false)}
+                                className="px-3 border border-gray-200 text-gray-500 py-2 rounded-xl text-xs">
+                                Отмена
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Шаг 2: отправить ссылку */}
+                    {activeSurvey.trainer_filled_at && !activeSurvey.filled_at && (
+                      <div className="space-y-2">
+                        <div className="text-xs text-gray-500 mb-1">
+                          <span className="font-medium text-gray-700">Шаг 2 из 2:</span> Отправьте анкету родителю
+                          {student?.birth_date && (() => {
+                            const age = Math.floor((Date.now() - new Date(student.birth_date).getTime()) / (365.25 * 86400000))
+                            return age >= 11 ? ' и ученику (11+)' : ''
+                          })()}
+                        </div>
+                        <button onClick={() => copyProgressLink('parent')}
+                          className={`w-full text-xs py-2.5 rounded-xl border font-medium
+                            ${activeSurvey.parent_sent_at ? 'border-green-200 bg-green-50 text-green-700' : 'border-blue-200 bg-blue-50 text-blue-700'}`}>
+                          {activeSurvey.parent_sent_at ? '✓ Родителю отправлено — скопировать снова' : '📨 Скопировать текст для родителя'}
+                        </button>
+                        {student?.birth_date && (() => {
+                          const age = Math.floor((Date.now() - new Date(student.birth_date).getTime()) / (365.25 * 86400000))
+                          return age >= 11 ? (
+                            <button onClick={() => copyProgressLink('student')}
+                              className={`w-full text-xs py-2.5 rounded-xl border font-medium
+                                ${activeSurvey.student_sent_at ? 'border-green-200 bg-green-50 text-green-700' : 'border-purple-200 bg-purple-50 text-purple-700'}`}>
+                              {activeSurvey.student_sent_at ? '✓ Ученику отправлено — скопировать снова' : '📨 Скопировать текст для ученика'}
+                            </button>
+                          ) : null
+                        })()}
+                        {isOverdue && (
+                          <div className="bg-orange-50 border border-orange-200 rounded-xl p-2.5 text-xs text-orange-700">
+                            ⏰ Отправлено {daysSinceSent} дн. назад — нет ответа. Напомните лично.
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Заполнен — показать данные */}
+                    {activeSurvey.filled_at && showProgressTrainer && (
+                      <div className="pt-1 text-xs space-y-3">
+                        <div className="text-gray-500">
+                          Заполнил: <span className="font-medium text-gray-700">{activeSurvey.filled_by === 'parent' ? 'Родитель' : 'Ученик'}</span>
+                        </div>
+                        {activeSurvey.trainer_notes && (
+                          <div className="italic text-gray-600">"{activeSurvey.trainer_notes}"</div>
+                        )}
+                        <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                          {PROGRESS_QUALITIES.map(k => {
+                            const t = activeSurvey[`trainer_${k}`]
+                            const r = activeSurvey[`q_${k}`]
+                            const diff = t != null && r != null ? r - t : null
+                            return t != null || r != null ? (
+                              <div key={k} className="flex justify-between items-center">
+                                <span className="text-gray-500">{PROGRESS_QUALITY_LABELS[k]}</span>
+                                <span className="font-medium text-gray-800">
+                                  {t ?? '—'} / {r ?? '—'}
+                                  {diff != null && diff !== 0 && (
+                                    <span className={`ml-1 ${diff > 0 ? 'text-green-500' : 'text-red-400'}`}>
+                                      {diff > 0 ? `+${diff}` : diff}
+                                    </span>
+                                  )}
+                                </span>
+                              </div>
+                            ) : null
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 
-              {/* Заполнена — показать данные */}
-              {progressSurvey?.filled_at && showProgressTrainer && (
-                <div className="pt-2 text-xs space-y-3">
-                  <div className="text-gray-500">
-                    Заполнил: <span className="font-medium text-gray-700">{progressSurvey.filled_by === 'parent' ? 'Родитель' : 'Ученик'}</span>
-                  </div>
-                  {progressSurvey.trainer_notes && (
-                    <div className="italic text-gray-600">"{progressSurvey.trainer_notes}"</div>
-                  )}
-                  <div>
-                    <div className="text-gray-500 font-medium mb-1.5">16 качеств — тренер / родитель:</div>
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-                      {PROGRESS_QUALITIES.map(k => {
-                        const t = progressSurvey[`trainer_${k}`]
-                        const r = progressSurvey[`q_${k}`]
-                        const diff = t != null && r != null ? r - t : null
-                        return t != null || r != null ? (
-                          <div key={k} className="flex justify-between items-center">
-                            <span className="text-gray-500">{PROGRESS_QUALITY_LABELS[k]}</span>
-                            <span className="font-medium text-gray-800">
-                              {t ?? '—'} / {r ?? '—'}
-                              {diff != null && diff !== 0 && (
-                                <span className={`ml-1 ${diff > 0 ? 'text-green-500' : 'text-red-400'}`}>
-                                  {diff > 0 ? `+${diff}` : diff}
-                                </span>
-                              )}
-                            </span>
-                          </div>
-                        ) : null
-                      })}
-                    </div>
-                  </div>
+              {/* Предыдущие срезы */}
+              {prevSurveys.length > 0 && (
+                <div className="space-y-2">
+                  {groupByYear
+                    ? Object.entries(byYear).sort(([a], [b]) => Number(b) - Number(a)).map(([year, sList]) => (
+                        <div key={year}>
+                          <div className="text-xs text-gray-400 font-medium px-1 mb-1.5">{year}</div>
+                          {sList.map(s => <SurveySummaryRow key={s.id} s={s} qualities={PROGRESS_QUALITIES} labels={PROGRESS_QUALITY_LABELS} />)}
+                        </div>
+                      ))
+                    : prevSurveys.map(s => <SurveySummaryRow key={s.id} s={s} qualities={PROGRESS_QUALITIES} labels={PROGRESS_QUALITY_LABELS} />)
+                  }
                 </div>
               )}
             </div>
@@ -1391,8 +1481,8 @@ export default function StudentPage() {
         )
       })()}
 
-      {/* AI: Сравнение Анкеты 1 и Анкеты 2 */}
-      {survey?.filled_at && progressSurvey?.filled_at && (
+      {/* AI: Анализ прогресса */}
+      {survey?.filled_at && progressSurveys.some(s => s.filled_at) && (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm mb-2 overflow-hidden">
           <div className="flex items-center px-4 py-3 bg-gray-50 border-b border-gray-100">
             <span className="flex-1 text-sm font-medium text-gray-800">✨ Анализ прогресса (ИИ)</span>
@@ -1401,10 +1491,11 @@ export default function StudentPage() {
             <button
               onClick={async () => {
                 setGeneratingCompare(true)
+                const latestFilled = progressSurveys.find(s => s.filled_at)
                 const res = await fetch('/api/compare-surveys', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ survey1: survey, survey2: progressSurvey, studentName: student?.name }),
+                  body: JSON.stringify({ survey1: survey, survey2: latestFilled, studentName: student?.name }),
                 })
                 const data = await res.json()
                 if (data.program) setCompareProgram(data.program)
@@ -1412,7 +1503,7 @@ export default function StudentPage() {
               }}
               disabled={generatingCompare}
               className="w-full bg-black text-white py-2.5 rounded-xl text-sm font-medium disabled:opacity-50">
-              {generatingCompare ? '⏳ Генерация...' : compareProgram ? '🔄 Обновить анализ' : '✨ Сравнить анкеты и сгенерировать программу'}
+              {generatingCompare ? '⏳ Генерация...' : compareProgram ? '🔄 Обновить анализ' : '✨ Сравнить с начальной анкетой'}
             </button>
             {compareProgram && (
               <textarea
