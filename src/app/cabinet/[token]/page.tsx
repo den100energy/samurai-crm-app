@@ -21,7 +21,7 @@ const QUALITY_LABELS: Record<string,string> = {
 }
 
 type Student = { id: string; name: string; group_name: string | null; birth_date: string | null; photo_url: string | null }
-type TrainerInfo = { name: string; phone: string | null; telegram_username: string | null; vk_url: string | null }
+type TrainerInfo = { name: string; phone: string | null; telegram_username: string | null; vk_url: string | null; days: string[] }
 type Subscription = { sessions_left: number | null; sessions_total: number | null; end_date: string | null; type: string }
 type Survey = { id: string; filled_at: string | null; created_at: string } & Record<string, number | null | string>
 type Task = { id: string; title: string; description: string | null; due_date: string | null; completed: boolean }
@@ -302,7 +302,7 @@ export default function CabinetPage() {
   const [aiProgram, setAiProgram] = useState<string | null>(null)
   const [scheduleSlots, setScheduleSlots] = useState<ScheduleSlot[]>([])
   const [scheduleOverrides, setScheduleOverrides] = useState<ScheduleOverride[]>([])
-  const [trainerInfo, setTrainerInfo] = useState<TrainerInfo | null>(null)
+  const [trainersInfo, setTrainersInfo] = useState<TrainerInfo[]>([])
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<'home' | 'progress' | 'tasks' | 'achievements'>('home')
   const [togglingTask, setTogglingTask] = useState<string | null>(null)
@@ -361,12 +361,26 @@ export default function CabinetPage() {
     setScheduleSlots(slots)
     setScheduleOverrides((ovRes.data as ScheduleOverride[]) || [])
 
-    // Загрузить контакт тренера
-    const trainerName = slots[0]?.trainer_name
-    if (trainerName) {
-      const { data: tr } = await supabase
-        .from('trainers').select('name, phone, telegram_username, vk_url').eq('name', trainerName).maybeSingle()
-      if (tr) setTrainerInfo(tr)
+    // Загрузить все контакты тренеров группы
+    const trainerDaysMap = new Map<string, string[]>()
+    for (const slot of slots) {
+      if (!slot.trainer_name) continue
+      const dayLabel = WEEK_DAYS_SHORT[slot.day_of_week] ?? ''
+      const existing = trainerDaysMap.get(slot.trainer_name) ?? []
+      if (!existing.includes(dayLabel)) existing.push(dayLabel)
+      trainerDaysMap.set(slot.trainer_name, existing)
+    }
+    const uniqueTrainerNames = Array.from(trainerDaysMap.keys())
+    if (uniqueTrainerNames.length > 0) {
+      const { data: trRows } = await supabase
+        .from('trainers').select('name, phone, telegram_username, vk_url')
+        .in('name', uniqueTrainerNames)
+      if (trRows) {
+        setTrainersInfo(trRows.map(tr => ({
+          ...tr,
+          days: trainerDaysMap.get(tr.name) ?? [],
+        })))
+      }
     }
 
     setLoading(false)
@@ -591,20 +605,20 @@ export default function CabinetPage() {
                   {(subscription.sessions_left ?? 0) <= 2 && (
                     <div className="mt-3 bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-600">
                       ⚠️ Заканчиваются занятия — пора продлить абонемент
-                      {trainerInfo?.phone && (
-                        <a href={`tel:${trainerInfo.phone}`}
+                      {trainersInfo[0]?.phone && (
+                        <a href={`tel:${trainersInfo[0].phone}`}
                           className="block mt-2 text-center bg-red-600 text-white rounded-lg py-1.5 font-medium text-sm">
                           📞 Позвонить тренеру
                         </a>
                       )}
-                      {trainerInfo?.telegram_username && (
-                        <a href={`https://t.me/${trainerInfo.telegram_username}`} target="_blank"
+                      {trainersInfo[0]?.telegram_username && (
+                        <a href={`https://t.me/${trainersInfo[0].telegram_username}`} target="_blank"
                           className="block mt-1.5 text-center bg-white border border-red-200 text-red-600 rounded-lg py-1.5 font-medium text-sm">
                           ✈️ Написать в Telegram
                         </a>
                       )}
-                      {trainerInfo?.vk_url && (
-                        <a href={trainerInfo.vk_url} target="_blank"
+                      {trainersInfo[0]?.vk_url && (
+                        <a href={trainersInfo[0].vk_url} target="_blank"
                           className="block mt-1.5 text-center bg-white border border-red-200 text-red-600 rounded-lg py-1.5 font-medium text-sm">
                           ВК Написать ВКонтакте
                         </a>
@@ -673,35 +687,50 @@ export default function CabinetPage() {
               )
             })()}
 
-            {/* Кнопка связи с тренером */}
-            {trainerInfo && (trainerInfo.phone || trainerInfo.telegram_username) && (
+            {/* Контакты тренеров */}
+            {trainersInfo.length > 0 && (
               <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-                <div className="text-xs text-gray-400 mb-3 uppercase tracking-wide">Тренер</div>
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-lg font-bold text-gray-500">
-                    {trainerInfo.name[0]}
-                  </div>
-                  <div className="font-medium text-gray-800">{trainerInfo.name}</div>
+                <div className="text-xs text-gray-400 mb-3 uppercase tracking-wide">
+                  {trainersInfo.length === 1 ? 'Тренер' : 'Тренеры'}
                 </div>
-                <div className="flex gap-2">
-                  {trainerInfo.phone && (
-                    <a href={`tel:${trainerInfo.phone}`}
-                      className="flex-1 text-center border border-gray-200 text-gray-700 text-sm py-2 rounded-xl">
-                      📞 Позвонить
-                    </a>
-                  )}
-                  {trainerInfo.telegram_username && (
-                    <a href={`https://t.me/${trainerInfo.telegram_username}`} target="_blank"
-                      className="flex-1 text-center border border-blue-200 bg-blue-50 text-blue-700 text-sm py-2 rounded-xl">
-                      ✈️ Telegram
-                    </a>
-                  )}
-                  {trainerInfo.vk_url && (
-                    <a href={trainerInfo.vk_url} target="_blank"
-                      className="flex-1 text-center border border-blue-200 bg-blue-50 text-blue-700 text-sm py-2 rounded-xl">
-                      ВК ВКонтакте
-                    </a>
-                  )}
+                <div className="space-y-4">
+                  {trainersInfo.map(tr => (
+                    <div key={tr.name}>
+                      <div className="flex items-center gap-3 mb-2">
+                        <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-lg font-bold text-gray-500 shrink-0">
+                          {tr.name[0]}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-gray-800 text-sm">{tr.name}</div>
+                          {tr.days.length > 0 && (
+                            <div className="text-xs text-gray-400 mt-0.5">{tr.days.join(', ')}</div>
+                          )}
+                        </div>
+                      </div>
+                      {(tr.phone || tr.telegram_username || tr.vk_url) && (
+                        <div className="flex gap-2 ml-13">
+                          {tr.phone && (
+                            <a href={`tel:${tr.phone}`}
+                              className="flex-1 text-center border border-gray-200 text-gray-700 text-sm py-2 rounded-xl">
+                              📞 Позвонить
+                            </a>
+                          )}
+                          {tr.telegram_username && (
+                            <a href={`https://t.me/${tr.telegram_username}`} target="_blank"
+                              className="flex-1 text-center border border-blue-200 bg-blue-50 text-blue-700 text-sm py-2 rounded-xl">
+                              ✈️ Telegram
+                            </a>
+                          )}
+                          {tr.vk_url && (
+                            <a href={tr.vk_url} target="_blank"
+                              className="flex-1 text-center border border-indigo-200 bg-indigo-50 text-indigo-700 text-sm py-2 rounded-xl">
+                              ВК
+                            </a>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
