@@ -66,6 +66,39 @@ type Belt = {
   notes: string | null
 }
 
+type StudentTicket = {
+  id: string
+  student_id: string
+  type: string
+  description: string | null
+  status: 'pending' | 'in_review' | 'resolved'
+  created_at: string
+}
+
+const TICKET_TYPE_LABELS: Record<string, { label: string; color: string }> = {
+  'болезнь': { label: 'Болезнь',  color: 'bg-red-100 text-red-700' },
+  'перенос': { label: 'Перенос',  color: 'bg-yellow-100 text-yellow-700' },
+  'жалоба':  { label: 'Жалоба',   color: 'bg-orange-100 text-orange-700' },
+  'вопрос':  { label: 'Вопрос',   color: 'bg-blue-100 text-blue-700' },
+}
+
+const TICKET_STATUS_LABELS: Record<string, string> = {
+  pending:   'Новое',
+  in_review: 'В работе',
+  resolved:  'Решено',
+}
+
+const TICKET_STATUS_COLORS: Record<string, string> = {
+  pending:   'bg-yellow-100 text-yellow-700',
+  in_review: 'bg-blue-100 text-blue-700',
+  resolved:  'bg-green-100 text-green-700',
+}
+
+const TICKET_STATUS_NEXT: Record<string, 'in_review' | 'resolved'> = {
+  pending:   'in_review',
+  in_review: 'resolved',
+}
+
 const GROUPS = ['Дети 4-9', 'Подростки (нач)', 'Подростки (оп)', 'Цигун', 'Индивидуальные']
 const BELTS = ['Белый', 'Жёлтый', 'Оранжевый', 'Зелёный', 'Синий', 'Фиолетовый', 'Коричневый', 'Чёрный']
 
@@ -135,6 +168,7 @@ export default function StudentPage() {
   const [freezeForm, setFreezeForm] = useState({ freeze_start: '', freeze_end: '' })
   const [showTicketForm, setShowTicketForm] = useState(false)
   const [ticketForm, setTicketForm] = useState({ type: '', description: '' })
+  const [studentTickets, setStudentTickets] = useState<StudentTicket[]>([])
   const [showAddAttendance, setShowAddAttendance] = useState(false)
   const [addAttDate, setAddAttDate] = useState(new Date().toISOString().split('T')[0])
   const [contacts, setContacts] = useState<Contact[]>([])
@@ -157,7 +191,7 @@ export default function StudentPage() {
 
   useEffect(() => {
     async function load() {
-      const [{ data: s }, { data: sb }, { data: at }, { data: bl }, { data: st }, { data: ct }, { data: sv }, { data: ps }, { data: sp }, { data: py }] = await Promise.all([
+      const [{ data: s }, { data: sb }, { data: at }, { data: bl }, { data: st }, { data: ct }, { data: sv }, { data: ps }, { data: sp }, { data: py }, { data: tk }] = await Promise.all([
         supabase.from('students').select('*').eq('id', id).single(),
         supabase.from('subscriptions').select('*').eq('student_id', id).order('created_at', { ascending: false }),
         supabase.from('attendance').select('*').eq('student_id', id).order('date', { ascending: false }).limit(20),
@@ -168,6 +202,7 @@ export default function StudentPage() {
         supabase.from('progress_surveys').select('*').eq('student_id', id).order('created_at', { ascending: false }),
         supabase.from('student_profiles').select('*').eq('student_id', id).maybeSingle(),
         supabase.from('payments').select('id, amount, category, paid_at, payment_type, description').eq('student_id', id).order('paid_at', { ascending: false }).limit(20),
+        supabase.from('tickets').select('*').eq('student_id', id).order('created_at', { ascending: false }),
       ])
       if (s) { setStudent(s); setForm(s) }
       setSubs(sb || [])
@@ -187,6 +222,7 @@ export default function StudentPage() {
       }
       if (sp) setStudentProfile(sp)
       setPayments(py || [])
+      setStudentTickets(tk || [])
     }
     load()
   }, [id])
@@ -277,15 +313,22 @@ export default function StudentPage() {
 
   async function createTicket(e: React.FormEvent) {
     e.preventDefault()
-    await supabase.from('tickets').insert({
+    const { data } = await supabase.from('tickets').insert({
       student_id: id,
       type: ticketForm.type,
       description: ticketForm.description || null,
       status: 'pending',
-    })
+    }).select().single()
+    if (data) setStudentTickets(prev => [data, ...prev])
     setShowTicketForm(false)
     setTicketForm({ type: '', description: '' })
-    alert('Обращение создано!')
+  }
+
+  async function advanceTicket(ticket: StudentTicket) {
+    if (ticket.status === 'resolved') return
+    const next = TICKET_STATUS_NEXT[ticket.status]
+    await supabase.from('tickets').update({ status: next }).eq('id', ticket.id)
+    setStudentTickets(prev => prev.map(t => t.id === ticket.id ? { ...t, status: next } : t))
   }
 
   async function addAttendance(present: boolean) {
@@ -1245,37 +1288,87 @@ export default function StudentPage() {
         </div>
       )}
 
-      {/* Ticket form */}
-      {showTicketForm ? (
-        <form onSubmit={createTicket} className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm mb-2 space-y-2">
-          <div className="font-semibold text-gray-800 text-sm mb-1">Новое обращение</div>
-          <select required value={ticketForm.type} onChange={e => setTicketForm({...ticketForm, type: e.target.value})}
-            className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none bg-white">
-            <option value="">Тип обращения *</option>
-            <option value="болезнь">🤒 Болезнь</option>
-            <option value="перенос">🔄 Перенос занятия</option>
-            <option value="жалоба">⚠️ Жалоба</option>
-            <option value="вопрос">❓ Вопрос</option>
-          </select>
-          <textarea value={ticketForm.description} onChange={e => setTicketForm({...ticketForm, description: e.target.value})}
-            placeholder="Описание (необязательно)" rows={3}
-            className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none resize-none" />
-          <div className="flex gap-2">
-            <button type="submit" className="flex-1 bg-black text-white py-2 rounded-xl text-sm font-medium">
-              Отправить
-            </button>
-            <button type="button" onClick={() => setShowTicketForm(false)}
-              className="px-4 border border-gray-200 text-gray-500 py-2 rounded-xl text-sm">
-              Отмена
-            </button>
+      {/* История обращений */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm mb-2 overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-gray-800 text-sm">📝 История обращений</span>
+            {studentTickets.filter(t => t.status === 'pending').length > 0 && (
+              <span className="inline-flex items-center justify-center w-5 h-5 bg-red-500 text-white text-xs font-bold rounded-full animate-pulse">
+                !
+              </span>
+            )}
+            {studentTickets.length > 0 && (
+              <span className="text-xs text-gray-400">{studentTickets.length} шт.</span>
+            )}
           </div>
-        </form>
-      ) : (
-        <button onClick={() => setShowTicketForm(true)}
-          className="w-full border border-gray-200 text-gray-600 text-sm py-2.5 rounded-xl mb-2">
-          📝 Создать обращение
-        </button>
-      )}
+          <button onClick={() => setShowTicketForm(v => !v)}
+            className="text-sm text-gray-500 border border-gray-200 px-2.5 py-1 rounded-xl hover:bg-gray-50 transition-colors">
+            {showTicketForm ? 'Отмена' : '+ Создать'}
+          </button>
+        </div>
+
+        {showTicketForm && (
+          <form onSubmit={createTicket} className="p-4 border-b border-gray-100 space-y-2 bg-gray-50">
+            <select required value={ticketForm.type} onChange={e => setTicketForm({...ticketForm, type: e.target.value})}
+              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none bg-white">
+              <option value="">Тип обращения *</option>
+              <option value="болезнь">🤒 Болезнь</option>
+              <option value="перенос">🔄 Перенос занятия</option>
+              <option value="жалоба">⚠️ Жалоба</option>
+              <option value="вопрос">❓ Вопрос</option>
+            </select>
+            <textarea value={ticketForm.description} onChange={e => setTicketForm({...ticketForm, description: e.target.value})}
+              placeholder="Описание (необязательно)" rows={3}
+              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none resize-none bg-white" />
+            <button type="submit" className="w-full bg-black text-white py-2 rounded-xl text-sm font-medium">
+              Отправить обращение
+            </button>
+          </form>
+        )}
+
+        {studentTickets.length === 0 && !showTicketForm ? (
+          <div className="text-center text-gray-400 text-sm py-5">Обращений нет</div>
+        ) : (
+          <div className="divide-y divide-gray-100">
+            {studentTickets.map(t => {
+              const typeInfo = TICKET_TYPE_LABELS[t.type] || { label: t.type, color: 'bg-gray-100 text-gray-600' }
+              return (
+                <div key={t.id} className="px-4 py-3">
+                  <div className="flex items-start justify-between gap-2 mb-1">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {t.status === 'pending' && (
+                        <span className="text-red-500 font-bold text-sm leading-none">!</span>
+                      )}
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${typeInfo.color}`}>
+                        {typeInfo.label}
+                      </span>
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${TICKET_STATUS_COLORS[t.status]}`}>
+                        {TICKET_STATUS_LABELS[t.status]}
+                      </span>
+                    </div>
+                    <span className="text-xs text-gray-400 shrink-0">
+                      {new Date(t.created_at).toLocaleDateString('ru-RU')}
+                    </span>
+                  </div>
+                  {t.description && (
+                    <p className="text-sm text-gray-600 mt-1 mb-2">{t.description}</p>
+                  )}
+                  {t.status !== 'resolved' && (
+                    <button onClick={() => advanceTicket(t)}
+                      className="text-xs border border-gray-200 text-gray-600 px-3 py-1 rounded-xl hover:bg-gray-50 transition-colors">
+                      {t.status === 'pending' ? 'Взять в работу' : 'Отметить решённым'}
+                    </button>
+                  )}
+                  {t.status === 'resolved' && (
+                    <span className="text-xs text-green-600 font-medium">✓ Решено</span>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
 
       {/* Анкета прогресса (Анкета 2) */}
       {(() => {
@@ -1491,11 +1584,14 @@ export default function StudentPage() {
             <button
               onClick={async () => {
                 setGeneratingCompare(true)
-                const latestFilled = progressSurveys.find(s => s.filled_at)
+                // All filled progress surveys sorted oldest → newest
+                const filledSurveys = [...progressSurveys]
+                  .filter(s => s.filled_at)
+                  .sort((a, b) => new Date(a.filled_at).getTime() - new Date(b.filled_at).getTime())
                 const res = await fetch('/api/compare-surveys', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ survey1: survey, survey2: latestFilled, studentName: student?.name }),
+                  body: JSON.stringify({ survey1: survey, surveys: filledSurveys, studentName: student?.name }),
                 })
                 const data = await res.json()
                 if (data.program) setCompareProgram(data.program)
