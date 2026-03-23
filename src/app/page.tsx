@@ -20,6 +20,9 @@ export default function Home() {
   const [notifying, setNotifying] = useState(false)
   const [modal, setModal] = useState<'noSessions' | 'expiring' | 'churn' | null>(null)
   const [loaded, setLoaded] = useState(false)
+  type SurveyStage = 'needSurvey' | 'notified' | 'trainerDone' | 'filled'
+  const [surveyFunnel, setSurveyFunnel] = useState<Record<SurveyStage, { id: string; name: string }[]> | null>(null)
+  const [surveyFunnelModal, setSurveyFunnelModal] = useState<SurveyStage | null>(null)
 
   useEffect(() => {
     async function load() {
@@ -27,10 +30,11 @@ export default function Home() {
       const in7days = new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0]
       const ago30days = new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0]
 
-      const [{ data: students }, { data: allSubs }, { data: recentAtt }] = await Promise.all([
+      const [{ data: students }, { data: allSubs }, { data: recentAtt }, { data: allSurveys }] = await Promise.all([
         supabase.from('students').select('id, name').eq('status', 'active'),
         supabase.from('subscriptions').select('student_id, sessions_left, end_date').order('created_at', { ascending: false }),
         supabase.from('attendance').select('student_id, date').eq('present', true).gte('date', ago30days).order('date', { ascending: false }),
+        supabase.from('progress_surveys').select('student_id, filled_at, parent_sent_at, trainer_filled_at, created_at').order('created_at', { ascending: false }),
       ])
 
       if (!students) return
@@ -66,6 +70,34 @@ export default function Home() {
       setNoSessions(noSessArr)
       setExpiring(expiringArr)
       setChurn(churnArr)
+
+      // Воронка срезов
+      const threeMonthsAgo = new Date()
+      threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3)
+      // Последний срез на каждого студента
+      const latestSurveyMap = new Map<string, { filled_at: string | null; parent_sent_at: string | null; trainer_filled_at: string | null; created_at: string }>()
+      for (const s of (allSurveys || [])) {
+        if (!latestSurveyMap.has(s.student_id)) latestSurveyMap.set(s.student_id, s)
+      }
+      const needSurveyArr: { id: string; name: string }[] = []
+      const notifiedArr: { id: string; name: string }[] = []
+      const trainerDoneArr: { id: string; name: string }[] = []
+      const filledArr: { id: string; name: string }[] = []
+      for (const student of students) {
+        const latest = latestSurveyMap.get(student.id)
+        if (!latest || (latest.filled_at && new Date(latest.filled_at) < threeMonthsAgo)) {
+          needSurveyArr.push(student)
+        } else if (latest && !latest.filled_at && latest.parent_sent_at) {
+          notifiedArr.push(student)
+        } else if (latest && latest.trainer_filled_at && !latest.filled_at && !latest.parent_sent_at) {
+          trainerDoneArr.push(student)
+        }
+        if (latest?.filled_at && new Date(latest.filled_at) >= threeMonthsAgo) {
+          filledArr.push(student)
+        }
+      }
+      setSurveyFunnel({ needSurvey: needSurveyArr, notified: notifiedArr, trainerDone: trainerDoneArr, filled: filledArr })
+
       setLoaded(true)
     }
     load()
@@ -227,6 +259,36 @@ export default function Home() {
         ))}
       </div>
 
+      {/* Воронка срезов прогресса */}
+      {surveyFunnel && (
+        <div className="mx-4 mb-5 rounded-2xl overflow-hidden border"
+          style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border)' }}>
+          <div className="px-4 py-2.5 border-b flex items-center gap-2" style={{ borderColor: 'var(--border)' }}>
+            <span className="text-sm font-medium" style={{ color: 'var(--text-1)' }}>📊 Срезы прогресса</span>
+            <span className="text-xs" style={{ color: 'var(--text-2)' }}>за 3 мес.</span>
+          </div>
+          <div className="grid grid-cols-4 divide-x" style={{ borderColor: 'var(--border)' }}>
+            {([
+              { label: 'Пора', count: surveyFunnel.needSurvey.length, stage: 'needSurvey' as const, color: 'text-amber-500' },
+              { label: 'Отправлено', count: surveyFunnel.notified.length, stage: 'notified' as const, color: 'text-blue-400' },
+              { label: 'Тренер ✓', count: surveyFunnel.trainerDone.length, stage: 'trainerDone' as const, color: 'text-purple-400' },
+              { label: 'Заполнили', count: surveyFunnel.filled.length, stage: 'filled' as const, color: 'text-green-500' },
+            ]).map(item => (
+              <button key={item.stage}
+                onClick={() => item.count > 0 ? setSurveyFunnelModal(item.stage) : undefined}
+                disabled={item.count === 0}
+                className="py-3 px-1 text-center transition-opacity disabled:opacity-40">
+                <div className={`text-2xl font-bold leading-none ${item.count > 0 ? item.color : ''}`}
+                  style={{ color: item.count === 0 ? 'var(--text-2)' : undefined }}>
+                  {item.count}
+                </div>
+                <div className="text-[10px] mt-1 leading-tight" style={{ color: 'var(--text-2)' }}>{item.label}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Разделитель */}
       <div className="mx-4 mb-5">
         <div className="flex items-center gap-3">
@@ -307,6 +369,41 @@ export default function Home() {
                   className="flex items-center justify-between py-3 border-b border-[#2C2C2E] hover:text-[#E8121E] transition-colors">
                   <span className="text-sm text-[#E5E5E7]">{s.name}</span>
                   <span className="text-orange-500 text-xs font-medium">{s.daysSince !== null ? `${s.daysSince} дн.` : '—'}</span>
+                </Link>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Модал воронки срезов */}
+      {surveyFunnelModal && surveyFunnel && (
+        <div className="fixed inset-0 z-50 flex items-end" style={{ backgroundColor: 'rgba(0,0,0,0.7)' }}
+          onClick={() => setSurveyFunnelModal(null)}>
+          <div className="w-full rounded-t-3xl flex flex-col max-h-[70vh]"
+            style={{ backgroundColor: 'var(--bg-card)' }}
+            onClick={e => e.stopPropagation()}>
+            <div className="flex justify-center pt-3 pb-1">
+              <div className="w-10 h-1 bg-[#48484A] rounded-full" />
+            </div>
+            <div className="flex items-center justify-between px-5 pt-2 pb-3 border-b" style={{ borderColor: 'var(--border)' }}>
+              <div className="font-semibold text-sm" style={{ color: 'var(--text-1)' }}>
+                {surveyFunnelModal === 'needSurvey'   && `Пора пройти срез · ${surveyFunnel.needSurvey.length} чел.`}
+                {surveyFunnelModal === 'notified'     && `Анкета отправлена · ${surveyFunnel.notified.length} чел.`}
+                {surveyFunnelModal === 'trainerDone'  && `Тренер оценил · ${surveyFunnel.trainerDone.length} чел.`}
+                {surveyFunnelModal === 'filled'       && `Заполнили анкету · ${surveyFunnel.filled.length} чел.`}
+              </div>
+              <button onClick={() => setSurveyFunnelModal(null)}
+                className="w-8 h-8 rounded-full bg-[#2C2C2E] flex items-center justify-center text-[#8E8E93] text-lg border border-[#3A3A3C]">
+                ×
+              </button>
+            </div>
+            <div className="overflow-y-auto flex-1 px-5 py-3">
+              {surveyFunnel[surveyFunnelModal].map(s => (
+                <Link key={s.id} href={`/students/${s.id}`} onClick={() => setSurveyFunnelModal(null)}
+                  className="flex items-center justify-between py-3 border-b border-[#2C2C2E] hover:text-[#E8121E] transition-colors">
+                  <span className="text-sm" style={{ color: 'var(--text-1)' }}>{s.name}</span>
+                  <span className="text-[#48484A] text-sm">›</span>
                 </Link>
               ))}
             </div>
