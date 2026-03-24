@@ -64,6 +64,7 @@ type Belt = {
   belt_name: string
   date: string
   notes: string | null
+  discipline: string | null
 }
 
 type StudentTicket = {
@@ -100,6 +101,33 @@ const TICKET_STATUS_NEXT: Record<string, 'in_review' | 'resolved'> = {
 }
 
 const GROUPS = ['Дети 4-9', 'Подростки (нач)', 'Подростки (оп)', 'Цигун', 'Индивидуальные']
+// Ушу
+const WUSHU_BELTS = [
+  'Белый — 10 туди',
+  'Жёлтый — 9 туди',
+  'Розовый — 8 туди',
+  'Зелёный — 7 туди',
+  'Оранжевый — 6 туди',
+  'Фиолетовый — 5 туди',
+  'Голубой — 4 туди',
+  'Синий — 3 туди',
+  'Коричневый — 2 туди',
+  'Красный — 1 степень',
+]
+
+const WUSHU_BELT_COLORS: Record<string, string> = {
+  'Белый — 10 туди':      'bg-gray-100 text-gray-700',
+  'Жёлтый — 9 туди':     'bg-yellow-100 text-yellow-700',
+  'Розовый — 8 туди':    'bg-pink-100 text-pink-700',
+  'Зелёный — 7 туди':    'bg-green-100 text-green-700',
+  'Оранжевый — 6 туди':  'bg-orange-100 text-orange-700',
+  'Фиолетовый — 5 туди': 'bg-purple-100 text-purple-700',
+  'Голубой — 4 туди':    'bg-sky-100 text-sky-700',
+  'Синий — 3 туди':      'bg-blue-100 text-blue-700',
+  'Коричневый — 2 туди': 'bg-amber-100 text-amber-800',
+  'Красный — 1 степень': 'bg-red-100 text-red-700',
+}
+
 // Айкидо: детские кю (11–7) → взрослые кю (6–1) → даны
 const BELTS = [
   // Детские
@@ -186,7 +214,7 @@ export default function StudentPage() {
   const [form, setForm] = useState<Partial<Student>>({})
   const [showSubForm, setShowSubForm] = useState(false)
   const [subForm, setSubForm] = useState({ type: '', sessions_total: '', start_date: '', end_date: '', amount: '', paid: false, bonuses: {} as Record<string, number> })
-  const [showBeltForm, setShowBeltForm] = useState(false)
+  const [showBeltForm, setShowBeltForm] = useState<'aikido' | 'wushu' | null>(null)
   const [beltForm, setBeltForm] = useState({ belt_name: '', date: new Date().toISOString().split('T')[0], notes: '' })
   const [subTypes, setSubTypes] = useState<{ id: string; name: string; group_type: string | null; sessions_count: number | null; price: number | null; bonuses: Record<string, number> | null; duration_months: number | null }[]>([])
   const [showQR, setShowQR] = useState(false)
@@ -447,16 +475,17 @@ export default function StudentPage() {
     setSubs(prev => prev.map(s => s.id === subId ? { ...s, paid: !paid } : s))
   }
 
-  async function addBelt(e: React.FormEvent) {
+  async function addBelt(e: React.FormEvent, discipline: 'aikido' | 'wushu') {
     e.preventDefault()
     const { data } = await supabase.from('belts').insert({
       student_id: id,
       belt_name: beltForm.belt_name,
       date: beltForm.date,
       notes: beltForm.notes || null,
+      discipline,
     }).select().single()
     if (data) setBelts(prev => [data, ...prev])
-    setShowBeltForm(false)
+    setShowBeltForm(null)
     setBeltForm({ belt_name: '', date: new Date().toISOString().split('T')[0], notes: '' })
   }
 
@@ -1045,53 +1074,113 @@ export default function StudentPage() {
 
       {/* Belts */}
       <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm mb-4">
-        <div className="flex items-center justify-between mb-3">
-          <div className="font-semibold text-gray-800">Пояса и аттестации</div>
-          <button onClick={() => setShowBeltForm(!showBeltForm)}
-            className="text-sm text-gray-500 border border-gray-200 px-3 py-1 rounded-xl">
-            + Добавить
-          </button>
-        </div>
+        <div className="font-semibold text-gray-800 mb-3">Пояса и аттестации</div>
 
-        {showBeltForm && (
-          <form onSubmit={addBelt} className="space-y-2 mb-4 p-3 bg-gray-50 rounded-xl">
-            <select required value={beltForm.belt_name} onChange={e => setBeltForm({...beltForm, belt_name: e.target.value})}
-              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none bg-white">
-              <option value="">Выберите пояс *</option>
-              {BELTS.map(b => <option key={b} value={b}>{b}</option>)}
-            </select>
-            <input value={beltForm.date} onChange={e => setBeltForm({...beltForm, date: e.target.value})}
-              type="date" className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none" />
-            <input value={beltForm.notes} onChange={e => setBeltForm({...beltForm, notes: e.target.value})}
-              placeholder="Заметка (необязательно)"
-              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none" />
-            <button type="submit" className="w-full bg-black text-white py-2 rounded-xl text-sm font-medium">
-              Сохранить
-            </button>
-          </form>
-        )}
-
-        {belts.length === 0 ? (
-          <div className="text-sm text-gray-400 text-center py-2">Аттестаций нет</div>
-        ) : (
-          <div className="space-y-2">
-            {belts.map((b, i) => (
-              <div key={b.id} className="flex items-center justify-between p-2 bg-gray-50 rounded-xl">
-                <div className="flex items-center gap-2">
-                  <span className={`text-xs px-2 py-1 rounded-full font-medium ${BELT_COLORS[b.belt_name] || 'bg-gray-100 text-gray-600'}`}>
-                    {b.belt_name}
-                  </span>
-                  <div>
-                    <div className="text-xs text-gray-500">{b.date}</div>
-                    {b.notes && <div className="text-xs text-gray-400">{b.notes}</div>}
-                  </div>
-                  {i === 0 && <span className="text-xs text-gray-400">(текущий)</span>}
-                </div>
-                <button onClick={() => deleteBelt(b.id)} className="text-xs text-red-400">✕</button>
+        {/* Подраздел: Айкидо */}
+        {(() => {
+          const aikidoBelts = belts.filter(b => !b.discipline || b.discipline === 'aikido')
+          return (
+            <div className="mb-4">
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-sm font-medium text-gray-600">🥋 Айкидо</div>
+                <button onClick={() => { setShowBeltForm(showBeltForm === 'aikido' ? null : 'aikido'); setBeltForm({ belt_name: '', date: new Date().toISOString().split('T')[0], notes: '' }) }}
+                  className="text-xs text-gray-500 border border-gray-200 px-2.5 py-1 rounded-xl">
+                  + Добавить
+                </button>
               </div>
-            ))}
-          </div>
-        )}
+
+              {showBeltForm === 'aikido' && (
+                <form onSubmit={e => addBelt(e, 'aikido')} className="space-y-2 mb-3 p-3 bg-gray-50 rounded-xl">
+                  <select required value={beltForm.belt_name} onChange={e => setBeltForm({...beltForm, belt_name: e.target.value})}
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none bg-white">
+                    <option value="">Выберите пояс *</option>
+                    {BELTS.map(b => <option key={b} value={b}>{b}</option>)}
+                  </select>
+                  <input value={beltForm.date} onChange={e => setBeltForm({...beltForm, date: e.target.value})}
+                    type="date" className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none" />
+                  <input value={beltForm.notes} onChange={e => setBeltForm({...beltForm, notes: e.target.value})}
+                    placeholder="Заметка (необязательно)"
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none" />
+                  <button type="submit" className="w-full bg-black text-white py-2 rounded-xl text-sm font-medium">Сохранить</button>
+                </form>
+              )}
+
+              {aikidoBelts.length === 0 ? (
+                <div className="text-xs text-gray-400 text-center py-2">Аттестаций нет</div>
+              ) : (
+                <div className="space-y-1.5">
+                  {aikidoBelts.map((b, i) => (
+                    <div key={b.id} className="flex items-center justify-between p-2 bg-gray-50 rounded-xl">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${BELT_COLORS[b.belt_name] || 'bg-gray-100 text-gray-600'}`}>
+                          {b.belt_name}
+                        </span>
+                        <span className="text-xs text-gray-400">{b.date}</span>
+                        {b.notes && <span className="text-xs text-gray-400">{b.notes}</span>}
+                        {i === 0 && <span className="text-xs text-blue-400">текущий</span>}
+                      </div>
+                      <button onClick={() => deleteBelt(b.id)} className="text-xs text-red-400 shrink-0">✕</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )
+        })()}
+
+        <div className="border-t border-gray-100 my-3" />
+
+        {/* Подраздел: Ушу */}
+        {(() => {
+          const wushuBelts = belts.filter(b => b.discipline === 'wushu')
+          return (
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-sm font-medium text-gray-600">🐉 Ушу</div>
+                <button onClick={() => { setShowBeltForm(showBeltForm === 'wushu' ? null : 'wushu'); setBeltForm({ belt_name: '', date: new Date().toISOString().split('T')[0], notes: '' }) }}
+                  className="text-xs text-gray-500 border border-gray-200 px-2.5 py-1 rounded-xl">
+                  + Добавить
+                </button>
+              </div>
+
+              {showBeltForm === 'wushu' && (
+                <form onSubmit={e => addBelt(e, 'wushu')} className="space-y-2 mb-3 p-3 bg-gray-50 rounded-xl">
+                  <select required value={beltForm.belt_name} onChange={e => setBeltForm({...beltForm, belt_name: e.target.value})}
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none bg-white">
+                    <option value="">Выберите степень *</option>
+                    {WUSHU_BELTS.map(b => <option key={b} value={b}>{b}</option>)}
+                  </select>
+                  <input value={beltForm.date} onChange={e => setBeltForm({...beltForm, date: e.target.value})}
+                    type="date" className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none" />
+                  <input value={beltForm.notes} onChange={e => setBeltForm({...beltForm, notes: e.target.value})}
+                    placeholder="Заметка (необязательно)"
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none" />
+                  <button type="submit" className="w-full bg-black text-white py-2 rounded-xl text-sm font-medium">Сохранить</button>
+                </form>
+              )}
+
+              {wushuBelts.length === 0 ? (
+                <div className="text-xs text-gray-400 text-center py-2">Аттестаций нет</div>
+              ) : (
+                <div className="space-y-1.5">
+                  {wushuBelts.map((b, i) => (
+                    <div key={b.id} className="flex items-center justify-between p-2 bg-gray-50 rounded-xl">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${WUSHU_BELT_COLORS[b.belt_name] || 'bg-gray-100 text-gray-600'}`}>
+                          {b.belt_name}
+                        </span>
+                        <span className="text-xs text-gray-400">{b.date}</span>
+                        {b.notes && <span className="text-xs text-gray-400">{b.notes}</span>}
+                        {i === 0 && <span className="text-xs text-blue-400">текущий</span>}
+                      </div>
+                      <button onClick={() => deleteBelt(b.id)} className="text-xs text-red-400 shrink-0">✕</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )
+        })()}
       </div>
 
       {/* Attendance */}
