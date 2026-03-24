@@ -52,14 +52,28 @@ export default function AttendancePage() {
 
       const withSubs = await loadWithSub(data || [])
       setStudents(withSubs)
-      setPresent(new Set(withSubs.map(s => s.id)))
-      // Reset guests when group changes
+      setPresent(new Set())  // по умолчанию никто не отмечен
       setGuests([])
       setGuestsLoaded(false)
       setShowGuests(false)
+
+      // Загрузить уже сохранённые отметки за эту дату (если есть)
+      if (withSubs.length > 0) {
+        const { data: attData } = await supabase
+          .from('attendance')
+          .select('student_id, present')
+          .eq('date', date)
+          .in('student_id', withSubs.map(s => s.id))
+
+        if (attData && attData.length > 0) {
+          const attMap = new Set<string>()
+          attData.forEach(a => { if (a.present) attMap.add(a.student_id) })
+          setPresent(attMap)
+        }
+      }
     }
     load()
-  }, [group])
+  }, [group, date])
 
   async function loadGuests() {
     if (guestsLoaded) return
