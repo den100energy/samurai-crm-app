@@ -100,17 +100,46 @@ const TICKET_STATUS_NEXT: Record<string, 'in_review' | 'resolved'> = {
 }
 
 const GROUPS = ['Дети 4-9', 'Подростки (нач)', 'Подростки (оп)', 'Цигун', 'Индивидуальные']
-const BELTS = ['Белый', 'Жёлтый', 'Оранжевый', 'Зелёный', 'Синий', 'Фиолетовый', 'Коричневый', 'Чёрный']
+// Айкидо: детские кю (11–7) → взрослые кю (6–1) → даны
+const BELTS = [
+  // Детские
+  'Белый (дет.)',
+  'Жёлтый с белой нашивкой — 11 кю',
+  'Оранжевый с белой нашивкой — 10 кю',
+  'Зелёный с белой нашивкой — 9 кю',
+  'Синий с белой нашивкой — 8 кю',
+  'Коричневый с белой нашивкой — 7 кю',
+  // Взрослые кю
+  'Белый — 6 кю',
+  'Жёлтый — 5 кю',
+  'Оранжевый — 4 кю',
+  'Зелёный — 3 кю',
+  'Синий — 2 кю',
+  'Коричневый — 1 кю',
+  // Даны
+  'Чёрный — 1 дан',
+  'Чёрный — 2 дан',
+  'Чёрный — 3 дан',
+  'Чёрный — 4 дан',
+]
 
 const BELT_COLORS: Record<string, string> = {
-  'Белый': 'bg-gray-100 text-gray-700',
-  'Жёлтый': 'bg-yellow-100 text-yellow-700',
-  'Оранжевый': 'bg-orange-100 text-orange-700',
-  'Зелёный': 'bg-green-100 text-green-700',
-  'Синий': 'bg-blue-100 text-blue-700',
-  'Фиолетовый': 'bg-purple-100 text-purple-700',
-  'Коричневый': 'bg-amber-100 text-amber-800',
-  'Чёрный': 'bg-gray-800 text-white',
+  'Белый (дет.)':                          'bg-gray-100 text-gray-700',
+  'Жёлтый с белой нашивкой — 11 кю':      'bg-yellow-100 text-yellow-700',
+  'Оранжевый с белой нашивкой — 10 кю':   'bg-orange-100 text-orange-700',
+  'Зелёный с белой нашивкой — 9 кю':      'bg-green-100 text-green-700',
+  'Синий с белой нашивкой — 8 кю':        'bg-blue-100 text-blue-700',
+  'Коричневый с белой нашивкой — 7 кю':   'bg-amber-100 text-amber-800',
+  'Белый — 6 кю':                          'bg-gray-100 text-gray-700',
+  'Жёлтый — 5 кю':                         'bg-yellow-100 text-yellow-700',
+  'Оранжевый — 4 кю':                      'bg-orange-100 text-orange-700',
+  'Зелёный — 3 кю':                        'bg-green-100 text-green-700',
+  'Синий — 2 кю':                          'bg-blue-100 text-blue-700',
+  'Коричневый — 1 кю':                     'bg-amber-100 text-amber-800',
+  'Чёрный — 1 дан':                        'bg-gray-800 text-white',
+  'Чёрный — 2 дан':                        'bg-gray-800 text-white',
+  'Чёрный — 3 дан':                        'bg-gray-800 text-white',
+  'Чёрный — 4 дан':                        'bg-gray-800 text-white',
 }
 
 function SurveySummaryRow({ s, qualities, labels }: { s: any; qualities: string[]; labels: Record<string, string> }) {
@@ -697,7 +726,7 @@ export default function StudentPage() {
               <div className="text-sm text-gray-400">{student.group_name || 'Группа не указана'}</div>
               {currentBelt && (
                 <span className={`inline-block text-xs px-2 py-0.5 rounded-full mt-1 font-medium ${BELT_COLORS[currentBelt.belt_name] || 'bg-gray-100 text-gray-600'}`}>
-                  {currentBelt.belt_name} пояс
+                  {currentBelt.belt_name}
                 </span>
               )}
             </div>
