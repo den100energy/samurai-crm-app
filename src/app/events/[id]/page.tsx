@@ -53,6 +53,7 @@ export default function EventDetailPage() {
   const [subMap, setSubMap] = useState<Record<string, SubInfo>>({})
   const [showAdd, setShowAdd] = useState(false)
   const [selectedId, setSelectedId] = useState('')
+  const [addGroup, setAddGroup] = useState('Все')
   const [trainers, setTrainers] = useState<string[]>([])
 
   // Edit state
@@ -325,17 +326,51 @@ export default function EventDetailPage() {
       </div>
 
       {showAdd && (
-        <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm mb-4 space-y-3">
-          <select value={selectedId} onChange={e => setSelectedId(e.target.value)}
-            className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none bg-white">
-            <option value="">Выберите ученика</option>
-            {available.map(s => <option key={s.id} value={s.id}>{s.name}{s.group_name ? ` (${s.group_name})` : ''}</option>)}
-          </select>
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm mb-4 overflow-hidden">
+          {/* Вкладки по группам */}
+          {(() => {
+            const groupsInAvailable = ['Все', ...Array.from(new Set(available.map(s => s.group_name).filter(Boolean))) as string[]]
+            const filtered = addGroup === 'Все' ? available : available.filter(s => s.group_name === addGroup)
+            return (
+              <>
+                <div className="flex gap-1.5 overflow-x-auto px-3 pt-3 pb-2 border-b border-gray-100">
+                  {groupsInAvailable.map(g => (
+                    <button key={g}
+                      onClick={() => { setAddGroup(g); setSelectedId('') }}
+                      className={`whitespace-nowrap px-3 py-1 rounded-full text-xs font-medium transition-colors shrink-0
+                        ${addGroup === g ? 'bg-black text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                      {g}
+                    </button>
+                  ))}
+                </div>
 
+                {/* Список учеников */}
+                <div className="max-h-52 overflow-y-auto divide-y divide-gray-50">
+                  {filtered.length === 0 ? (
+                    <div className="text-sm text-gray-400 text-center py-4">Все добавлены</div>
+                  ) : (
+                    filtered.map(s => (
+                      <button key={s.id}
+                        onClick={() => setSelectedId(s.id === selectedId ? '' : s.id)}
+                        className={`w-full flex items-center justify-between px-4 py-2.5 text-left transition-colors
+                          ${selectedId === s.id ? 'bg-blue-50' : 'hover:bg-gray-50'}`}>
+                        <span className={`text-sm font-medium ${selectedId === s.id ? 'text-blue-700' : 'text-gray-700'}`}>
+                          {s.name}
+                        </span>
+                        {selectedId === s.id && <span className="text-blue-500 text-xs">✓ выбран</span>}
+                      </button>
+                    ))
+                  )}
+                </div>
+              </>
+            )
+          })()}
+
+          {/* Кнопки оплаты — появляются после выбора */}
           {selectedId && (
-            <div>
+            <div className="px-4 py-3 border-t border-gray-100 space-y-2">
               {isBonusEvent && (
-                <div className={`text-xs mb-3 px-3 py-2 rounded-xl ${hasBonusAvailable ? 'bg-purple-50 text-purple-700' : 'bg-gray-50 text-gray-500'}`}>
+                <div className={`text-xs px-3 py-2 rounded-xl ${hasBonusAvailable ? 'bg-purple-50 text-purple-700' : 'bg-gray-50 text-gray-500'}`}>
                   {hasBonusAvailable
                     ? `✅ Есть бонус «${event.bonus_type}» — осталось ${bonusLeft}`
                     : `❌ Бонуса «${event.bonus_type}» нет`}
