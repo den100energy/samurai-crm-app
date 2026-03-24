@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { FujiScene } from '@/components/FujiScene'
+import { localDateStr } from '@/lib/dates'
 
 type Student = { id: string; name: string; group_name: string | null; birth_date: string | null; photo_url: string | null }
 type ScheduleSlot = { day_of_week: number; time_start: string | null; trainer_name: string | null }
@@ -129,8 +130,8 @@ export default function ParentPage() {
       const jsDay = now.getDay()
       const monday = new Date(now); monday.setDate(now.getDate() - (jsDay === 0 ? 6 : jsDay - 1))
       const sunday = new Date(monday); sunday.setDate(monday.getDate() + 13) // 2 недели вперёд
-      const mondayStr = monday.toISOString().split('T')[0]
-      const sundayStr = sunday.toISOString().split('T')[0]
+      const mondayStr = localDateStr(monday)
+      const sundayStr = localDateStr(sunday)
 
       const [{ data: subs }, { data: att }, { data: sv }, { data: tk }, { data: certsData }, { data: sched }, { data: ovs }] = await Promise.all([
         supabase.from('subscriptions').select('*').eq('student_id', s.id).order('created_at', { ascending: false }).limit(1),
@@ -189,7 +190,7 @@ export default function ParentPage() {
       const checkDate = new Date(now)
       checkDate.setDate(now.getDate() + offset)
       const checkDay = checkDate.getDay() === 0 ? 7 : checkDate.getDay()
-      const checkStr = checkDate.toISOString().split('T')[0]
+      const checkStr = localDateStr(checkDate)
       // Проверяем override на этот день
       const override = scheduleOverrides.find(o => o.date === checkStr)
       if (override?.cancelled) continue
@@ -372,7 +373,7 @@ export default function ParentPage() {
                         const jsDay = now.getDay() === 0 ? 7 : now.getDay()
                         const diff = slot.day_of_week - jsDay
                         const d = new Date(now); d.setDate(now.getDate() + (diff < 0 ? diff + 7 : diff))
-                        return d.toISOString().split('T')[0]
+                        return localDateStr(d)
                       })()
                       const override = scheduleOverrides.find(o => o.date === slotDate)
                       const isCancelled = override?.cancelled

@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/components/ThemeProvider'
 import { useAuth } from '@/components/AuthProvider'
+import { localDateStr } from '@/lib/dates'
 
 type ScheduleEntry = {
   id: string
@@ -70,7 +71,7 @@ function getWeekDates() {
   for (let i = 0; i < 7; i++) {
     const d = new Date(monday)
     d.setDate(monday.getDate() + i)
-    dates[i + 1] = d.toISOString().split('T')[0]
+    dates[i + 1] = localDateStr(d)
   }
   return dates
 }
@@ -78,7 +79,7 @@ function getWeekDates() {
 // Get nearest future date for a given day of week
 function nearestDateForDay(dayNum: number): string {
   const weekDates = getWeekDates()
-  return weekDates[dayNum] || new Date().toISOString().split('T')[0]
+  return weekDates[dayNum] || localDateStr()
 }
 
 export default function SchedulePage() {

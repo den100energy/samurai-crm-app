@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
 import { FujiScene } from '@/components/FujiScene'
+import { localDateStr } from '@/lib/dates'
 
 const supabase = createBrowserClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -41,7 +42,7 @@ function getThisWeekDates(): Record<number, string> {
   for (let i = 0; i < 7; i++) {
     const d = new Date(monday)
     d.setDate(monday.getDate() + i)
-    dates[i + 1] = d.toISOString().split('T')[0]
+    dates[i + 1] = localDateStr(d)
   }
   return dates
 }
@@ -470,7 +471,7 @@ export default function CabinetPage() {
   const colors = ['#3B82F6', '#10B981', '#F59E0B']
 
   // Сегодняшняя тренировка
-  const todayIso = new Date().toISOString().split('T')[0]
+  const todayIso = localDateStr()
   const todayNum = new Date().getDay() === 0 ? 7 : new Date().getDay()
   const todaySlot = scheduleSlots.find(s => s.day_of_week === todayNum)
   const todayOverride = scheduleOverrides.find(o => o.date === todayIso)
