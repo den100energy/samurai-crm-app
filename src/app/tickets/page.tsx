@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
+import { useAuth } from '@/components/AuthProvider'
 
 type Ticket = {
   id: string
@@ -11,20 +12,18 @@ type Ticket = {
   description: string | null
   status: string
   created_at: string
+  taken_by: string | null
+  taken_at: string | null
+  resolved_by: string | null
+  resolved_at: string | null
   students: { name: string } | null
 }
 
 const TYPE_LABELS: Record<string, { label: string; color: string }> = {
-  'болезнь':  { label: 'Болезнь',  color: 'bg-red-100 text-red-700' },
-  'перенос':  { label: 'Перенос',  color: 'bg-yellow-100 text-yellow-700' },
-  'жалоба':   { label: 'Жалоба',   color: 'bg-orange-100 text-orange-700' },
-  'вопрос':   { label: 'Вопрос',   color: 'bg-blue-100 text-blue-700' },
-}
-
-const STATUS_NEXT: Record<string, string> = {
-  pending:   'in_review',
-  in_review: 'resolved',
-  resolved:  'resolved',
+  'болезнь':  { label: '🤒 Болезнь',  color: 'bg-red-100 text-red-700' },
+  'перенос':  { label: '🔄 Перенос',  color: 'bg-yellow-100 text-yellow-700' },
+  'жалоба':   { label: '⚠️ Жалоба',   color: 'bg-orange-100 text-orange-700' },
+  'вопрос':   { label: '❓ Вопрос',   color: 'bg-blue-100 text-blue-700' },
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -45,9 +44,16 @@ const STATUS_BTN: Record<string, string> = {
   resolved:  '',
 }
 
+function fmtDate(iso: string | null) {
+  if (!iso) return ''
+  return new Date(iso).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+}
+
 export default function TicketsPage() {
+  const { userName } = useAuth()
   const [tickets, setTickets] = useState<Ticket[]>([])
   const [filter, setFilter] = useState<'all' | 'pending' | 'in_review' | 'resolved'>('all')
+  const [advancing, setAdvancing] = useState<string | null>(null)
 
   useEffect(() => { load() }, [])
 
@@ -56,14 +62,24 @@ export default function TicketsPage() {
       .from('tickets')
       .select('*, students(name)')
       .order('created_at', { ascending: false })
-    setTickets(data || [])
+    setTickets((data as Ticket[]) || [])
   }
 
   async function advance(ticket: Ticket) {
     if (ticket.status === 'resolved') return
-    const next = STATUS_NEXT[ticket.status]
-    await supabase.from('tickets').update({ status: next }).eq('id', ticket.id)
-    setTickets(prev => prev.map(t => t.id === ticket.id ? { ...t, status: next } : t))
+    setAdvancing(ticket.id)
+    const res = await fetch('/api/ticket-advance', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ticket_id: ticket.id, actor: userName || 'Неизвестный' }),
+    })
+    const json = await res.json()
+    if (json.ok && json.ticket) {
+      setTickets(prev => prev.map(t =>
+        t.id === ticket.id ? { ...t, ...json.ticket, students: t.students } : t
+      ))
+    }
+    setAdvancing(null)
   }
 
   async function remove(id: string) {
@@ -129,11 +145,29 @@ export default function TicketsPage() {
                   <div className="text-sm text-gray-600 mb-3 bg-gray-50 rounded-xl p-2">{t.description}</div>
                 )}
 
+                {/* Лог воронки */}
+                {(t.taken_by || t.resolved_by) && (
+                  <div className="mb-3 space-y-1 border-l-2 border-gray-100 pl-3">
+                    {t.taken_by && (
+                      <div className="text-xs text-gray-400">
+                        🔄 Взял в работу: <span className="font-medium text-gray-600">{t.taken_by}</span>
+                        {t.taken_at && <span className="ml-1 text-gray-300">· {fmtDate(t.taken_at)}</span>}
+                      </div>
+                    )}
+                    {t.resolved_by && (
+                      <div className="text-xs text-gray-400">
+                        ✅ Решил: <span className="font-medium text-gray-600">{t.resolved_by}</span>
+                        {t.resolved_at && <span className="ml-1 text-gray-300">· {fmtDate(t.resolved_at)}</span>}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <div className="flex items-center gap-2">
                   {t.status !== 'resolved' && (
-                    <button onClick={() => advance(t)}
-                      className="flex-1 text-sm bg-black text-white py-1.5 rounded-xl font-medium">
-                      {STATUS_BTN[t.status]}
+                    <button onClick={() => advance(t)} disabled={advancing === t.id}
+                      className="flex-1 text-sm bg-black text-white py-1.5 rounded-xl font-medium disabled:opacity-50">
+                      {advancing === t.id ? '...' : STATUS_BTN[t.status]}
                     </button>
                   )}
                   {t.status === 'resolved' && (
