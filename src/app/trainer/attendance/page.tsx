@@ -6,6 +6,7 @@ import { useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/components/AuthProvider'
 import { useTheme } from '@/components/ThemeProvider'
+import { localDateStr } from '@/lib/dates'
 
 type Student = {
   id: string
@@ -52,7 +53,7 @@ function AttendanceContent() {
   const divider = dark ? 'border-[#3A3A3C]' : 'border-gray-50'
   const [myGroups, setMyGroups] = useState<string[]>([])
   const [selectedGroup, setSelectedGroup] = useState('')
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0])
+  const [date, setDate] = useState(localDateStr())
   const [students, setStudents] = useState<Student[]>([])
   const [guests, setGuests] = useState<Student[]>([])
   const [present, setPresent] = useState<Set<string>>(new Set())

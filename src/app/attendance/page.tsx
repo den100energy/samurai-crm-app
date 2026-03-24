@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/components/AuthProvider'
+import { localDateStr } from '@/lib/dates'
 
 type Student = {
   id: string
@@ -34,7 +35,7 @@ export default function AttendancePage() {
   const [students, setStudents] = useState<Student[]>([])
   const [guests, setGuests] = useState<Student[]>([])
   const [group, setGroup] = useState(GROUPS[0])
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0])
+  const [date, setDate] = useState(localDateStr())
   const [present, setPresent] = useState<Set<string>>(new Set())
   const [showGuests, setShowGuests] = useState(false)
   const [guestsLoaded, setGuestsLoaded] = useState(false)

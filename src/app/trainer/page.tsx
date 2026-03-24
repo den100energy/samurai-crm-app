@@ -8,6 +8,7 @@ import { useAuth } from '@/components/AuthProvider'
 import { useTheme } from '@/components/ThemeProvider'
 import { hasAccess } from '@/lib/auth'
 import { FujiScene } from '@/components/FujiScene'
+import { localDateStr } from '@/lib/dates'
 
 type ScheduleSlot = {
   id: string
@@ -36,7 +37,7 @@ function getWeekDates(): Record<number, string> {
   for (let i = 0; i < 7; i++) {
     const d = new Date(monday)
     d.setDate(monday.getDate() + i)
-    dates[i + 1] = d.toISOString().split('T')[0]
+    dates[i + 1] = localDateStr(d)
   }
   return dates
 }
