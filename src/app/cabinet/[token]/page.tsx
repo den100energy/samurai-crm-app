@@ -26,6 +26,7 @@ type Subscription = { sessions_left: number | null; sessions_total: number | nul
 type Survey = { id: string; filled_at: string | null; created_at: string } & Record<string, number | null | string>
 type Task = { id: string; title: string; description: string | null; due_date: string | null; completed: boolean }
 type Cert = { id: string; type: string; title: string; date: string | null; notes: string | null }
+type Ticket = { id: string; type: string; description: string | null; status: string; created_at: string }
 type ScheduleSlot = { id: string; day_of_week: number; time_start: string | null; trainer_name: string | null }
 type ScheduleOverride = { date: string; group_name: string; trainer_name: string | null; cancelled: boolean; note: string | null }
 
@@ -303,8 +304,12 @@ export default function CabinetPage() {
   const [scheduleSlots, setScheduleSlots] = useState<ScheduleSlot[]>([])
   const [scheduleOverrides, setScheduleOverrides] = useState<ScheduleOverride[]>([])
   const [trainersInfo, setTrainersInfo] = useState<TrainerInfo[]>([])
+  const [tickets, setTickets] = useState<Ticket[]>([])
+  const [ticketForm, setTicketForm] = useState({ type: '', description: '' })
+  const [showTicketForm, setShowTicketForm] = useState(false)
+  const [ticketSending, setTicketSending] = useState(false)
   const [loading, setLoading] = useState(true)
-  const [tab, setTab] = useState<'home' | 'progress' | 'tasks' | 'achievements'>('home')
+  const [tab, setTab] = useState<'home' | 'progress' | 'tasks' | 'achievements' | 'tickets'>('home')
   const [togglingTask, setTogglingTask] = useState<string | null>(null)
 
   useEffect(() => {
@@ -328,7 +333,7 @@ export default function CabinetPage() {
     const monday = weekDates[1]
     const sunday = weekDates[7]
 
-    const [subRes, surveysRes, tasksRes, certsRes, attRes, diagRes, schedRes, ovRes] = await Promise.all([
+    const [subRes, surveysRes, tasksRes, certsRes, attRes, tkRes, diagRes, schedRes, ovRes] = await Promise.all([
       supabase.from('subscriptions').select('sessions_left, sessions_total, end_date, type')
         .eq('student_id', sid).order('created_at', { ascending: false }).limit(1).maybeSingle(),
       supabase.from('progress_surveys').select('*').eq('student_id', sid).order('created_at'),
@@ -338,6 +343,8 @@ export default function CabinetPage() {
         .eq('student_id', sid).order('date', { ascending: false }),
       supabase.from('attendance').select('date, present').eq('student_id', sid)
         .order('date', { ascending: false }).limit(180),
+      supabase.from('tickets').select('id, type, description, status, created_at')
+        .eq('student_id', sid).order('created_at', { ascending: false }),
       supabase.from('diagnostic_surveys').select('ai_program').eq('student_id', sid)
         .order('created_at', { ascending: false }).limit(1).maybeSingle(),
       studentData.group_name
@@ -356,6 +363,7 @@ export default function CabinetPage() {
     setTasks(tasksRes.data || [])
     setCerts(certsRes.data || [])
     setAttendance(attRes.data || [])
+    setTickets(tkRes.data || [])
     setAiProgram(diagRes.data?.ai_program || null)
     const slots = (schedRes.data as ScheduleSlot[]) || []
     setScheduleSlots(slots)
@@ -384,6 +392,22 @@ export default function CabinetPage() {
     }
 
     setLoading(false)
+  }
+
+  async function sendTicket(e: React.FormEvent) {
+    e.preventDefault()
+    if (!student || !ticketForm.type) return
+    setTicketSending(true)
+    const { data } = await supabase.from('tickets').insert({
+      student_id: student.id,
+      type: ticketForm.type,
+      description: ticketForm.description || null,
+      status: 'pending',
+    }).select('id, type, description, status, created_at').single()
+    if (data) setTickets(prev => [data, ...prev])
+    setTicketForm({ type: '', description: '' })
+    setShowTicketForm(false)
+    setTicketSending(false)
   }
 
   async function toggleTask(taskId: string, current: boolean) {
@@ -511,18 +535,26 @@ export default function CabinetPage() {
       <div className="bg-white border-b border-gray-100 sticky top-0 z-10">
         <div className="max-w-lg mx-auto flex">
           {([
-            { key: 'home',         label: 'Главная',     icon: '🏠' },
-            { key: 'progress',     label: 'Прогресс',    icon: '📊' },
-            { key: 'tasks',        label: 'Задания',     icon: '📋' },
-            { key: 'achievements', label: 'Достижения',  icon: '🏆' },
-          ] as const).map(t => (
+            { key: 'home',         label: 'Главная',    icon: '🏠',  badge: null },
+            { key: 'progress',     label: 'Прогресс',   icon: '📊',  badge: null },
+            { key: 'tasks',        label: 'Задания',     icon: '📋',  badge: null },
+            { key: 'achievements', label: 'Достижения',  icon: '🏆',  badge: null },
+            { key: 'tickets',      label: 'Связь',       icon: '💬',  badge: tickets.filter(t => t.status === 'pending').length || null },
+          ] as { key: typeof tab; label: string; icon: string; badge: number | null }[]).map(t => (
             <button key={t.key} onClick={() => setTab(t.key)}
-              className={`flex-1 py-3 text-xs font-medium transition-colors border-b-2 ${
+              className={`flex-1 py-3 text-xs font-medium transition-colors border-b-2 relative ${
                 tab === t.key
                   ? 'border-black text-black'
                   : 'border-transparent text-gray-400'
               }`}>
-              <div>{t.icon}</div>
+              <div className="relative inline-block">
+                {t.icon}
+                {t.badge && tab !== t.key && (
+                  <span className="absolute -top-1 -right-2 bg-red-500 text-white text-[8px] rounded-full w-3.5 h-3.5 flex items-center justify-center font-bold">
+                    {t.badge}
+                  </span>
+                )}
+              </div>
               <div>{t.label}</div>
             </button>
           ))}
@@ -1007,6 +1039,83 @@ export default function CabinetPage() {
               </div>
             </div>
           </>
+        )}
+
+        {/* ── СВЯЗЬ С ТРЕНЕРОМ ── */}
+        {tab === 'tickets' && (
+          <div className="space-y-3">
+            {showTicketForm ? (
+              <form onSubmit={sendTicket} className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm space-y-3">
+                <div className="font-semibold text-gray-800 text-sm">Новое обращение</div>
+                <select required value={ticketForm.type}
+                  onChange={e => setTicketForm({ ...ticketForm, type: e.target.value })}
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none bg-white">
+                  <option value="">Выберите тип *</option>
+                  <option value="болезнь">🤒 Болезнь / пропуск</option>
+                  <option value="перенос">🔄 Перенос занятия</option>
+                  <option value="жалоба">⚠️ Жалоба</option>
+                  <option value="вопрос">❓ Вопрос тренеру</option>
+                </select>
+                <textarea value={ticketForm.description}
+                  onChange={e => setTicketForm({ ...ticketForm, description: e.target.value })}
+                  placeholder="Опишите подробнее (необязательно)" rows={4}
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none resize-none" />
+                <div className="flex gap-2">
+                  <button type="submit" disabled={ticketSending}
+                    className="flex-1 bg-black text-white py-2.5 rounded-xl text-sm font-medium disabled:opacity-50">
+                    {ticketSending ? 'Отправка...' : 'Отправить'}
+                  </button>
+                  <button type="button" onClick={() => setShowTicketForm(false)}
+                    className="px-4 border border-gray-200 text-gray-500 py-2.5 rounded-xl text-sm">
+                    Отмена
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <button onClick={() => setShowTicketForm(true)}
+                className="w-full bg-black text-white py-3 rounded-2xl text-sm font-medium">
+                + Написать тренеру
+              </button>
+            )}
+
+            {tickets.length === 0 && !showTicketForm ? (
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8 text-center">
+                <div className="text-4xl mb-3">📬</div>
+                <div className="font-medium text-gray-700">Обращений пока нет</div>
+                <div className="text-sm text-gray-400 mt-1">Здесь появятся твои вопросы и сообщения тренеру</div>
+              </div>
+            ) : tickets.length > 0 ? (
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm divide-y divide-gray-50">
+                {tickets.map(t => (
+                  <div key={t.id} className="p-4">
+                    <div className="flex items-start justify-between gap-2 mb-1">
+                      <span className="text-sm font-medium text-gray-800">
+                        {{ болезнь: '🤒 Болезнь', перенос: '🔄 Перенос занятия', жалоба: '⚠️ Жалоба', вопрос: '❓ Вопрос' }[t.type] ?? t.type}
+                      </span>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {t.status === 'pending' && (
+                          <span className="text-orange-500 font-bold text-base leading-none" title="Ожидает ответа">!</span>
+                        )}
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${{
+                          pending:   'bg-yellow-100 text-yellow-700',
+                          in_review: 'bg-blue-100 text-blue-700',
+                          resolved:  'bg-green-100 text-green-700',
+                        }[t.status] ?? 'bg-gray-100 text-gray-500'}`}>
+                          {{ pending: 'Новое', in_review: 'В работе', resolved: 'Решено' }[t.status] ?? t.status}
+                        </span>
+                      </div>
+                    </div>
+                    {t.description && (
+                      <p className="text-xs text-gray-500 mt-1 leading-relaxed">{t.description}</p>
+                    )}
+                    <div className="text-xs text-gray-300 mt-2">
+                      {new Date(t.created_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </div>
         )}
       </div>
     </div>
