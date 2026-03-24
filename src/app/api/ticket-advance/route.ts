@@ -26,7 +26,7 @@ async function sendTelegram(text: string) {
 }
 
 export async function POST(req: NextRequest) {
-  const { ticket_id, actor } = await req.json()
+  const { ticket_id, actor, resolution_note } = await req.json()
   if (!ticket_id || !actor) {
     return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
   }
@@ -61,14 +61,17 @@ export async function POST(req: NextRequest) {
       `🕐 ${new Date(now).toLocaleString('ru-RU')}`,
     ].filter(Boolean).join('\n')
   } else if (ticket.status === 'in_review') {
-    update = { status: 'resolved', resolved_by: actor, resolved_at: now }
-    const takenInfo = ticket.taken_by ? `\n✋ Взял: ${ticket.taken_by}` : ''
+    if (!resolution_note) return NextResponse.json({ error: 'resolution_note required' }, { status: 400 })
+    update = { status: 'resolved', resolved_by: actor, resolved_at: now, resolution_note }
+    const takenInfo = ticket.taken_by ? `✋ Взял: ${ticket.taken_by}` : ''
     tgText = [
       `✅ <b>Обращение решено</b>`,
       ``,
       `👤 Ученик: <b>${studentName}</b>`,
       `📋 Тип: ${typeLabel}`,
-      ticket.description ? `📝 ${ticket.description}` : '',
+      ticket.description ? `📝 Вопрос: ${ticket.description}` : '',
+      ``,
+      `💬 Как решили: <b>${resolution_note}</b>`,
       ``,
       takenInfo,
       `✅ Решил: <b>${actor}</b>`,
@@ -80,7 +83,7 @@ export async function POST(req: NextRequest) {
     .from('tickets')
     .update(update)
     .eq('id', ticket_id)
-    .select('id, type, description, status, created_at, taken_by, taken_at, resolved_by, resolved_at')
+    .select('id, type, description, status, created_at, taken_by, taken_at, resolved_by, resolved_at, resolution_note')
     .single()
 
   // Отправляем Telegram уведомление (не блокируем ответ)

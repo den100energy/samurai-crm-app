@@ -26,7 +26,7 @@ type Subscription = { sessions_left: number | null; sessions_total: number | nul
 type Survey = { id: string; filled_at: string | null; created_at: string } & Record<string, number | null | string>
 type Task = { id: string; title: string; description: string | null; due_date: string | null; completed: boolean }
 type Cert = { id: string; type: string; title: string; date: string | null; notes: string | null }
-type Ticket = { id: string; type: string; description: string | null; status: string; created_at: string }
+type Ticket = { id: string; type: string; description: string | null; status: string; resolution_note: string | null; created_at: string }
 type ScheduleSlot = { id: string; day_of_week: number; time_start: string | null; trainer_name: string | null }
 type ScheduleOverride = { date: string; group_name: string; trainer_name: string | null; cancelled: boolean; note: string | null }
 
@@ -343,7 +343,7 @@ export default function CabinetPage() {
         .eq('student_id', sid).order('date', { ascending: false }),
       supabase.from('attendance').select('date, present').eq('student_id', sid)
         .order('date', { ascending: false }).limit(180),
-      supabase.from('tickets').select('id, type, description, status, created_at')
+      supabase.from('tickets').select('id, type, description, status, resolution_note, created_at')
         .eq('student_id', sid).order('created_at', { ascending: false }),
       supabase.from('diagnostic_surveys').select('ai_program').eq('student_id', sid)
         .order('created_at', { ascending: false }).limit(1).maybeSingle(),
@@ -403,8 +403,8 @@ export default function CabinetPage() {
       type: ticketForm.type,
       description: ticketForm.description || null,
       status: 'pending',
-    }).select('id, type, description, status, created_at').single()
-    if (data) setTickets(prev => [data, ...prev])
+    }).select('id, type, description, status, resolution_note, created_at').single()
+    if (data) setTickets(prev => [data as Ticket, ...prev])
     setTicketForm({ type: '', description: '' })
     setShowTicketForm(false)
     setTicketSending(false)
@@ -1107,6 +1107,12 @@ export default function CabinetPage() {
                     </div>
                     {t.description && (
                       <p className="text-xs text-gray-500 mt-1 leading-relaxed">{t.description}</p>
+                    )}
+                    {t.resolution_note && (
+                      <div className="mt-2 bg-green-50 rounded-xl px-3 py-2">
+                        <div className="text-xs text-green-600 font-medium mb-0.5">✅ Ответ тренера:</div>
+                        <p className="text-sm text-green-800 leading-relaxed">{t.resolution_note}</p>
+                      </div>
                     )}
                     <div className="text-xs text-gray-300 mt-2">
                       {new Date(t.created_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}

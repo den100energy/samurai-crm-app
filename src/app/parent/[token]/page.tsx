@@ -5,11 +5,17 @@ import { useParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { FujiScene } from '@/components/FujiScene'
 
-type Student = { id: string; name: string; group_name: string | null; birth_date: string | null }
+type Student = { id: string; name: string; group_name: string | null; birth_date: string | null; photo_url: string | null }
+type ScheduleSlot = { day_of_week: number; time_start: string | null; trainer_name: string | null }
+type ScheduleOverride = { date: string; trainer_name: string | null; cancelled: boolean }
+
+const DAYS = ['', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
+const DAYS_FULL = ['', 'понедельник', 'вторник', 'среда', 'четверг', 'пятница', 'суббота', 'воскресенье']
 type Subscription = { id: string; type: string; sessions_total: number | null; sessions_left: number | null; start_date: string | null; end_date: string | null }
 type Attendance = { id: string; date: string; present: boolean }
 type Survey = { id: string; survey_number: number; title: string | null; filled_at: string | null; created_at: string } & Record<string, number | null>
-type Ticket = { id: string; type: string; description: string | null; status: string; created_at: string }
+type Ticket = { id: string; type: string; description: string | null; status: string; resolution_note: string | null; created_at: string }
+type Cert = { id: string; type: string; title: string; date: string | null }
 
 const TICKET_TYPE_LABELS: Record<string, string> = {
   'болезнь': '🤒 Болезнь',
@@ -106,24 +112,53 @@ export default function ParentPage() {
   const [showTicketForm, setShowTicketForm] = useState(false)
   const [ticketSending, setTicketSending] = useState(false)
   const [notFound, setNotFound] = useState(false)
+  const [schedule, setSchedule] = useState<ScheduleSlot[]>([])
+  const [scheduleOverrides, setScheduleOverrides] = useState<ScheduleOverride[]>([])
+  const [trainers, setTrainers] = useState<{ name: string; phone: string | null; telegram_username: string | null }[]>([])
+  const [certs, setCerts] = useState<Cert[]>([])
 
   useEffect(() => {
     async function load() {
       const { data: s } = await supabase
-        .from('students').select('id, name, group_name, birth_date')
+        .from('students').select('id, name, group_name, birth_date, photo_url')
         .eq('parent_token', token).eq('status', 'active').single()
       if (!s) { setNotFound(true); return }
       setStudent(s)
-      const [{ data: subs }, { data: att }, { data: sv }, { data: tk }] = await Promise.all([
+      // Даты текущей недели для overrides
+      const now = new Date()
+      const jsDay = now.getDay()
+      const monday = new Date(now); monday.setDate(now.getDate() - (jsDay === 0 ? 6 : jsDay - 1))
+      const sunday = new Date(monday); sunday.setDate(monday.getDate() + 13) // 2 недели вперёд
+      const mondayStr = monday.toISOString().split('T')[0]
+      const sundayStr = sunday.toISOString().split('T')[0]
+
+      const [{ data: subs }, { data: att }, { data: sv }, { data: tk }, { data: certsData }, { data: sched }, { data: ovs }] = await Promise.all([
         supabase.from('subscriptions').select('*').eq('student_id', s.id).order('created_at', { ascending: false }).limit(1),
-        supabase.from('attendance').select('*').eq('student_id', s.id).order('date', { ascending: false }).limit(15),
+        supabase.from('attendance').select('*').eq('student_id', s.id).order('date', { ascending: false }).limit(90),
         supabase.from('progress_surveys').select('*').eq('student_id', s.id).not('filled_at', 'is', null).order('created_at'),
-        supabase.from('tickets').select('id, type, description, status, created_at').eq('student_id', s.id).order('created_at', { ascending: false }),
+        supabase.from('tickets').select('id, type, description, status, resolution_note, created_at').eq('student_id', s.id).order('created_at', { ascending: false }),
+        supabase.from('certifications').select('id, type, title, date').eq('student_id', s.id).order('date', { ascending: false }),
+        s.group_name
+          ? supabase.from('schedule').select('day_of_week, time_start, trainer_name').eq('group_name', s.group_name).order('day_of_week').order('time_start')
+          : Promise.resolve({ data: [] }),
+        s.group_name
+          ? supabase.from('schedule_overrides').select('date, trainer_name, cancelled').eq('group_name', s.group_name).gte('date', mondayStr).lte('date', sundayStr)
+          : Promise.resolve({ data: [] }),
       ])
       if (subs && subs.length > 0) setActiveSub(subs[0])
       setAttendance(att || [])
       setSurveys(sv || [])
       setTickets(tk || [])
+      setCerts(certsData || [])
+      const slots = (sched as ScheduleSlot[]) || []
+      setSchedule(slots)
+      setScheduleOverrides((ovs as ScheduleOverride[]) || [])
+      // Загрузить контакты тренеров этой группы
+      const trainerNames = [...new Set(slots.map(sl => sl.trainer_name).filter(Boolean))] as string[]
+      if (trainerNames.length > 0) {
+        const { data: trData } = await supabase.from('trainers').select('name, phone, telegram_username').in('name', trainerNames)
+        setTrainers(trData || [])
+      }
     }
     load()
   }, [token])
@@ -144,8 +179,41 @@ export default function ParentPage() {
     </main>
   )
 
-  const presentCount = attendance.filter(a => a.present).length
+  // Ближайшее занятие
+  function getNextLesson() {
+    if (schedule.length === 0) return null
+    const now = new Date()
+    const todayTime = now.getHours() * 60 + now.getMinutes()
+    // Ищем в ближайшие 7 дней
+    for (let offset = 0; offset <= 7; offset++) {
+      const checkDate = new Date(now)
+      checkDate.setDate(now.getDate() + offset)
+      const checkDay = checkDate.getDay() === 0 ? 7 : checkDate.getDay()
+      const checkStr = checkDate.toISOString().split('T')[0]
+      // Проверяем override на этот день
+      const override = scheduleOverrides.find(o => o.date === checkStr)
+      if (override?.cancelled) continue
+      const slots = schedule.filter(s => s.day_of_week === checkDay)
+      for (const slot of slots) {
+        if (!slot.time_start) continue
+        const [h, m] = slot.time_start.split(':').map(Number)
+        const slotMins = h * 60 + m
+        if (offset === 0 && slotMins <= todayTime) continue // уже прошло сегодня
+        const trainerName = override?.trainer_name ?? slot.trainer_name
+        return { date: checkStr, day: checkDay, time: slot.time_start, trainer: trainerName, isToday: offset === 0, isTomorrow: offset === 1 }
+      }
+    }
+    return null
+  }
+  const nextLesson = getNextLesson()
+
+  const monthAgo = new Date(); monthAgo.setMonth(monthAgo.getMonth() - 1)
+  const presentCount = attendance.filter(a => a.present && new Date(a.date) >= monthAgo).length
   const lastVisit = attendance.find(a => a.present)?.date
+
+  function fmtDate(iso: string) {
+    return new Date(iso).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', weekday: 'short' })
+  }
   const latestSurvey = surveys[surveys.length - 1] ?? null
   const firstSurvey = surveys[0] ?? null
 
@@ -158,7 +226,7 @@ export default function ParentPage() {
       type: ticketForm.type,
       description: ticketForm.description || null,
       status: 'pending',
-    }).select('id, type, description, status, created_at').single()
+    }).select('id, type, description, status, resolution_note, created_at').single()
     if (data) setTickets(prev => [data, ...prev])
     setTicketForm({ type: '', description: '' })
     setShowTicketForm(false)
@@ -179,9 +247,14 @@ export default function ParentPage() {
         <div className="relative overflow-hidden">
           <FujiScene dark={false} bgColor="#F9FAFB" />
           <div className="absolute inset-x-0 bottom-0 pb-4 flex flex-col items-center z-10">
-            <div className="w-16 h-16 rounded-full bg-white/90 text-gray-800 flex items-center justify-center text-2xl font-bold shadow-lg border-2 border-white mb-2">
-              {student.name[0]}
-            </div>
+            {student.photo_url ? (
+              <img src={student.photo_url} alt={student.name}
+                className="w-16 h-16 rounded-full object-cover shadow-lg border-2 border-white mb-2" />
+            ) : (
+              <div className="w-16 h-16 rounded-full bg-white/90 text-gray-800 flex items-center justify-center text-2xl font-bold shadow-lg border-2 border-white mb-2">
+                {student.name[0]}
+              </div>
+            )}
             <div className="text-white text-lg font-bold drop-shadow-lg">{student.name}</div>
             <div className="text-white/70 text-sm drop-shadow">{student.group_name || 'Группа не указана'}</div>
           </div>
@@ -193,7 +266,7 @@ export default function ParentPage() {
             { key: 'sub', label: 'Абонемент' },
             { key: 'attendance', label: 'Посещения' },
             { key: 'progress', label: '📈 Прогресс', badge: surveys.length > 0 ? surveys.length : null },
-            { key: 'tickets', label: '📝 Связь', badge: tickets.filter(t => t.status === 'pending').length || null },
+            { key: 'tickets', label: '📞 Тренер', badge: tickets.filter(t => t.status === 'pending').length || null },
           ] as { key: typeof tab; label: string; badge?: number | null }[]).map(t => (
             <button key={t.key} onClick={() => setTab(t.key)}
               className={`flex-1 py-3 text-xs font-medium border-b-2 transition-colors relative ${
@@ -229,7 +302,7 @@ export default function ParentPage() {
                     {activeSub.end_date && (
                       <div className="flex items-center justify-between">
                         <span className="text-sm text-gray-500">Действует до</span>
-                        <span className="text-sm font-medium text-gray-700">{activeSub.end_date}</span>
+                        <span className="text-sm font-medium text-gray-700">{fmtDate(activeSub.end_date)}</span>
                       </div>
                     )}
                     {activeSub.sessions_left !== null && activeSub.sessions_left <= 2 && activeSub.sessions_left > 0 && (
@@ -253,10 +326,71 @@ export default function ParentPage() {
                   <div className="text-xs text-gray-400 mt-1">посещений за месяц</div>
                 </div>
                 <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm text-center">
-                  <div className="text-sm font-bold text-gray-800">{lastVisit || '—'}</div>
+                  <div className="text-sm font-bold text-gray-800">{lastVisit ? fmtDate(lastVisit) : '—'}</div>
                   <div className="text-xs text-gray-400 mt-1">последнее посещение</div>
                 </div>
               </div>
+
+              {/* Аттестации */}
+              {certs.length > 0 && (
+                <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
+                  <div className="text-xs text-gray-400 uppercase tracking-wide mb-3">Аттестации и пояса</div>
+                  <div className="space-y-2">
+                    {certs.map(c => (
+                      <div key={c.id} className="flex items-center justify-between">
+                        <div>
+                          <span className="text-xs font-medium text-gray-500 mr-2">{c.type}</span>
+                          <span className="text-sm text-gray-800">{c.title}</span>
+                        </div>
+                        {c.date && <span className="text-xs text-gray-400">{new Date(c.date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' })}</span>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Ближайшее занятие */}
+              {nextLesson && (
+                <div className="bg-black text-white rounded-2xl p-4">
+                  <div className="text-xs text-white/60 uppercase tracking-wide mb-1">Ближайшее занятие</div>
+                  <div className="text-xl font-bold">{nextLesson.time}</div>
+                  <div className="text-sm text-white/80 mt-0.5">
+                    {nextLesson.isToday ? 'Сегодня' : nextLesson.isTomorrow ? 'Завтра' : DAYS_FULL[nextLesson.day]}, {new Date(nextLesson.date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}
+                  </div>
+                  {nextLesson.trainer && <div className="text-xs text-white/60 mt-1">Тренер: {nextLesson.trainer}</div>}
+                </div>
+              )}
+
+              {/* Расписание на неделю */}
+              {schedule.length > 0 && (
+                <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
+                  <div className="text-xs text-gray-400 uppercase tracking-wide mb-3">Расписание группы</div>
+                  <div className="space-y-2">
+                    {schedule.map((slot, i) => {
+                      const slotDate = (() => {
+                        const now = new Date()
+                        const jsDay = now.getDay() === 0 ? 7 : now.getDay()
+                        const diff = slot.day_of_week - jsDay
+                        const d = new Date(now); d.setDate(now.getDate() + (diff < 0 ? diff + 7 : diff))
+                        return d.toISOString().split('T')[0]
+                      })()
+                      const override = scheduleOverrides.find(o => o.date === slotDate)
+                      const isCancelled = override?.cancelled
+                      const trainerName = override?.trainer_name ?? slot.trainer_name
+                      return (
+                        <div key={i} className={`flex items-center justify-between text-sm ${isCancelled ? 'opacity-40 line-through' : ''}`}>
+                          <div className="flex items-center gap-2">
+                            <span className="w-6 text-xs font-medium text-gray-500">{DAYS[slot.day_of_week]}</span>
+                            <span className="font-medium text-gray-800">{slot.time_start}</span>
+                            {isCancelled && <span className="text-xs text-red-500 no-underline" style={{textDecoration:'none'}}>отменено</span>}
+                          </div>
+                          {trainerName && <span className="text-xs text-gray-400">{trainerName}</span>}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
             </>
           )}
 
@@ -269,10 +403,10 @@ export default function ParentPage() {
               ) : (
                 <div className="space-y-2">
                   {attendance.map(a => (
-                    <div key={a.id} className="flex items-center justify-between text-sm">
-                      <span className="text-gray-500">{a.date}</span>
+                    <div key={a.id} className="flex items-center justify-between text-sm py-0.5">
+                      <span className="text-gray-500">{fmtDate(a.date)}</span>
                       <span className={a.present ? 'text-green-600 font-medium' : 'text-gray-300'}>
-                        {a.present ? '● Был' : '○ Не был'}
+                        {a.present ? '✓ был' : '— не был'}
                       </span>
                     </div>
                   ))}
@@ -314,6 +448,12 @@ export default function ParentPage() {
                       </div>
                     </div>
                   )}
+
+                  {/* Пояснение */}
+                  <div className="bg-blue-50 rounded-2xl px-4 py-3 text-xs text-blue-700 leading-relaxed">
+                    📋 Оценки выставляет тренер по наблюдениям на тренировках. Шкала от 1 до 10.
+                    Срезы проводятся раз в 3 месяца — так видна динамика развития ребёнка.
+                  </div>
 
                   {/* Радарная диаграмма */}
                   <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
@@ -377,9 +517,38 @@ export default function ParentPage() {
             </>
           )}
 
-          {/* ── ОБРАЩЕНИЯ ── */}
+          {/* ── ТРЕНЕР ── */}
           {tab === 'tickets' && (
             <div className="space-y-3">
+              {/* Контакты тренеров */}
+              {trainers.length > 0 && (
+                <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm space-y-3">
+                  <div className="text-xs text-gray-400 uppercase tracking-wide">Ваши тренеры</div>
+                  {trainers.map(tr => (
+                    <div key={tr.name} className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-600 font-bold shrink-0">
+                        {tr.name[0]}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-gray-800 text-sm">{tr.name}</div>
+                        <div className="flex gap-2 mt-1">
+                          {tr.phone && (
+                            <a href={`tel:${tr.phone}`} className="text-xs bg-gray-100 text-gray-700 px-2.5 py-1 rounded-lg font-medium">
+                              📞 Позвонить
+                            </a>
+                          )}
+                          {tr.telegram_username && (
+                            <a href={`https://t.me/${tr.telegram_username}`} target="_blank" rel="noreferrer"
+                              className="text-xs bg-blue-50 text-blue-600 px-2.5 py-1 rounded-lg font-medium">
+                              ✈ Telegram
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
               {/* Форма создания */}
               {showTicketForm ? (
                 <form onSubmit={sendTicket} className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm space-y-3">
@@ -441,6 +610,12 @@ export default function ParentPage() {
                       </div>
                       {t.description && (
                         <p className="text-xs text-gray-500 mt-1 leading-relaxed">{t.description}</p>
+                      )}
+                      {t.resolution_note && (
+                        <div className="mt-2 bg-green-50 rounded-xl px-3 py-2">
+                          <div className="text-xs text-green-600 font-medium mb-0.5">✅ Ответ тренера:</div>
+                          <p className="text-sm text-green-800 leading-relaxed">{t.resolution_note}</p>
+                        </div>
                       )}
                       <div className="text-xs text-gray-300 mt-2">
                         {new Date(t.created_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}
