@@ -9,6 +9,24 @@ type Student = { id: string; name: string; group_name: string | null; birth_date
 type Subscription = { id: string; type: string; sessions_total: number | null; sessions_left: number | null; start_date: string | null; end_date: string | null }
 type Attendance = { id: string; date: string; present: boolean }
 type Survey = { id: string; survey_number: number; title: string | null; filled_at: string | null; created_at: string } & Record<string, number | null>
+type Ticket = { id: string; type: string; description: string | null; status: string; created_at: string }
+
+const TICKET_TYPE_LABELS: Record<string, string> = {
+  'болезнь': '🤒 Болезнь',
+  'перенос': '🔄 Перенос занятия',
+  'жалоба':  '⚠️ Жалоба',
+  'вопрос':  '❓ Вопрос',
+}
+const TICKET_STATUS_LABELS: Record<string, string> = {
+  pending:   'Новое',
+  in_review: 'В работе',
+  resolved:  'Решено',
+}
+const TICKET_STATUS_COLORS: Record<string, string> = {
+  pending:   'bg-yellow-100 text-yellow-700',
+  in_review: 'bg-blue-100 text-blue-700',
+  resolved:  'bg-green-100 text-green-700',
+}
 
 const QUALITIES = ['strength','speed','endurance','agility','coordination','posture','flexibility','discipline','sociability','confidence','learnability','attentiveness','emotional_balance','goal_orientation','activity','self_defense']
 const QUALITY_LABELS: Record<string, string> = {
@@ -82,7 +100,11 @@ export default function ParentPage() {
   const [activeSub, setActiveSub] = useState<Subscription | null>(null)
   const [attendance, setAttendance] = useState<Attendance[]>([])
   const [surveys, setSurveys] = useState<Survey[]>([])
-  const [tab, setTab] = useState<'sub' | 'attendance' | 'progress'>('sub')
+  const [tab, setTab] = useState<'sub' | 'attendance' | 'progress' | 'tickets'>('sub')
+  const [tickets, setTickets] = useState<Ticket[]>([])
+  const [ticketForm, setTicketForm] = useState({ type: '', description: '' })
+  const [showTicketForm, setShowTicketForm] = useState(false)
+  const [ticketSending, setTicketSending] = useState(false)
   const [notFound, setNotFound] = useState(false)
 
   useEffect(() => {
@@ -92,14 +114,16 @@ export default function ParentPage() {
         .eq('parent_token', token).eq('status', 'active').single()
       if (!s) { setNotFound(true); return }
       setStudent(s)
-      const [{ data: subs }, { data: att }, { data: sv }] = await Promise.all([
+      const [{ data: subs }, { data: att }, { data: sv }, { data: tk }] = await Promise.all([
         supabase.from('subscriptions').select('*').eq('student_id', s.id).order('created_at', { ascending: false }).limit(1),
         supabase.from('attendance').select('*').eq('student_id', s.id).order('date', { ascending: false }).limit(15),
         supabase.from('progress_surveys').select('*').eq('student_id', s.id).not('filled_at', 'is', null).order('created_at'),
+        supabase.from('tickets').select('id, type, description, status, created_at').eq('student_id', s.id).order('created_at', { ascending: false }),
       ])
       if (subs && subs.length > 0) setActiveSub(subs[0])
       setAttendance(att || [])
       setSurveys(sv || [])
+      setTickets(tk || [])
     }
     load()
   }, [token])
@@ -124,6 +148,22 @@ export default function ParentPage() {
   const lastVisit = attendance.find(a => a.present)?.date
   const latestSurvey = surveys[surveys.length - 1] ?? null
   const firstSurvey = surveys[0] ?? null
+
+  async function sendTicket(e: React.FormEvent) {
+    e.preventDefault()
+    if (!student || !ticketForm.type) return
+    setTicketSending(true)
+    const { data } = await supabase.from('tickets').insert({
+      student_id: student.id,
+      type: ticketForm.type,
+      description: ticketForm.description || null,
+      status: 'pending',
+    }).select('id, type, description, status, created_at').single()
+    if (data) setTickets(prev => [data, ...prev])
+    setTicketForm({ type: '', description: '' })
+    setShowTicketForm(false)
+    setTicketSending(false)
+  }
 
   function sessionsColor(left: number | null) {
     if (left === null) return 'text-gray-600'
@@ -153,6 +193,7 @@ export default function ParentPage() {
             { key: 'sub', label: 'Абонемент' },
             { key: 'attendance', label: 'Посещения' },
             { key: 'progress', label: '📈 Прогресс', badge: surveys.length > 0 ? surveys.length : null },
+            { key: 'tickets', label: '📝 Связь', badge: tickets.filter(t => t.status === 'pending').length || null },
           ] as { key: typeof tab; label: string; badge?: number | null }[]).map(t => (
             <button key={t.key} onClick={() => setTab(t.key)}
               className={`flex-1 py-3 text-xs font-medium border-b-2 transition-colors relative ${
@@ -334,6 +375,81 @@ export default function ParentPage() {
                 </>
               )}
             </>
+          )}
+
+          {/* ── ОБРАЩЕНИЯ ── */}
+          {tab === 'tickets' && (
+            <div className="space-y-3">
+              {/* Форма создания */}
+              {showTicketForm ? (
+                <form onSubmit={sendTicket} className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm space-y-3">
+                  <div className="font-semibold text-gray-800 text-sm">Новое обращение</div>
+                  <select required value={ticketForm.type}
+                    onChange={e => setTicketForm({ ...ticketForm, type: e.target.value })}
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none bg-white">
+                    <option value="">Выберите тип *</option>
+                    <option value="болезнь">🤒 Болезнь / пропуск</option>
+                    <option value="перенос">🔄 Перенос занятия</option>
+                    <option value="жалоба">⚠️ Жалоба</option>
+                    <option value="вопрос">❓ Вопрос тренеру</option>
+                  </select>
+                  <textarea value={ticketForm.description}
+                    onChange={e => setTicketForm({ ...ticketForm, description: e.target.value })}
+                    placeholder="Опишите подробнее (необязательно)" rows={4}
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none resize-none" />
+                  <div className="flex gap-2">
+                    <button type="submit" disabled={ticketSending}
+                      className="flex-1 bg-black text-white py-2.5 rounded-xl text-sm font-medium disabled:opacity-50">
+                      {ticketSending ? 'Отправка...' : 'Отправить'}
+                    </button>
+                    <button type="button" onClick={() => setShowTicketForm(false)}
+                      className="px-4 border border-gray-200 text-gray-500 py-2.5 rounded-xl text-sm">
+                      Отмена
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <button onClick={() => setShowTicketForm(true)}
+                  className="w-full bg-black text-white py-3 rounded-2xl text-sm font-medium">
+                  + Написать тренеру
+                </button>
+              )}
+
+              {/* История обращений */}
+              {tickets.length === 0 && !showTicketForm ? (
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8 text-center">
+                  <div className="text-3xl mb-2">📬</div>
+                  <div className="text-sm text-gray-500">Обращений пока нет</div>
+                  <div className="text-xs text-gray-400 mt-1">Здесь появятся ваши вопросы и сообщения тренеру</div>
+                </div>
+              ) : tickets.length > 0 ? (
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm divide-y divide-gray-50">
+                  {tickets.map(t => (
+                    <div key={t.id} className="p-4">
+                      <div className="flex items-start justify-between gap-2 mb-1">
+                        <span className="text-sm font-medium text-gray-800">
+                          {TICKET_TYPE_LABELS[t.type] ?? t.type}
+                        </span>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {t.status === 'pending' && (
+                            <span className="text-orange-500 text-base leading-none" title="Ожидает ответа">!</span>
+                          )}
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${TICKET_STATUS_COLORS[t.status]}`}>
+                            {TICKET_STATUS_LABELS[t.status] ?? t.status}
+                          </span>
+                        </div>
+                      </div>
+                      {t.description && (
+                        <p className="text-xs text-gray-500 mt-1 leading-relaxed">{t.description}</p>
+                      )}
+                      <div className="text-xs text-gray-300 mt-2">
+                        {new Date(t.created_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </div>
           )}
 
           <div className="text-center text-xs text-gray-300 pb-2">Школа Самурая</div>
