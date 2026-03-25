@@ -51,7 +51,7 @@ export default function Survey3Page() {
   const [step, setStep] = useState(0)
   const [submitting, setSubmitting] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
-  const [tgGroups, setTgGroups] = useState<{id: string; name: string; invite_link: string; description: string | null}[]>([])
+  const [tgGroups, setTgGroups] = useState<{id: string; name: string; invite_link: string; description: string | null; group_names: string[]}[]>([])
 
   const [form, setForm] = useState({
     // Шаг 1 — данные ученика
@@ -244,6 +244,10 @@ export default function Survey3Page() {
   // Шаг 99 — завершено
   if (step === 99) {
     const wantsGroup = form.father_in_group || form.mother_in_group
+    const studentGroupName = student?.group_name
+    const relevantGroups = tgGroups.filter(g =>
+      !g.group_names?.length || (studentGroupName && g.group_names.includes(studentGroupName))
+    )
     return (
       <div className="min-h-screen bg-gradient-to-b from-amber-50 to-white flex flex-col items-center justify-center p-6 text-center">
         <div className="text-6xl mb-5">🥋</div>
@@ -252,7 +256,7 @@ export default function Survey3Page() {
           Спасибо! Все данные сохранены. Тренер сформирует договор — вы получите его на подпись при следующем посещении.
         </p>
 
-        {wantsGroup && tgGroups.length > 0 && (
+        {wantsGroup && relevantGroups.length > 0 && (
           <div className="w-full max-w-sm bg-white rounded-2xl border border-amber-200 shadow-sm p-5 text-left">
             <p className="font-semibold text-gray-800 mb-1">📢 Информационные группы</p>
             <p className="text-sm text-gray-500 mb-4">
@@ -263,7 +267,7 @@ export default function Survey3Page() {
                 : 'Вы отметили, что мама хочет получать новости — вступите в группу:'}
             </p>
             <div className="space-y-2">
-              {tgGroups.map(g => (
+              {relevantGroups.map(g => (
                 <a key={g.id} href={g.invite_link} target="_blank" rel="noopener noreferrer"
                   className="flex items-center justify-between w-full px-4 py-3 bg-blue-50 border border-blue-200 rounded-xl text-sm font-medium text-blue-700 hover:bg-blue-100 transition-colors">
                   <span>📢 {g.name}</span>

@@ -19,12 +19,15 @@ type TgGroup = {
   name: string
   invite_link: string
   description: string | null
+  group_names: string[]
 }
+
+const STUDENT_GROUPS = ['Дети 4-9', 'Подростки (нач)', 'Подростки (оп)', 'Цигун', 'Индивидуальные']
 
 type BonusRow = { name: string; count: string }
 
 const emptyForm = { name: '', group_type: 'Старт', sessions_count: '', price: '', description: '', duration_months: '' }
-const emptyTgForm = { name: '', invite_link: '', description: '' }
+const emptyTgForm = { name: '', invite_link: '', description: '', group_names: [] as string[] }
 
 export default function SettingsPage() {
   const [types, setTypes] = useState<SubType[]>([])
@@ -54,14 +57,23 @@ export default function SettingsPage() {
 
   function startEditTg(g: TgGroup) {
     setTgEditId(g.id)
-    setTgForm({ name: g.name, invite_link: g.invite_link, description: g.description || '' })
+    setTgForm({ name: g.name, invite_link: g.invite_link, description: g.description || '', group_names: g.group_names || [] })
     setTgShowForm(true)
+  }
+
+  function toggleTgGroup(grp: string) {
+    setTgForm(f => ({
+      ...f,
+      group_names: f.group_names.includes(grp)
+        ? f.group_names.filter(g => g !== grp)
+        : [...f.group_names, grp],
+    }))
   }
 
   async function saveTg(e: React.FormEvent) {
     e.preventDefault()
     setTgSaving(true)
-    const payload = { name: tgForm.name, invite_link: tgForm.invite_link, description: tgForm.description || null }
+    const payload = { name: tgForm.name, invite_link: tgForm.invite_link, description: tgForm.description || null, group_names: tgForm.group_names }
     if (tgEditId) {
       await supabase.from('telegram_groups').update(payload).eq('id', tgEditId)
     } else {
@@ -301,8 +313,24 @@ export default function SettingsPage() {
               placeholder="Ссылка-приглашение * (https://t.me/+...)"
               className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none font-mono" />
             <input value={tgForm.description} onChange={e => setTgForm(f => ({ ...f, description: e.target.value }))}
-              placeholder="Описание (необязательно, например: для родителей 7-10 лет)"
+              placeholder="Описание (необязательно, например: общение учеников группы)"
               className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none" />
+
+            <div>
+              <div className="text-xs font-medium text-gray-500 mb-1.5">
+                Для каких учебных групп? <span className="font-normal text-gray-400">(если не выбрано — показывается всем)</span>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {STUDENT_GROUPS.map(grp => (
+                  <button key={grp} type="button" onClick={() => toggleTgGroup(grp)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors
+                      ${tgForm.group_names.includes(grp) ? 'bg-black text-white border-black' : 'bg-white border-gray-200 text-gray-600'}`}>
+                    {tgForm.group_names.includes(grp) ? '✓ ' : ''}{grp}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <div className="flex gap-2 pt-1">
               <button type="submit" disabled={tgSaving}
                 className="flex-1 bg-black text-white py-2 rounded-xl text-sm font-medium disabled:opacity-50">
@@ -326,6 +354,15 @@ export default function SettingsPage() {
                   <div className="font-medium text-gray-800 text-sm">📢 {g.name}</div>
                   {g.description && <div className="text-xs text-gray-400 mt-0.5">{g.description}</div>}
                   <div className="text-xs text-blue-500 mt-0.5 truncate">{g.invite_link}</div>
+                  {g.group_names?.length > 0 ? (
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {g.group_names.map(grp => (
+                        <span key={grp} className="px-2 py-0.5 bg-gray-200 text-gray-600 rounded-full text-xs">{grp}</span>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-xs text-gray-400 mt-0.5">Для всех групп</div>
+                  )}
                 </div>
                 <div className="flex gap-2 shrink-0">
                   <button onClick={() => startEditTg(g)} className="text-xs text-gray-400 hover:text-gray-600">✏️</button>
