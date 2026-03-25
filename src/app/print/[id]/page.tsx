@@ -27,10 +27,20 @@ export default function PrintContractPage() {
 
   const { student, profile, sub } = data
 
-  // Формируем ФИО
-  const fullName = profile?.last_name
+  // Подписант договора (родитель или сам ученик)
+  const signerFullName = profile?.signer_last_name
+    ? [profile.signer_last_name, profile.signer_first_name, profile.signer_middle_name].filter(Boolean).join(' ')
+    : profile?.last_name
     ? [profile.last_name, profile.first_name, profile.middle_name].filter(Boolean).join(' ')
     : student.name
+
+  // ФИО ученика (для предмета договора)
+  const studentFullName = profile?.last_name
+    ? [profile.last_name, profile.first_name, profile.middle_name].filter(Boolean).join(' ')
+    : student.name
+
+  // Используем имя подписанта везде в договоре
+  const fullName = signerFullName
 
   const today = new Date()
   const dateStr = `«${today.getDate().toString().padStart(2,'0')}» ${['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'][today.getMonth()]} ${today.getFullYear()} г.`
@@ -38,6 +48,23 @@ export default function PrintContractPage() {
   const birthDate = student.birth_date
     ? new Date(student.birth_date).toLocaleDateString('ru-RU')
     : '____________'
+
+  const signerBirthDate = profile?.signer_birth_date
+    ? new Date(profile.signer_birth_date).toLocaleDateString('ru-RU')
+    : null
+
+  const passportStr = profile?.signer_passport_series && profile?.signer_passport_number
+    ? `${profile.signer_passport_series} ${profile.signer_passport_number}`
+    : null
+
+  const passportIssuedDate = profile?.signer_passport_issued_date
+    ? new Date(profile.signer_passport_issued_date).toLocaleDateString('ru-RU')
+    : null
+
+  const childDocLabel = profile?.child_doc_type === 'passport' ? 'Паспорт ребёнка' : 'Свидетельство о рождении'
+  const childDocIssuedDate = profile?.child_doc_issued_date
+    ? new Date(profile.child_doc_issued_date).toLocaleDateString('ru-RU')
+    : null
 
   const subName = sub?.subscription_types?.name || sub?.type || '________________________'
   const subSessions = sub?.sessions_total || '____'
@@ -80,7 +107,7 @@ export default function PrintContractPage() {
         </div>
 
         <p className="text-sm leading-relaxed mb-4">
-          Настоящий документ «Договор на приобретение абонемента» представляет собой соглашение ИП Филоновой Евгении Алексеевны, действующей под фирменным наименованием ЦЕНТР ФИЗИЧЕСКОГО РАЗВИТИЯ И САМОЗАЩИТЫ «ШКОЛА САМУРАЯ» (далее — «ЦЕНТР ФРиС») и <strong className="underline">{fullName}</strong>, именуемой (-ым) в дальнейшем КЛИЕНТ, о нижеследующем:
+          Настоящий документ «Договор на приобретение абонемента» представляет собой соглашение ИП Филоновой Евгении Алексеевны, действующей под фирменным наименованием ЦЕНТР ФИЗИЧЕСКОГО РАЗВИТИЯ И САМОЗАЩИТЫ «ШКОЛА САМУРАЯ» (далее — «ЦЕНТР ФРиС») и <strong className="underline">{fullName}</strong>{profile?.contract_with && profile.contract_with !== 'other' ? `, действующего (-ей) в интересах несовершеннолетнего (-ей) <strong>${studentFullName}</strong>,` : ','} именуемой (-ым) в дальнейшем КЛИЕНТ, о нижеследующем:
         </p>
 
         <div className="text-sm leading-relaxed space-y-3">
@@ -123,11 +150,24 @@ export default function PrintContractPage() {
           <div>
             <p className="font-bold mb-2">КЛИЕНТ:</p>
             <p>ФИО: <strong>{fullName}</strong></p>
+            {signerBirthDate && <p>Дата рождения: {signerBirthDate}</p>}
+            {passportStr && <p>Паспорт: {passportStr}</p>}
+            {passportIssuedDate && profile?.signer_passport_issued_by && (
+              <p>Выдан: {passportIssuedDate}, {profile.signer_passport_issued_by}</p>
+            )}
+            {profile?.signer_address_reg && <p>Адрес рег.: {profile.signer_address_reg}</p>}
+            {profile?.signer_address_fact && profile.signer_address_fact !== profile.signer_address_reg && (
+              <p>Адрес факт.: {profile.signer_address_fact}</p>
+            )}
             <p>Телефон: {student.phone || '________________________'}</p>
-            <p>Дата рождения: {birthDate}</p>
-            {profile?.address && <p>Адрес: {profile.address}</p>}
             <p>E-mail: {profile?.email || student.email || '________________________'}</p>
-            <p className="mt-6">Подпись: _______________ / {fullName.split(' ').slice(0,2).join(' ')}</p>
+            {profile?.child_doc_type && (
+              <p className="mt-1">{childDocLabel}: {profile.child_doc_number || '___'}
+                {childDocIssuedDate && `, выдан ${childDocIssuedDate}`}
+                {profile.child_doc_issued_by && `, ${profile.child_doc_issued_by}`}
+              </p>
+            )}
+            <p className="mt-4">Подпись: _______________ / {fullName.split(' ').slice(0,2).join(' ')}</p>
           </div>
         </div>
       </div>
@@ -141,7 +181,7 @@ export default function PrintContractPage() {
         </div>
 
         <p className="text-sm mb-4">
-          ИП Филонова Евгения Алексеевна (ЦЕНТР ФРиС) и <strong>{fullName}</strong> (КЛИЕНТ) подписали настоящее Приложение №1 о нижеследующем.
+          ИП Филонова Евгения Алексеевна (ЦЕНТР ФРиС) и <strong>{fullName}</strong> (КЛИЕНТ){profile?.contract_with && profile.contract_with !== 'other' ? `, действующий (-ая) в интересах <strong>${studentFullName}</strong>,` : ''} подписали настоящее Приложение №1 о нижеследующем.
         </p>
 
         <table className="w-full border-collapse border border-gray-400 text-sm mb-4">
@@ -198,7 +238,7 @@ export default function PrintContractPage() {
               <p className="font-bold">от {dateStr}</p>
             </div>
             <p className="text-sm mb-4">
-              ИП Филонова Евгения Алексеевна (ЦЕНТР ФРиС) и <strong>{fullName}</strong> (КЛИЕНТ) подписали настоящее Приложение №2.
+              ИП Филонова Евгения Алексеевна (ЦЕНТР ФРиС) и <strong>{fullName}</strong> (КЛИЕНТ){profile?.contract_with && profile.contract_with !== 'other' ? `, действующий (-ая) в интересах <strong>${studentFullName}</strong>,` : ''} подписали настоящее Приложение №2.
             </p>
             <p className="text-sm mb-4">Общая стоимость Договора: <strong>{subAmount}</strong></p>
 
