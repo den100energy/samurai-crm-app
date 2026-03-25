@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { QRCodeSVG } from 'qrcode.react'
 import { supabase } from '@/lib/supabase'
+import { useAuth } from '@/components/AuthProvider'
 
 type Student = {
   id: string
@@ -14,6 +15,7 @@ type Student = {
   group_name: string | null
   status: string
   parent_token: string | null
+  cabinet_token: string | null
   health_notes: string | null
   invite_token: string | null
   telegram_chat_id: number | null
@@ -206,6 +208,8 @@ function SurveySummaryRow({ s, qualities, labels }: { s: any; qualities: string[
 export default function StudentPage() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
+  const { role, permissions } = useAuth()
+  const canViewCabinet = role === 'founder' || permissions.includes('students.cabinet')
   const [student, setStudent] = useState<Student | null>(null)
   const [subs, setSubs] = useState<Subscription[]>([])
   const [attendance, setAttendance] = useState<Attendance[]>([])
@@ -649,6 +653,11 @@ export default function StudentPage() {
     setSurvey(null)
     setShowSurvey(false)
     setEditingSurvey(false)
+  }
+
+  function openStudentCabinet() {
+    if (!student?.cabinet_token) return alert('Токен кабинета не найден')
+    window.open(`${window.location.origin}/cabinet/${student.cabinet_token}`, '_blank')
   }
 
   function copyParentLink() {
@@ -1297,6 +1306,14 @@ export default function StudentPage() {
           🔗 Кабинет родителя
         </button>
       </div>
+      {canViewCabinet && (
+        <div className="flex gap-2 mb-2">
+          <button onClick={openStudentCabinet}
+            className="flex-1 border border-purple-200 bg-purple-50 text-purple-700 text-sm py-2.5 rounded-xl">
+            🎌 Кабинет ученика
+          </button>
+        </div>
+      )}
 
       {/* Telegram ученика */}
       <div className="flex gap-2 mb-4">

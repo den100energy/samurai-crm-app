@@ -316,6 +316,16 @@ export default function ParentPage() {
                         Занятия закончились — обратитесь к тренеру для продления
                       </div>
                     )}
+                    {/* 4D: Апсейл — ученик регулярно ходит и «у потолка» абонемента */}
+                    {activeSub.sessions_left !== null && activeSub.sessions_total !== null &&
+                      activeSub.sessions_total >= 8 &&
+                      activeSub.sessions_left <= Math.ceil(activeSub.sessions_total * 0.15) &&
+                      activeSub.sessions_left > 0 && (
+                      <div className="mt-3 p-3 bg-purple-50 border border-purple-200 rounded-xl text-xs text-purple-700">
+                        <div className="font-semibold mb-1">💡 {student.name} ходит на полную!</div>
+                        <div className="text-purple-600">Ваш ребёнок использует абонемент максимально. Спросите тренера о безлимитном варианте — обычно выгоднее при такой активности.</div>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="text-sm text-gray-400 text-center py-2">Абонемент не найден</div>

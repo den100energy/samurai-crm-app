@@ -23,6 +23,9 @@ export default function Home() {
   type SurveyStage = 'needSurvey' | 'notified' | 'trainerDone' | 'filled'
   const [surveyFunnel, setSurveyFunnel] = useState<Record<SurveyStage, { id: string; name: string }[]> | null>(null)
   const [surveyFunnelModal, setSurveyFunnelModal] = useState<SurveyStage | null>(null)
+  type CrmStatus = 'onboarding' | 'active' | 'at_risk' | 'established' | 'lapsed'
+  const [crmFunnel, setCrmFunnel] = useState<Record<CrmStatus, { id: string; name: string }[]> | null>(null)
+  const [crmModal, setCrmModal] = useState<CrmStatus | null>(null)
 
   useEffect(() => {
     async function load() {
@@ -31,7 +34,7 @@ export default function Home() {
       const ago30days = new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0]
 
       const [{ data: students }, { data: allSubs }, { data: recentAtt }, { data: allSurveys }] = await Promise.all([
-        supabase.from('students').select('id, name').eq('status', 'active'),
+        supabase.from('students').select('id, name, crm_status').eq('status', 'active'),
         supabase.from('subscriptions').select('student_id, sessions_left, end_date').order('created_at', { ascending: false }),
         supabase.from('attendance').select('student_id, date').eq('present', true).gte('date', ago30days).order('date', { ascending: false }),
         supabase.from('progress_surveys').select('student_id, filled_at, parent_sent_at, trainer_filled_at, created_at').order('created_at', { ascending: false }),
@@ -97,6 +100,17 @@ export default function Home() {
         }
       }
       setSurveyFunnel({ needSurvey: needSurveyArr, notified: notifiedArr, trainerDone: trainerDoneArr, filled: filledArr })
+
+      // CRM-воронка по статусам
+      const crmBuckets: Record<string, { id: string; name: string }[]> = {
+        onboarding: [], active: [], at_risk: [], established: [], lapsed: [],
+      }
+      for (const s of students) {
+        const status = (s as any).crm_status ?? 'active'
+        if (status in crmBuckets) crmBuckets[status].push({ id: s.id, name: s.name })
+        else crmBuckets['active'].push({ id: s.id, name: s.name })
+      }
+      setCrmFunnel(crmBuckets as any)
 
       setLoaded(true)
     }
@@ -289,6 +303,42 @@ export default function Home() {
         </div>
       )}
 
+      {/* CRM-воронка учеников */}
+      {crmFunnel && (
+        <div className="mx-4 mb-5 rounded-2xl overflow-hidden border"
+          style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border)' }}>
+          <div className="px-4 py-2.5 border-b flex items-center gap-2" style={{ borderColor: 'var(--border)' }}>
+            <span className="text-sm font-medium" style={{ color: 'var(--text-1)' }}>🎯 Статус учеников</span>
+            <span className="text-xs" style={{ color: 'var(--text-2)' }}>CRM-воронка</span>
+          </div>
+          <div className="grid grid-cols-5 divide-x" style={{ borderColor: 'var(--border)' }}>
+            {([
+              { key: 'onboarding' as CrmStatus, label: 'Старт',    color: 'text-blue-400'   },
+              { key: 'active'     as CrmStatus, label: 'Активны',  color: 'text-green-500'  },
+              { key: 'at_risk'    as CrmStatus, label: 'Риск',     color: 'text-[#E8121E]'  },
+              { key: 'established'as CrmStatus, label: 'Лояльны',  color: 'text-purple-400' },
+              { key: 'lapsed'     as CrmStatus, label: 'Спящие',   color: 'text-amber-500'  },
+            ]).map(item => {
+              const count = crmFunnel[item.key]?.length ?? 0
+              return (
+                <button key={item.key}
+                  onClick={() => count > 0 ? setCrmModal(item.key) : undefined}
+                  disabled={count === 0}
+                  className="py-3 px-1 text-center transition-opacity disabled:opacity-40">
+                  <div className={`text-2xl font-bold leading-none ${count > 0 ? item.color : ''}`}
+                    style={{ color: count === 0 ? 'var(--text-2)' : undefined }}>
+                    {count}
+                  </div>
+                  <div className="text-[10px] mt-1 leading-tight" style={{ color: 'var(--text-2)' }}>
+                    {item.label}
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Разделитель */}
       <div className="mx-4 mb-5">
         <div className="flex items-center gap-3">
@@ -401,6 +451,41 @@ export default function Home() {
             <div className="overflow-y-auto flex-1 px-5 py-3">
               {surveyFunnel[surveyFunnelModal].map(s => (
                 <Link key={s.id} href={`/students/${s.id}`} onClick={() => setSurveyFunnelModal(null)}
+                  className="flex items-center justify-between py-3 border-b border-[#2C2C2E] hover:text-[#E8121E] transition-colors">
+                  <span className="text-sm" style={{ color: 'var(--text-1)' }}>{s.name}</span>
+                  <span className="text-[#48484A] text-sm">›</span>
+                </Link>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Модал CRM-воронки */}
+      {crmModal && crmFunnel && (
+        <div className="fixed inset-0 z-50 flex items-end" style={{ backgroundColor: 'rgba(0,0,0,0.7)' }}
+          onClick={() => setCrmModal(null)}>
+          <div className="w-full rounded-t-3xl flex flex-col max-h-[70vh]"
+            style={{ backgroundColor: 'var(--bg-card)' }}
+            onClick={e => e.stopPropagation()}>
+            <div className="flex justify-center pt-3 pb-1">
+              <div className="w-10 h-1 bg-[#48484A] rounded-full" />
+            </div>
+            <div className="flex items-center justify-between px-5 pt-2 pb-3 border-b" style={{ borderColor: 'var(--border)' }}>
+              <div className="font-semibold text-sm" style={{ color: 'var(--text-1)' }}>
+                {crmModal === 'onboarding'  && `Старт (первые 30 дней) · ${crmFunnel.onboarding.length} чел.`}
+                {crmModal === 'active'      && `Активные ученики · ${crmFunnel.active.length} чел.`}
+                {crmModal === 'at_risk'     && `⚠️ Зона риска · ${crmFunnel.at_risk.length} чел.`}
+                {crmModal === 'established' && `Лояльные (6+ мес.) · ${crmFunnel.established.length} чел.`}
+                {crmModal === 'lapsed'      && `Спящие · ${crmFunnel.lapsed.length} чел.`}
+              </div>
+              <button onClick={() => setCrmModal(null)}
+                className="w-8 h-8 rounded-full bg-[#2C2C2E] flex items-center justify-center text-[#8E8E93] text-lg border border-[#3A3A3C]">
+                ×
+              </button>
+            </div>
+            <div className="overflow-y-auto flex-1 px-5 py-3">
+              {crmFunnel[crmModal].map(s => (
+                <Link key={s.id} href={`/students/${s.id}`} onClick={() => setCrmModal(null)}
                   className="flex items-center justify-between py-3 border-b border-[#2C2C2E] hover:text-[#E8121E] transition-colors">
                   <span className="text-sm" style={{ color: 'var(--text-1)' }}>{s.name}</span>
                   <span className="text-[#48484A] text-sm">›</span>

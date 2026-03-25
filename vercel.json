@@ -11,6 +11,14 @@
     {
       "path": "/api/cron/notify-repeat-survey",
       "schedule": "0 10 * * 1"
+    },
+    {
+      "path": "/api/cron/update-crm-status",
+      "schedule": "0 8 * * 0"
+    },
+    {
+      "path": "/api/cron/lifecycle-touchpoints",
+      "schedule": "0 9 * * *"
     }
   ]
 }

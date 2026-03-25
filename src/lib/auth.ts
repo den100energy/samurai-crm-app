@@ -30,9 +30,10 @@ export const SECTIONS = [
   {
     key: 'students', label: 'Ученики', route: '/students', emoji: '🥋',
     items: [
-      { key: 'students.view', label: 'Просмотр списка' },
-      { key: 'students.edit', label: 'Редактировать карточку' },
-      { key: 'students.add',  label: 'Добавить ученика' },
+      { key: 'students.view',    label: 'Просмотр списка' },
+      { key: 'students.edit',    label: 'Редактировать карточку' },
+      { key: 'students.add',     label: 'Добавить ученика' },
+      { key: 'students.cabinet', label: 'Открывать кабинет ученика' },
     ],
   },
   {

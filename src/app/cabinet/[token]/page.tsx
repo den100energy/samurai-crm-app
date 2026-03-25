@@ -21,7 +21,7 @@ const QUALITY_LABELS: Record<string,string> = {
   goal_orientation:'Целеустремлённость', activity:'Активность', self_defense:'Самозащита',
 }
 
-type Student = { id: string; name: string; group_name: string | null; birth_date: string | null; photo_url: string | null }
+type Student = { id: string; name: string; group_name: string | null; birth_date: string | null; photo_url: string | null; created_at: string }
 type TrainerInfo = { name: string; phone: string | null; telegram_username: string | null; vk_url: string | null; days: string[] }
 type Subscription = { sessions_left: number | null; sessions_total: number | null; end_date: string | null; type: string }
 type Survey = { id: string; filled_at: string | null; created_at: string } & Record<string, number | null | string>
@@ -321,7 +321,7 @@ export default function CabinetPage() {
     // Найти ученика по токену
     const { data: studentData } = await supabase
       .from('students')
-      .select('id, name, group_name, birth_date, photo_url')
+      .select('id, name, group_name, birth_date, photo_url, created_at')
       .eq('cabinet_token', token)
       .single()
 
@@ -1039,6 +1039,70 @@ export default function CabinetPage() {
                 </div>
               </div>
             </div>
+
+            {/* Паспорт прогресса — История */}
+            {(() => {
+              type TimelineEvent = { date: string; icon: string; title: string }
+              const events: TimelineEvent[] = []
+
+              if (student?.created_at) {
+                events.push({ date: student.created_at, icon: '🎌', title: 'Начало пути в Самурае' })
+              }
+
+              const presentSorted = [...attendance]
+                .filter(a => a.present)
+                .sort((a, b) => a.date.localeCompare(b.date))
+
+              if (presentSorted.length > 0) {
+                events.push({ date: presentSorted[0].date, icon: '🥋', title: 'Первая тренировка' })
+              }
+
+              const milestoneList: { n: number; icon: string }[] = [
+                { n: 10, icon: '🔥' }, { n: 25, icon: '💪' }, { n: 50, icon: '🥋' }, { n: 100, icon: '🏆' },
+              ]
+              for (const { n, icon } of milestoneList) {
+                if (presentSorted.length >= n) {
+                  events.push({ date: presentSorted[n - 1].date, icon, title: `${n} тренировок` })
+                }
+              }
+
+              surveys.filter(s => s.filled_at).forEach(s => {
+                events.push({ date: s.filled_at as string, icon: '📊', title: 'Срез прогресса' })
+              })
+
+              certs.filter(c => c.date).forEach(c => {
+                events.push({ date: c.date as string, icon: CERT_ICONS[c.type] || '⭐', title: c.title })
+              })
+
+              events.sort((a, b) => b.date.localeCompare(a.date))
+              if (events.length === 0) return null
+
+              return (
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+                  <h2 className="font-semibold text-gray-800 mb-4">🗺️ История</h2>
+                  <div>
+                    {events.map((ev, i) => (
+                      <div key={i} className="flex gap-3">
+                        <div className="flex flex-col items-center">
+                          <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-base shrink-0">
+                            {ev.icon}
+                          </div>
+                          {i < events.length - 1 && (
+                            <div className="w-0.5 bg-gray-100 flex-1 mt-1 min-h-[16px]" />
+                          )}
+                        </div>
+                        <div className="pt-1 pb-3 flex-1 min-w-0">
+                          <div className="text-sm font-medium text-gray-800">{ev.title}</div>
+                          <div className="text-xs text-gray-400 mt-0.5">
+                            {new Date(ev.date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )
+            })()}
           </>
         )}
 

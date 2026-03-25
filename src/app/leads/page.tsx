@@ -32,9 +32,24 @@ export default function LeadsPage() {
   const [leads, setLeads] = useState<Lead[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
-  const [view, setView] = useState<'funnel' | 'list'>('funnel')
+  const [view, setView] = useState<'funnel' | 'list' | 'winback'>('funnel')
   const [form, setForm] = useState({ name: '', phone: '', source: '', notes: '' })
   const [expandedLead, setExpandedLead] = useState<string | null>(null)
+
+  type WinbackStudent = {
+    id: string
+    name: string
+    phone: string | null
+    daysSince: number | null
+    segment: 'early' | 'sleeping' | 'churned'
+    crm_status: string | null
+    crm_note: string | null
+  }
+  const [winbackStudents, setWinbackStudents] = useState<WinbackStudent[]>([])
+  const [winbackLoading, setWinbackLoading] = useState(false)
+  const [winbackNote, setWinbackNote] = useState<Record<string, string>>({})
+  const [winbackExpanded, setWinbackExpanded] = useState<string | null>(null)
+  const [winbackSaving, setWinbackSaving] = useState<string | null>(null)
 
   async function load() {
     const { data } = await supabase.from('leads').select('*').order('created_at', { ascending: false })
@@ -42,7 +57,86 @@ export default function LeadsPage() {
     setLoading(false)
   }
 
+  async function loadWinback() {
+    setWinbackLoading(true)
+    const today = new Date().toISOString().split('T')[0]
+    const ago180 = new Date(Date.now() - 180 * 86400000).toISOString().split('T')[0]
+
+    const [{ data: students }, { data: lastVisits }, { data: subs }] = await Promise.all([
+      supabase.from('students').select('id, name, phone, crm_status, crm_note').eq('status', 'active'),
+      supabase.from('attendance').select('student_id, date').eq('present', true)
+        .gte('date', ago180).order('date', { ascending: false }),
+      supabase.from('subscriptions').select('student_id, sessions_left, end_date')
+        .order('created_at', { ascending: false }),
+    ])
+
+    if (!students) { setWinbackLoading(false); return }
+
+    const lastVisitMap = new Map<string, string>()
+    for (const v of (lastVisits || [])) {
+      if (!lastVisitMap.has(v.student_id)) lastVisitMap.set(v.student_id, v.date)
+    }
+    const subMap = new Map<string, { sessions_left: number | null; end_date: string | null }>()
+    for (const s of (subs || [])) {
+      if (!subMap.has(s.student_id)) subMap.set(s.student_id, s)
+    }
+
+    const result: WinbackStudent[] = []
+    for (const s of students) {
+      const lastVisit = lastVisitMap.get(s.id)
+      const daysSince = lastVisit
+        ? Math.floor((Date.now() - new Date(lastVisit).getTime()) / 86400000)
+        : null
+      const sub = subMap.get(s.id)
+      const hasActiveSub = sub != null
+        && (sub.sessions_left === null || sub.sessions_left > 0)
+        && (!sub.end_date || sub.end_date >= today)
+
+      // Сегмент
+      let segment: 'early' | 'sleeping' | 'churned' | null = null
+      if (hasActiveSub && daysSince !== null && daysSince >= 10 && daysSince < 21) {
+        segment = 'early'
+      } else if (
+        (daysSince !== null && daysSince >= 21 && daysSince < 90) ||
+        (!hasActiveSub && daysSince !== null && daysSince < 60)
+      ) {
+        segment = 'sleeping'
+      } else if (daysSince !== null && daysSince >= 90 && daysSince < 180) {
+        segment = 'churned'
+      }
+
+      if (segment) {
+        result.push({ id: s.id, name: s.name, phone: s.phone, daysSince, segment, crm_status: s.crm_status, crm_note: s.crm_note })
+      }
+    }
+
+    result.sort((a, b) => (b.daysSince ?? 0) - (a.daysSince ?? 0))
+    setWinbackStudents(result)
+    // Инициализируем поля заметок
+    const notes: Record<string, string> = {}
+    for (const s of result) notes[s.id] = s.crm_note ?? ''
+    setWinbackNote(notes)
+    setWinbackLoading(false)
+  }
+
+  async function winbackAction(studentId: string, action: 'contacted' | 'paused' | 'churned') {
+    setWinbackSaving(studentId)
+    const note = winbackNote[studentId] ?? ''
+    const updates: Record<string, string | null> = { crm_note: note || null }
+    if (action === 'paused')   updates.crm_status = 'paused'
+    if (action === 'churned') { updates.crm_status = 'churned'; updates.status = 'archived' }
+    await supabase.from('students').update(updates).eq('id', studentId)
+    setWinbackStudents(prev =>
+      action === 'contacted'
+        ? prev.map(s => s.id === studentId ? { ...s, crm_note: note } : s)
+        : prev.filter(s => s.id !== studentId)
+    )
+    setWinbackExpanded(null)
+    setWinbackSaving(null)
+  }
+
   useEffect(() => { load() }, [])
+  useEffect(() => { if (view === 'winback') loadWinback() }, [view])
 
   async function addLead(e: React.FormEvent) {
     e.preventDefault()
@@ -139,6 +233,16 @@ export default function LeadsPage() {
             ${view === 'list' ? 'bg-black text-white border-black' : 'border-gray-200 text-gray-600'}`}>
           📋 Список
         </button>
+        <button onClick={() => setView('winback')}
+          className={`flex-1 py-2 rounded-xl text-sm font-medium border transition-colors relative
+            ${view === 'winback' ? 'bg-black text-white border-black' : 'border-gray-200 text-gray-600'}`}>
+          😴 Спящие
+          {winbackStudents.filter(s => s.segment === 'early').length > 0 && view !== 'winback' && (
+            <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center">
+              {winbackStudents.filter(s => s.segment === 'early').length}
+            </span>
+          )}
+        </button>
       </div>
 
       {/* Форма добавления */}
@@ -203,7 +307,7 @@ export default function LeadsPage() {
             })}
           </div>
         </div>
-      ) : (
+      ) : view === 'list' ? (
         // СПИСОК
         <div className="space-y-2">
           {leads.length === 0 ? (
@@ -214,8 +318,158 @@ export default function LeadsPage() {
               onStatusChange={updateStatus} onDelete={deleteLead} canEdit={canEdit} />
           ))}
         </div>
+      ) : (
+        // СПЯЩИЕ / WIN-BACK
+        winbackLoading ? (
+          <div className="text-center text-gray-400 py-12">Загрузка...</div>
+        ) : winbackStudents.length === 0 ? (
+          <div className="text-center text-gray-400 py-12">
+            <div className="text-4xl mb-3">🎉</div>
+            <div className="font-medium text-gray-600">Спящих нет!</div>
+            <div className="text-sm mt-1">Все ученики активны</div>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {/* Ранний сигнал */}
+            {winbackStudents.filter(s => s.segment === 'early').length > 0 && (
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="text-sm font-semibold text-orange-600">🔥 Ранний сигнал</div>
+                  <div className="text-xs text-gray-400">10–21 день без визита · активный абонемент</div>
+                </div>
+                <div className="space-y-2">
+                  {winbackStudents.filter(s => s.segment === 'early').map(s => (
+                    <WinbackCard key={s.id} student={s} expanded={winbackExpanded === s.id}
+                      note={winbackNote[s.id] ?? ''} saving={winbackSaving === s.id}
+                      onToggle={() => setWinbackExpanded(winbackExpanded === s.id ? null : s.id)}
+                      onNoteChange={v => setWinbackNote(p => ({...p, [s.id]: v}))}
+                      onAction={action => winbackAction(s.id, action)} />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Спящие */}
+            {winbackStudents.filter(s => s.segment === 'sleeping').length > 0 && (
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="text-sm font-semibold text-amber-600">😴 Спящие</div>
+                  <div className="text-xs text-gray-400">21–90 дней без визита</div>
+                </div>
+                <div className="space-y-2">
+                  {winbackStudents.filter(s => s.segment === 'sleeping').map(s => (
+                    <WinbackCard key={s.id} student={s} expanded={winbackExpanded === s.id}
+                      note={winbackNote[s.id] ?? ''} saving={winbackSaving === s.id}
+                      onToggle={() => setWinbackExpanded(winbackExpanded === s.id ? null : s.id)}
+                      onNoteChange={v => setWinbackNote(p => ({...p, [s.id]: v}))}
+                      onAction={action => winbackAction(s.id, action)} />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Ушедшие */}
+            {winbackStudents.filter(s => s.segment === 'churned').length > 0 && (
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="text-sm font-semibold text-gray-500">👋 Ушедшие</div>
+                  <div className="text-xs text-gray-400">90–180 дней · одна попытка возврата</div>
+                </div>
+                <div className="space-y-2">
+                  {winbackStudents.filter(s => s.segment === 'churned').map(s => (
+                    <WinbackCard key={s.id} student={s} expanded={winbackExpanded === s.id}
+                      note={winbackNote[s.id] ?? ''} saving={winbackSaving === s.id}
+                      onToggle={() => setWinbackExpanded(winbackExpanded === s.id ? null : s.id)}
+                      onNoteChange={v => setWinbackNote(p => ({...p, [s.id]: v}))}
+                      onAction={action => winbackAction(s.id, action)} />
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )
       )}
     </main>
+  )
+}
+
+function WinbackCard({ student, expanded, note, saving, onToggle, onNoteChange, onAction }: {
+  student: { id: string; name: string; phone: string | null; daysSince: number | null; segment: string; crm_status: string | null; crm_note: string | null }
+  expanded: boolean
+  note: string
+  saving: boolean
+  onToggle: () => void
+  onNoteChange: (v: string) => void
+  onAction: (action: 'contacted' | 'paused' | 'churned') => void
+}) {
+  const segmentColor = student.segment === 'early' ? 'border-orange-200 bg-orange-50'
+    : student.segment === 'sleeping' ? 'border-amber-200 bg-amber-50'
+    : 'border-gray-200 bg-gray-50'
+
+  const daysLabel = student.daysSince !== null ? `${student.daysSince} дн. без визита` : 'нет визитов'
+
+  const hint = student.segment === 'early'
+    ? '💡 Личное сообщение от тренера — без предложений, просто забота'
+    : student.segment === 'sleeping'
+    ? '💡 Предложи паузу или "пробную возвратную неделю" — с дедлайном 7 дней'
+    : '💡 Одно сильное предложение. Если нет ответа — переводи в "Ушёл"'
+
+  return (
+    <div className={`rounded-xl border overflow-hidden ${segmentColor}`}>
+      <button onClick={onToggle} className="w-full flex items-center px-3 py-2.5 text-left gap-3">
+        <div className="flex-1 min-w-0">
+          <div className="font-medium text-gray-800 text-sm">{student.name}</div>
+          <div className="text-xs text-gray-500">{student.phone || '—'} · {daysLabel}</div>
+          {student.crm_note && !expanded && (
+            <div className="text-xs text-gray-400 mt-0.5 truncate">📝 {student.crm_note}</div>
+          )}
+        </div>
+        <span className="text-gray-400 text-lg">{expanded ? '▲' : '▼'}</span>
+      </button>
+
+      {expanded && (
+        <div className="px-3 pb-3 border-t border-white/60 space-y-3">
+          <div className="text-xs text-gray-600 bg-white/70 rounded-lg px-3 py-2 mt-2">{hint}</div>
+
+          <textarea
+            value={note}
+            onChange={e => onNoteChange(e.target.value)}
+            placeholder="Заметка: что сказал, что предложили, причина..."
+            rows={2}
+            className="w-full border border-gray-200 rounded-xl px-3 py-2 text-xs outline-none resize-none bg-white"
+          />
+
+          <div className="grid grid-cols-3 gap-1.5">
+            <button
+              onClick={() => onAction('contacted')}
+              disabled={saving}
+              className="py-2 rounded-xl text-xs font-medium bg-blue-600 text-white disabled:opacity-40">
+              ✓ Связался
+            </button>
+            <button
+              onClick={() => onAction('paused')}
+              disabled={saving}
+              className="py-2 rounded-xl text-xs font-medium bg-amber-500 text-white disabled:opacity-40">
+              ❄️ Заморозить
+            </button>
+            <button
+              onClick={() => onAction('churned')}
+              disabled={saving}
+              className="py-2 rounded-xl text-xs font-medium bg-gray-400 text-white disabled:opacity-40">
+              👋 Ушёл
+            </button>
+          </div>
+          <div className="text-[10px] text-gray-400 text-center">
+            Связался — сохраняет заметку · Заморозить — ставит паузу · Ушёл — переводит в архив
+          </div>
+
+          <a href={`/students/${student.id}`}
+            className="block text-center text-xs text-blue-600 underline">
+            Открыть карточку ученика →
+          </a>
+        </div>
+      )}
+    </div>
   )
 }
 

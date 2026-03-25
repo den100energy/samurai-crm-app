@@ -21,10 +21,11 @@ type Ticket = {
 }
 
 const TYPE_LABELS: Record<string, { label: string; color: string }> = {
-  'болезнь':  { label: '🤒 Болезнь',  color: 'bg-red-100 text-red-700' },
-  'перенос':  { label: '🔄 Перенос',  color: 'bg-yellow-100 text-yellow-700' },
-  'жалоба':   { label: '⚠️ Жалоба',   color: 'bg-orange-100 text-orange-700' },
-  'вопрос':   { label: '❓ Вопрос',   color: 'bg-blue-100 text-blue-700' },
+  'болезнь':   { label: '🤒 Болезнь',    color: 'bg-red-100 text-red-700' },
+  'перенос':   { label: '🔄 Перенос',    color: 'bg-yellow-100 text-yellow-700' },
+  'жалоба':    { label: '⚠️ Жалоба',    color: 'bg-orange-100 text-orange-700' },
+  'вопрос':    { label: '❓ Вопрос',     color: 'bg-blue-100 text-blue-700' },
+  'crm_задача':{ label: '🎯 CRM-задача', color: 'bg-purple-100 text-purple-700' },
 }
 
 const STATUS_LABELS: Record<string, string> = {
