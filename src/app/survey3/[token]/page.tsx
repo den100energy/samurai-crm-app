@@ -51,6 +51,7 @@ export default function Survey3Page() {
   const [step, setStep] = useState(0)
   const [submitting, setSubmitting] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [tgGroups, setTgGroups] = useState<{id: string; name: string; invite_link: string; description: string | null}[]>([])
 
   const [form, setForm] = useState({
     // Шаг 1 — данные ученика
@@ -79,6 +80,12 @@ export default function Survey3Page() {
     goals: [] as string[],
     consent_rules: false, consent_contract: false, consent_personal_data: false,
   })
+
+  useEffect(() => {
+    supabase.from('telegram_groups').select('*').order('created_at').then(({ data }) => {
+      setTgGroups(data || [])
+    })
+  }, [])
 
   useEffect(() => {
     supabase.from('student_profiles')
@@ -235,15 +242,40 @@ export default function Survey3Page() {
   if (!profile) return <div className="min-h-screen flex items-center justify-center text-gray-500 p-6 text-center"><div><div className="text-4xl mb-3">🔍</div><p>Анкета не найдена</p></div></div>
 
   // Шаг 99 — завершено
-  if (step === 99) return (
-    <div className="min-h-screen bg-gradient-to-b from-amber-50 to-white flex flex-col items-center justify-center p-6 text-center">
-      <div className="text-6xl mb-5">🥋</div>
-      <h1 className="text-2xl font-bold text-gray-800 mb-3">Анкета заполнена!</h1>
-      <p className="text-gray-600 max-w-sm leading-relaxed">
-        Спасибо! Все данные сохранены. Тренер сформирует договор — вы получите его на подпись при следующем посещении.
-      </p>
-    </div>
-  )
+  if (step === 99) {
+    const wantsGroup = form.father_in_group || form.mother_in_group
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-amber-50 to-white flex flex-col items-center justify-center p-6 text-center">
+        <div className="text-6xl mb-5">🥋</div>
+        <h1 className="text-2xl font-bold text-gray-800 mb-3">Анкета заполнена!</h1>
+        <p className="text-gray-600 max-w-sm leading-relaxed mb-6">
+          Спасибо! Все данные сохранены. Тренер сформирует договор — вы получите его на подпись при следующем посещении.
+        </p>
+
+        {wantsGroup && tgGroups.length > 0 && (
+          <div className="w-full max-w-sm bg-white rounded-2xl border border-amber-200 shadow-sm p-5 text-left">
+            <p className="font-semibold text-gray-800 mb-1">📢 Информационные группы</p>
+            <p className="text-sm text-gray-500 mb-4">
+              {form.father_in_group && form.mother_in_group
+                ? 'Вы отметили, что папа и мама хотят получать новости — вступите в группу:'
+                : form.father_in_group
+                ? 'Вы отметили, что папа хочет получать новости — вступите в группу:'
+                : 'Вы отметили, что мама хочет получать новости — вступите в группу:'}
+            </p>
+            <div className="space-y-2">
+              {tgGroups.map(g => (
+                <a key={g.id} href={g.invite_link} target="_blank" rel="noopener noreferrer"
+                  className="flex items-center justify-between w-full px-4 py-3 bg-blue-50 border border-blue-200 rounded-xl text-sm font-medium text-blue-700 hover:bg-blue-100 transition-colors">
+                  <span>📢 {g.name}</span>
+                  <span className="text-blue-400">Вступить →</span>
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
 
   // Шаг 0 — вводный
   if (step === 0) return (

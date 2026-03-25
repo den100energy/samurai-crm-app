@@ -1796,6 +1796,20 @@ export default function StudentPage() {
               {(studentProfile.father_name || studentProfile.mother_name) && (
                 <div>Родители: {[studentProfile.father_name, studentProfile.mother_name].filter(Boolean).join(', ')}</div>
               )}
+              {(studentProfile.father_in_group || studentProfile.mother_in_group) && (
+                <div className="flex flex-wrap gap-1 mt-1">
+                  {studentProfile.father_in_group && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-xs font-medium">
+                      📢 Папа хочет в группу
+                    </span>
+                  )}
+                  {studentProfile.mother_in_group && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-xs font-medium">
+                      📢 Мама хочет в группу
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
           )}
           <button onClick={() => window.open(`/print/${id}`, '_blank')}

@@ -14,9 +14,17 @@ type SubType = {
   bonuses: Record<string, number> | null
 }
 
+type TgGroup = {
+  id: string
+  name: string
+  invite_link: string
+  description: string | null
+}
+
 type BonusRow = { name: string; count: string }
 
 const emptyForm = { name: '', group_type: 'Старт', sessions_count: '', price: '', description: '', duration_months: '' }
+const emptyTgForm = { name: '', invite_link: '', description: '' }
 
 export default function SettingsPage() {
   const [types, setTypes] = useState<SubType[]>([])
@@ -26,11 +34,50 @@ export default function SettingsPage() {
   const [editId, setEditId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
-  useEffect(() => { load() }, [])
+  const [tgGroups, setTgGroups] = useState<TgGroup[]>([])
+  const [tgShowForm, setTgShowForm] = useState(false)
+  const [tgForm, setTgForm] = useState(emptyTgForm)
+  const [tgEditId, setTgEditId] = useState<string | null>(null)
+  const [tgSaving, setTgSaving] = useState(false)
+
+  useEffect(() => { load(); loadTg() }, [])
 
   async function load() {
     const { data } = await supabase.from('subscription_types').select('*').order('created_at')
     setTypes(data || [])
+  }
+
+  async function loadTg() {
+    const { data } = await supabase.from('telegram_groups').select('*').order('created_at')
+    setTgGroups(data || [])
+  }
+
+  function startEditTg(g: TgGroup) {
+    setTgEditId(g.id)
+    setTgForm({ name: g.name, invite_link: g.invite_link, description: g.description || '' })
+    setTgShowForm(true)
+  }
+
+  async function saveTg(e: React.FormEvent) {
+    e.preventDefault()
+    setTgSaving(true)
+    const payload = { name: tgForm.name, invite_link: tgForm.invite_link, description: tgForm.description || null }
+    if (tgEditId) {
+      await supabase.from('telegram_groups').update(payload).eq('id', tgEditId)
+    } else {
+      await supabase.from('telegram_groups').insert(payload)
+    }
+    setTgShowForm(false)
+    setTgEditId(null)
+    setTgForm(emptyTgForm)
+    setTgSaving(false)
+    loadTg()
+  }
+
+  async function removeTg(id: string) {
+    if (!confirm('Удалить группу?')) return
+    await supabase.from('telegram_groups').delete().eq('id', id)
+    loadTg()
   }
 
   function startEdit(t: SubType) {
@@ -225,6 +272,67 @@ export default function SettingsPage() {
                 </div>
               </div>
             )}
+          </div>
+        )}
+      </div>
+
+      {/* Telegram группы */}
+      <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm mb-4">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <div className="font-semibold text-gray-800">Telegram-группы</div>
+            <div className="text-xs text-gray-400 mt-0.5">Ссылки показываются родителям, отметившим галочку в анкете</div>
+          </div>
+          <button onClick={() => { setTgShowForm(true); setTgEditId(null); setTgForm(emptyTgForm) }}
+            className="text-sm text-gray-500 border border-gray-200 px-3 py-1.5 rounded-xl shrink-0">
+            + Добавить
+          </button>
+        </div>
+
+        {tgShowForm && (
+          <form onSubmit={saveTg} className="space-y-2 mb-4 p-3 bg-gray-50 rounded-xl">
+            <div className="text-xs font-medium text-gray-500 mb-1">
+              {tgEditId ? 'Редактировать группу' : 'Новая группа'}
+            </div>
+            <input required value={tgForm.name} onChange={e => setTgForm(f => ({ ...f, name: e.target.value }))}
+              placeholder="Название группы *"
+              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none" />
+            <input required value={tgForm.invite_link} onChange={e => setTgForm(f => ({ ...f, invite_link: e.target.value }))}
+              placeholder="Ссылка-приглашение * (https://t.me/+...)"
+              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none font-mono" />
+            <input value={tgForm.description} onChange={e => setTgForm(f => ({ ...f, description: e.target.value }))}
+              placeholder="Описание (необязательно, например: для родителей 7-10 лет)"
+              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none" />
+            <div className="flex gap-2 pt-1">
+              <button type="submit" disabled={tgSaving}
+                className="flex-1 bg-black text-white py-2 rounded-xl text-sm font-medium disabled:opacity-50">
+                {tgSaving ? 'Сохранение...' : 'Сохранить'}
+              </button>
+              <button type="button" onClick={() => { setTgShowForm(false); setTgEditId(null); setTgForm(emptyTgForm) }}
+                className="px-4 border border-gray-200 text-gray-500 py-2 rounded-xl text-sm">
+                Отмена
+              </button>
+            </div>
+          </form>
+        )}
+
+        {tgGroups.length === 0 ? (
+          <div className="text-sm text-gray-400 text-center py-6">Нет групп — добавьте первую</div>
+        ) : (
+          <div className="space-y-2">
+            {tgGroups.map(g => (
+              <div key={g.id} className="flex items-start justify-between p-3 bg-gray-50 rounded-xl gap-2">
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium text-gray-800 text-sm">📢 {g.name}</div>
+                  {g.description && <div className="text-xs text-gray-400 mt-0.5">{g.description}</div>}
+                  <div className="text-xs text-blue-500 mt-0.5 truncate">{g.invite_link}</div>
+                </div>
+                <div className="flex gap-2 shrink-0">
+                  <button onClick={() => startEditTg(g)} className="text-xs text-gray-400 hover:text-gray-600">✏️</button>
+                  <button onClick={() => removeTg(g.id)} className="text-xs text-red-400 hover:text-red-600">✕</button>
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>
