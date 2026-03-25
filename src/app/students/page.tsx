@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/components/AuthProvider'
+import { OnboardingHint } from '@/components/OnboardingHint'
 
 type Student = {
   id: string
@@ -55,6 +56,8 @@ export default function StudentsPage() {
           </Link>
         </>}
       </div>
+
+      <OnboardingHint id="students_list" className="mb-4" />
 
       <input
         type="text"

@@ -5,6 +5,8 @@ import { useParams } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
 import { FujiScene } from '@/components/FujiScene'
 import { localDateStr } from '@/lib/dates'
+import { CabinetTour } from '@/components/CabinetTour'
+import { CABINET_TOUR_SLIDES } from '@/lib/onboarding'
 
 const supabase = createBrowserClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -491,6 +493,11 @@ export default function CabinetPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <CabinetTour
+        storageKey="samurai_cabinet_tour_done"
+        slides={CABINET_TOUR_SLIDES}
+        personName={student.name.split(' ')[0]}
+      />
       {/* Шапка */}
       <div className="relative overflow-hidden">
         <FujiScene dark={true} bgColor="#111827" />

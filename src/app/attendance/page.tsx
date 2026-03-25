@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/components/AuthProvider'
 import { localDateStr } from '@/lib/dates'
+import { OnboardingHint } from '@/components/OnboardingHint'
 
 type Student = {
   id: string
@@ -172,6 +173,8 @@ export default function AttendancePage() {
         <Link href="/" className="text-gray-500 hover:text-black text-xl font-bold leading-none">←</Link>
         <h1 className="text-xl font-bold text-gray-800">Посещаемость</h1>
       </div>
+
+      <OnboardingHint id="attendance" className="mb-4" />
 
       <input type="date" value={date} onChange={e => setDate(e.target.value)}
         className="w-full border border-gray-200 rounded-xl px-4 py-2.5 mb-3 outline-none focus:border-gray-400" />

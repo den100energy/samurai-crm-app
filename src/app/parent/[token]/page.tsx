@@ -5,6 +5,8 @@ import { useParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { FujiScene } from '@/components/FujiScene'
 import { localDateStr } from '@/lib/dates'
+import { CabinetTour } from '@/components/CabinetTour'
+import { PARENT_TOUR_SLIDES } from '@/lib/onboarding'
 
 type Student = { id: string; name: string; group_name: string | null; birth_date: string | null; photo_url: string | null }
 type ScheduleSlot = { day_of_week: number; time_start: string | null; trainer_name: string | null }
@@ -243,6 +245,11 @@ export default function ParentPage() {
 
   return (
     <main className="min-h-screen bg-gray-50">
+      <CabinetTour
+        storageKey="samurai_parent_tour_done"
+        slides={PARENT_TOUR_SLIDES}
+        personName={student.name.split(' ')[0]}
+      />
       <div className="max-w-sm mx-auto">
         {/* Hero */}
         <div className="relative overflow-hidden">

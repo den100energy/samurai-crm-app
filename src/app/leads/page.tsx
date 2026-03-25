@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/components/AuthProvider'
+import { OnboardingHint } from '@/components/OnboardingHint'
 
 type Lead = {
   id: string
@@ -190,6 +191,8 @@ export default function LeadsPage() {
           </button>
         )}
       </div>
+
+      <OnboardingHint id="leads" className="mb-4" />
 
       {/* Статистика */}
       <div className="grid grid-cols-4 gap-2 mb-4">

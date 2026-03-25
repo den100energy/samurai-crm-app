@@ -9,6 +9,8 @@ import { useTheme } from '@/components/ThemeProvider'
 import { hasAccess } from '@/lib/auth'
 import { FujiScene } from '@/components/FujiScene'
 import { localDateStr } from '@/lib/dates'
+import { OnboardingHint } from '@/components/OnboardingHint'
+import { resetAllHints } from '@/lib/onboarding'
 
 type ScheduleSlot = {
   id: string
@@ -228,6 +230,14 @@ export default function TrainerPage() {
                   px-2.5 py-1.5 rounded-lg hover:text-white transition-all duration-200">
                 {dark ? '☀' : '🌙'}
               </button>
+              <button
+                onClick={() => { resetAllHints(); window.location.reload() }}
+                title="Показать подсказки заново"
+                className="text-sm text-white/70 border border-white/20 bg-black/25 backdrop-blur-sm
+                  px-2.5 py-1.5 rounded-lg hover:border-amber-400/60 hover:text-amber-300
+                  transition-all duration-200">
+                💡
+              </button>
               <button onClick={signOut}
                 className="text-sm text-white/70 border border-white/20 bg-black/25 backdrop-blur-sm
                   px-3 py-1.5 rounded-lg hover:text-white transition-all duration-200">
@@ -249,6 +259,8 @@ export default function TrainerPage() {
       )}
 
       <div className="p-4">
+
+      <OnboardingHint id="trainer_cabinet" className="mb-4" />
 
       {/* Stats */}
       <div className="grid grid-cols-2 gap-3 mb-4">

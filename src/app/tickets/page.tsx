@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/components/AuthProvider'
+import { OnboardingHint } from '@/components/OnboardingHint'
 
 type Ticket = {
   id: string
@@ -123,6 +124,8 @@ export default function TicketsPage() {
         <h1 className="text-xl font-bold text-gray-800">Обращения</h1>
         <span className="ml-auto text-sm text-gray-400">{tickets.length} всего</span>
       </div>
+
+      <OnboardingHint id="tickets" className="mb-4" />
 
       {/* Filter tabs */}
       <div className="flex gap-2 mb-4 overflow-x-auto pb-1">

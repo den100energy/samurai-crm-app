@@ -8,6 +8,8 @@ import { useAuth } from '@/components/AuthProvider'
 import { SECTIONS, hasAccess } from '@/lib/auth'
 import { useTheme } from '@/components/ThemeProvider'
 import { FujiScene } from '@/components/FujiScene'
+import { OnboardingHint } from '@/components/OnboardingHint'
+import { resetAllHints } from '@/lib/onboarding'
 
 export default function Home() {
   const { role, userName, trainerId, permissions } = useAuth()
@@ -215,6 +217,16 @@ export default function Home() {
                   transition-all duration-200">
                 {theme === 'dark' ? '☀' : '🌙'}
               </button>
+              {role === 'founder' && (
+                <button
+                  onClick={() => { resetAllHints(); window.location.reload() }}
+                  title="Показать подсказки заново"
+                  className="text-xs text-white/70 border border-white/20 bg-black/25 backdrop-blur-sm
+                    px-2.5 py-1.5 rounded-lg hover:border-amber-400/60 hover:text-amber-300
+                    transition-all duration-200">
+                  💡
+                </button>
+              )}
               {userName && (
                 <button onClick={signOut}
                   className="text-xs text-white/70 border border-white/20 bg-black/25 backdrop-blur-sm
@@ -272,6 +284,11 @@ export default function Home() {
           </button>
         ))}
       </div>
+
+      {/* Онбординг-хинт для новых пользователей */}
+      {loaded && totalStudents === 0 && (
+        <OnboardingHint id="dashboard_welcome" className="mx-4 mb-4" />
+      )}
 
       {/* Воронка срезов прогресса */}
       {surveyFunnel && (

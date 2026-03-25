@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/components/AuthProvider'
+import { OnboardingHint } from '@/components/OnboardingHint'
 
 type Payment = {
   id: string
@@ -216,6 +217,8 @@ export default function FinancePage() {
           </button>
         )}
       </div>
+
+      <OnboardingHint id="finance" className="mb-4" />
 
       {/* Выбор месяца */}
       <div className="flex gap-2 overflow-x-auto pb-2 mb-4">
