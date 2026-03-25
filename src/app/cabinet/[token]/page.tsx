@@ -299,6 +299,8 @@ export default function CabinetPage() {
   const { token } = useParams<{ token: string }>()
   const [student, setStudent] = useState<Student | null>(null)
   const [subscription, setSubscription] = useState<Subscription | null>(null)
+  const [firstSubDate, setFirstSubDate] = useState<string | null>(null)
+  const [trainingStartDate, setTrainingStartDate] = useState<string | null>(null)
   const [surveys, setSurveys] = useState<Survey[]>([])
   const [tasks, setTasks] = useState<Task[]>([])
   const [certs, setCerts] = useState<Cert[]>([])
@@ -336,7 +338,7 @@ export default function CabinetPage() {
     const monday = weekDates[1]
     const sunday = weekDates[7]
 
-    const [subRes, surveysRes, tasksRes, certsRes, attRes, tkRes, diagRes, schedRes, ovRes] = await Promise.all([
+    const [subRes, surveysRes, tasksRes, certsRes, attRes, tkRes, diagRes, schedRes, ovRes, firstSubRes, profileRes] = await Promise.all([
       supabase.from('subscriptions').select('sessions_left, sessions_total, end_date, type')
         .eq('student_id', sid).order('created_at', { ascending: false }).limit(1).maybeSingle(),
       supabase.from('progress_surveys').select('*').eq('student_id', sid).order('created_at'),
@@ -359,9 +361,14 @@ export default function CabinetPage() {
             .eq('group_name', studentData.group_name)
             .gte('date', monday).lte('date', sunday)
         : Promise.resolve({ data: [] }),
+      supabase.from('subscriptions').select('start_date').eq('student_id', sid)
+        .order('start_date', { ascending: true }).limit(1).maybeSingle(),
+      supabase.from('student_profiles').select('training_start_date').eq('student_id', sid).maybeSingle(),
     ])
 
     setSubscription(subRes.data)
+    setFirstSubDate((firstSubRes as any).data?.start_date || null)
+    setTrainingStartDate((profileRes as any).data?.training_start_date || null)
     setSurveys(surveysRes.data || [])
     setTasks(tasksRes.data || [])
     setCerts(certsRes.data || [])
@@ -1052,8 +1059,9 @@ export default function CabinetPage() {
               type TimelineEvent = { date: string; icon: string; title: string }
               const events: TimelineEvent[] = []
 
-              if (student?.created_at) {
-                events.push({ date: student.created_at, icon: '🎌', title: 'Начало пути в Самурае' })
+              const startDate = trainingStartDate || firstSubDate || student?.created_at
+              if (startDate) {
+                events.push({ date: startDate, icon: '🎌', title: 'Начало пути в Школе Самурая' })
               }
 
               const presentSorted = [...attendance]

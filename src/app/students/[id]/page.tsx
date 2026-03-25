@@ -621,6 +621,18 @@ export default function StudentPage() {
     alert(`Текст скопирован!\n\nОтправьте ${forWho === 'parent' ? 'родителю' : 'ученику'} в Telegram или WhatsApp.`)
   }
 
+  async function saveTrainingStartDate(date: string) {
+    let prof = studentProfile
+    if (!prof) {
+      const { data } = await supabase.from('student_profiles').insert({ student_id: id }).select().single()
+      prof = data
+      if (prof) setStudentProfile(prof)
+    }
+    if (!prof) return
+    await supabase.from('student_profiles').update({ training_start_date: date || null }).eq('id', prof.id)
+    setStudentProfile({ ...prof, training_start_date: date || null })
+  }
+
   async function sendProfileSurvey() {
     let prof = studentProfile
     if (!prof) {
@@ -1757,6 +1769,16 @@ export default function StudentPage() {
           </span>
         </div>
         <div className="px-4 py-3 space-y-2">
+          <div>
+            <label className="text-xs text-gray-500 block mb-1">📅 Дата начала занятий</label>
+            <input
+              type="date"
+              defaultValue={studentProfile?.training_start_date || ''}
+              onBlur={e => saveTrainingStartDate(e.target.value)}
+              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-gray-400"
+            />
+            <p className="text-xs text-gray-400 mt-1">Для давних учеников — укажи вручную. Для новых — берётся из абонемента.</p>
+          </div>
           <button onClick={sendProfileSurvey}
             className={`w-full text-xs py-2.5 rounded-xl border font-medium
               ${studentProfile?.filled_at
