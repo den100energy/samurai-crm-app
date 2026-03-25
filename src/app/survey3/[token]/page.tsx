@@ -36,6 +36,7 @@ export default function Survey3Page() {
     height_category: '',
     father_name: '', father_phone: '', father_telegram: '', father_in_group: false,
     mother_name: '', mother_phone: '', mother_telegram: '', mother_in_group: false,
+    training_start_date: '',
     referral_source: '',
     goals: [] as string[],
     consent_rules: false, consent_contract: false, consent_personal_data: false,
@@ -72,6 +73,7 @@ export default function Survey3Page() {
             mother_phone: data.mother_phone || '',
             mother_telegram: data.mother_telegram || '',
             mother_in_group: data.mother_in_group || false,
+            training_start_date: data.training_start_date || '',
             referral_source: data.referral_source || '',
             goals: data.goals || [],
           }))
@@ -240,6 +242,16 @@ export default function Survey3Page() {
               </button>
             ))}
           </div>
+        </div>
+        <div>
+          <label className="text-xs text-gray-500 block mb-1">С какого месяца и года занимаешься в Школе Самурая?</label>
+          <input
+            type="month"
+            value={form.training_start_date ? form.training_start_date.slice(0, 7) : ''}
+            onChange={e => setForm(f => ({ ...f, training_start_date: e.target.value ? e.target.value + '-01' : '' }))}
+            className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-gray-400"
+          />
+          <p className="text-xs text-gray-400 mt-0.5">Примерно, если не помнишь точно</p>
         </div>
       </div>
       <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-100">
