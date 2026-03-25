@@ -21,6 +21,19 @@ const HEIGHT_OPTIONS = [
   { value: '>160', label: 'Выше 160 см' },
 ]
 
+function ProgressBar({ step, total }: { step: number; total: number }) {
+  return (
+    <div className="mb-5">
+      <div className="flex gap-1.5 mb-1">
+        {Array.from({ length: total }).map((_, i) => (
+          <div key={i} className={`h-1 flex-1 rounded-full ${i < step ? 'bg-black' : 'bg-gray-200'}`} />
+        ))}
+      </div>
+      <p className="text-xs text-gray-400 text-right">Шаг {step} из {total}</p>
+    </div>
+  )
+}
+
 export default function Survey3Page() {
   const { token } = useParams<{ token: string }>()
   const [profile, setProfile] = useState<any>(null)
@@ -30,14 +43,29 @@ export default function Survey3Page() {
   const [submitting, setSubmitting] = useState(false)
 
   const [form, setForm] = useState({
+    // Шаг 1 — данные ученика
     last_name: '', first_name: '', middle_name: '',
     student_telegram: '', email: '',
     address: '', school_name: '', school_grade: '',
     height_category: '',
+    training_start_date: '',
+    // Шаг 2 — контакты родителей
     father_name: '', father_phone: '', father_telegram: '', father_in_group: false,
     mother_name: '', mother_phone: '', mother_telegram: '', mother_in_group: false,
-    training_start_date: '',
     referral_source: '',
+    contract_with: '' as '' | 'мама' | 'папа' | 'другой',
+    // Шаг 3 — данные для договора (подписант)
+    signer_last_name: '', signer_first_name: '', signer_middle_name: '',
+    signer_birth_date: '',
+    signer_passport_series: '', signer_passport_number: '',
+    signer_passport_issued_by: '', signer_passport_issued_date: '',
+    signer_address_reg: '', signer_address_fact: '',
+    // Шаг 3 — документ ребёнка
+    child_doc_type: '' as '' | 'свидетельство' | 'паспорт',
+    child_doc_number: '',
+    child_doc_issued_by: '',
+    child_doc_issued_date: '',
+    // Шаг 4 — цели + согласия
     goals: [] as string[],
     consent_rules: false, consent_contract: false, consent_personal_data: false,
   })
@@ -52,7 +80,6 @@ export default function Survey3Page() {
           setProfile(data)
           setStudent(data.students)
           if (data.filled_at) setStep(99)
-          // Pre-fill existing data
           const nameParts = data.students?.name?.split(' ') || []
           setForm(f => ({
             ...f,
@@ -65,6 +92,7 @@ export default function Survey3Page() {
             school_name: data.school_name || '',
             school_grade: data.school_grade || '',
             height_category: data.height_category || '',
+            training_start_date: data.training_start_date || '',
             father_name: data.father_name || '',
             father_phone: data.father_phone || '',
             father_telegram: data.father_telegram || '',
@@ -73,8 +101,22 @@ export default function Survey3Page() {
             mother_phone: data.mother_phone || '',
             mother_telegram: data.mother_telegram || '',
             mother_in_group: data.mother_in_group || false,
-            training_start_date: data.training_start_date || '',
             referral_source: data.referral_source || '',
+            contract_with: data.contract_with || '',
+            signer_last_name: data.signer_last_name || '',
+            signer_first_name: data.signer_first_name || '',
+            signer_middle_name: data.signer_middle_name || '',
+            signer_birth_date: data.signer_birth_date || '',
+            signer_passport_series: data.signer_passport_series || '',
+            signer_passport_number: data.signer_passport_number || '',
+            signer_passport_issued_by: data.signer_passport_issued_by || '',
+            signer_passport_issued_date: data.signer_passport_issued_date || '',
+            signer_address_reg: data.signer_address_reg || '',
+            signer_address_fact: data.signer_address_fact || '',
+            child_doc_type: data.child_doc_type || '',
+            child_doc_number: data.child_doc_number || '',
+            child_doc_issued_by: data.child_doc_issued_by || '',
+            child_doc_issued_date: data.child_doc_issued_date || '',
             goals: data.goals || [],
           }))
         }
@@ -86,6 +128,18 @@ export default function Survey3Page() {
     setForm(f => ({
       ...f,
       goals: f.goals.includes(goal) ? f.goals.filter(g => g !== goal) : [...f.goals, goal],
+    }))
+  }
+
+  function handleContractWith(val: 'мама' | 'папа' | 'другой') {
+    const fullName = val === 'мама' ? form.mother_name : val === 'папа' ? form.father_name : ''
+    const parts = fullName.trim().split(/\s+/)
+    setForm(f => ({
+      ...f,
+      contract_with: val,
+      signer_last_name: parts[0] || f.signer_last_name,
+      signer_first_name: parts[1] || f.signer_first_name,
+      signer_middle_name: parts[2] || f.signer_middle_name,
     }))
   }
 
@@ -102,7 +156,6 @@ export default function Survey3Page() {
       filled_at: new Date().toISOString(),
     }).eq('id', profile.id)
 
-    // Создаём контакты родителей
     if (form.father_name || form.father_phone) {
       await supabase.from('student_contacts').upsert({
         student_id: profile.student_id,
@@ -126,6 +179,7 @@ export default function Survey3Page() {
   if (loading) return <div className="min-h-screen flex items-center justify-center text-gray-400">Загрузка...</div>
   if (!profile) return <div className="min-h-screen flex items-center justify-center text-gray-500 p-6 text-center"><div><div className="text-4xl mb-3">🔍</div><p>Анкета не найдена</p></div></div>
 
+  // Шаг 99 — завершено
   if (step === 99) return (
     <div className="min-h-screen bg-gradient-to-b from-amber-50 to-white flex flex-col items-center justify-center p-6 text-center">
       <div className="text-6xl mb-5">🥋</div>
@@ -147,7 +201,7 @@ export default function Survey3Page() {
       <div className="bg-white rounded-2xl border border-amber-100 shadow-sm p-5 mb-5 space-y-3">
         <p className="font-semibold text-gray-800">Добро пожаловать в семью Школы Самурая! 🎉</p>
         <p className="text-sm text-gray-600 leading-relaxed">
-          Чтобы мы могли оформить договор и максимально учесть всё важное для занятий, заполните анкету ученика. Это займёт 4–5 минут.
+          Чтобы мы могли оформить договор и максимально учесть всё важное для занятий, заполните анкету ученика. Это займёт 5–7 минут.
         </p>
         <div className="space-y-2">
           <div className="flex items-start gap-2 text-sm text-gray-700">
@@ -157,6 +211,10 @@ export default function Survey3Page() {
           <div className="flex items-start gap-2 text-sm text-gray-700">
             <span className="mt-0.5">👨‍👩‍👧</span>
             <span>Контакты родителей — чтобы мы всегда могли оперативно связаться</span>
+          </div>
+          <div className="flex items-start gap-2 text-sm text-gray-700">
+            <span className="mt-0.5">📄</span>
+            <span>Паспортные данные — для оформления договора об оказании услуг</span>
           </div>
           <div className="flex items-start gap-2 text-sm text-gray-700">
             <span className="mt-0.5">🎯</span>
@@ -174,12 +232,7 @@ export default function Survey3Page() {
   // Шаг 1 — данные ученика
   if (step === 1) return (
     <div className="min-h-screen bg-white p-5 max-w-lg mx-auto pb-24">
-      <div className="mb-5">
-        <div className="flex gap-1.5 mb-1">
-          {[0,1,2].map(i => <div key={i} className={`h-1 flex-1 rounded-full ${i === 0 ? 'bg-black' : 'bg-gray-200'}`} />)}
-        </div>
-        <p className="text-xs text-gray-400 text-right">Шаг 1 из 3</p>
-      </div>
+      <ProgressBar step={1} total={4} />
       <h2 className="text-lg font-bold text-gray-800 mb-4">Данные ученика</h2>
       <div className="space-y-3">
         {[
@@ -266,12 +319,7 @@ export default function Survey3Page() {
   // Шаг 2 — контакты родителей
   if (step === 2) return (
     <div className="min-h-screen bg-white p-5 max-w-lg mx-auto pb-24">
-      <div className="mb-5">
-        <div className="flex gap-1.5 mb-1">
-          {[0,1,2].map(i => <div key={i} className={`h-1 flex-1 rounded-full ${i <= 1 ? 'bg-black' : 'bg-gray-200'}`} />)}
-        </div>
-        <p className="text-xs text-gray-400 text-right">Шаг 2 из 3</p>
-      </div>
+      <ProgressBar step={2} total={4} />
       <h2 className="text-lg font-bold text-gray-800 mb-1">Контакты родителей</h2>
       <p className="text-sm text-gray-500 mb-5">Для оперативной связи по вопросам занятий</p>
 
@@ -308,6 +356,21 @@ export default function Survey3Page() {
           </label>
         </div>
 
+        {/* Кто подписывает договор */}
+        <div className="bg-blue-50 rounded-2xl p-4 space-y-3">
+          <p className="text-sm font-semibold text-gray-700">📄 Кто подписывает договор?</p>
+          <p className="text-xs text-gray-500">Договор об оказании услуг оформляется на законного представителя ребёнка</p>
+          <div className="flex gap-2">
+            {(['мама', 'папа', 'другой'] as const).map(val => (
+              <button key={val} onClick={() => handleContractWith(val)}
+                className={`flex-1 py-2.5 rounded-xl text-sm font-medium border transition-colors capitalize
+                  ${form.contract_with === val ? 'bg-black text-white border-black' : 'bg-white border-gray-200 text-gray-600'}`}>
+                {val === 'мама' ? '👩 Мама' : val === 'папа' ? '👨 Папа' : '👤 Другой'}
+              </button>
+            ))}
+          </div>
+        </div>
+
         <div>
           <label className="text-xs text-gray-500 block mb-1">Как узнали о Школе Самурая?</label>
           <input value={form.referral_source} onChange={e => setForm(f => ({...f, referral_source: e.target.value}))}
@@ -317,7 +380,11 @@ export default function Survey3Page() {
       </div>
 
       <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-100">
-        <button onClick={() => setStep(3)}
+        <button
+          onClick={() => {
+            if (!form.contract_with) { alert('Укажите кто подписывает договор'); return }
+            setStep(3)
+          }}
           className="w-full bg-black text-white py-3.5 rounded-2xl font-medium text-sm max-w-lg mx-auto block">
           Далее →
         </button>
@@ -325,15 +392,148 @@ export default function Survey3Page() {
     </div>
   )
 
-  // Шаг 3 — цели + согласия
+  // Шаг 3 — данные для договора
   if (step === 3) return (
-    <div className="min-h-screen bg-white p-5 max-w-lg mx-auto pb-28">
-      <div className="mb-5">
-        <div className="flex gap-1.5 mb-1">
-          {[0,1,2].map(i => <div key={i} className="h-1 flex-1 rounded-full bg-black" />)}
+    <div className="min-h-screen bg-white p-5 max-w-lg mx-auto pb-24">
+      <ProgressBar step={3} total={4} />
+      <h2 className="text-lg font-bold text-gray-800 mb-1">Данные для договора</h2>
+      <p className="text-sm text-gray-500 mb-5">
+        Подписант: <span className="font-medium text-gray-700 capitalize">{form.contract_with}</span>
+      </p>
+
+      {/* Паспортные данные подписанта */}
+      <div className="space-y-3 mb-6">
+        <p className="text-sm font-semibold text-gray-700">Данные подписанта договора</p>
+
+        {[
+          ['signer_last_name', 'Фамилия *'],
+          ['signer_first_name', 'Имя *'],
+          ['signer_middle_name', 'Отчество'],
+        ].map(([key, label]) => (
+          <div key={key}>
+            <label className="text-xs text-gray-500 block mb-1">{label}</label>
+            <input value={(form as any)[key]} onChange={e => setForm(f => ({...f, [key]: e.target.value}))}
+              className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-gray-400" />
+          </div>
+        ))}
+
+        <div>
+          <label className="text-xs text-gray-500 block mb-1">Дата рождения</label>
+          <input type="date" value={form.signer_birth_date}
+            onChange={e => setForm(f => ({...f, signer_birth_date: e.target.value}))}
+            className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-gray-400" />
         </div>
-        <p className="text-xs text-gray-400 text-right">Шаг 3 из 3</p>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs text-gray-500 block mb-1">Серия паспорта</label>
+            <input value={form.signer_passport_series}
+              onChange={e => setForm(f => ({...f, signer_passport_series: e.target.value}))}
+              placeholder="1234" maxLength={4}
+              className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-gray-400" />
+          </div>
+          <div>
+            <label className="text-xs text-gray-500 block mb-1">Номер паспорта</label>
+            <input value={form.signer_passport_number}
+              onChange={e => setForm(f => ({...f, signer_passport_number: e.target.value}))}
+              placeholder="567890" maxLength={6}
+              className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-gray-400" />
+          </div>
+        </div>
+
+        <div>
+          <label className="text-xs text-gray-500 block mb-1">Кем выдан</label>
+          <input value={form.signer_passport_issued_by}
+            onChange={e => setForm(f => ({...f, signer_passport_issued_by: e.target.value}))}
+            placeholder="Отделом МВД России по г. ..."
+            className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-gray-400" />
+        </div>
+
+        <div>
+          <label className="text-xs text-gray-500 block mb-1">Дата выдачи паспорта</label>
+          <input type="date" value={form.signer_passport_issued_date}
+            onChange={e => setForm(f => ({...f, signer_passport_issued_date: e.target.value}))}
+            className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-gray-400" />
+        </div>
+
+        <div>
+          <label className="text-xs text-gray-500 block mb-1">Адрес регистрации (прописки) *</label>
+          <input value={form.signer_address_reg}
+            onChange={e => setForm(f => ({...f, signer_address_reg: e.target.value}))}
+            placeholder="г. Москва, ул. Ленина, д.1, кв.1"
+            className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-gray-400" />
+        </div>
+
+        <div>
+          <label className="text-xs text-gray-500 block mb-1">Адрес фактического проживания</label>
+          <input value={form.signer_address_fact}
+            onChange={e => setForm(f => ({...f, signer_address_fact: e.target.value}))}
+            placeholder="Если отличается от прописки"
+            className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-gray-400" />
+        </div>
       </div>
+
+      {/* Документ ребёнка */}
+      <div className="space-y-3">
+        <p className="text-sm font-semibold text-gray-700">Документ ребёнка</p>
+        <div>
+          <label className="text-xs text-gray-500 block mb-2">Тип документа</label>
+          <div className="flex gap-2">
+            {(['свидетельство', 'паспорт'] as const).map(val => (
+              <button key={val} onClick={() => setForm(f => ({...f, child_doc_type: val}))}
+                className={`flex-1 py-2.5 rounded-xl text-sm font-medium border transition-colors
+                  ${form.child_doc_type === val ? 'bg-black text-white border-black' : 'bg-white border-gray-200 text-gray-600'}`}>
+                {val === 'свидетельство' ? '📜 Свидетельство о рождении' : '🪪 Паспорт'}
+              </button>
+            ))}
+          </div>
+          <p className="text-xs text-gray-400 mt-1">Свидетельство — до 14 лет, паспорт — с 14 лет</p>
+        </div>
+
+        {form.child_doc_type && (
+          <>
+            <div>
+              <label className="text-xs text-gray-500 block mb-1">Серия и номер</label>
+              <input value={form.child_doc_number}
+                onChange={e => setForm(f => ({...f, child_doc_number: e.target.value}))}
+                placeholder={form.child_doc_type === 'свидетельство' ? 'I-АБ 123456' : '1234 567890'}
+                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-gray-400" />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 block mb-1">Кем выдан</label>
+              <input value={form.child_doc_issued_by}
+                onChange={e => setForm(f => ({...f, child_doc_issued_by: e.target.value}))}
+                placeholder={form.child_doc_type === 'свидетельство' ? 'Отдел ЗАГС ...' : 'Отдел МВД России ...'}
+                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-gray-400" />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 block mb-1">Дата выдачи</label>
+              <input type="date" value={form.child_doc_issued_date}
+                onChange={e => setForm(f => ({...f, child_doc_issued_date: e.target.value}))}
+                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-gray-400" />
+            </div>
+          </>
+        )}
+      </div>
+
+      <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-100">
+        <button
+          onClick={() => {
+            if (!form.signer_last_name || !form.signer_first_name) { alert('Заполните фамилию и имя подписанта'); return }
+            if (!form.signer_address_reg) { alert('Укажите адрес регистрации'); return }
+            setStep(4)
+          }}
+          className="w-full bg-black text-white py-3.5 rounded-2xl font-medium text-sm max-w-lg mx-auto block">
+          Далее →
+        </button>
+      </div>
+    </div>
+  )
+
+  // Шаг 4 — цели + согласия
+  if (step === 4) return (
+    <div className="min-h-screen bg-white p-5 max-w-lg mx-auto pb-28">
+      <ProgressBar step={4} total={4} />
       <h2 className="text-lg font-bold text-gray-800 mb-1">Цели занятий</h2>
       <p className="text-sm text-gray-500 mb-4">Выберите всё, что важно для вас (можно несколько)</p>
 
