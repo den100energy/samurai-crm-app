@@ -34,6 +34,15 @@ function ProgressBar({ step, total }: { step: number; total: number }) {
   )
 }
 
+function FieldError({ msg }: { msg?: string }) {
+  if (!msg) return null
+  return <p className="text-xs text-red-500 mt-0.5">{msg}</p>
+}
+
+function inputClass(hasError: boolean) {
+  return `w-full border rounded-xl px-4 py-2.5 text-sm outline-none ${hasError ? 'border-red-400 bg-red-50' : 'border-gray-200 focus:border-gray-400'}`
+}
+
 export default function Survey3Page() {
   const { token } = useParams<{ token: string }>()
   const [profile, setProfile] = useState<any>(null)
@@ -41,6 +50,7 @@ export default function Survey3Page() {
   const [loading, setLoading] = useState(true)
   const [step, setStep] = useState(0)
   const [submitting, setSubmitting] = useState(false)
+  const [errors, setErrors] = useState<Record<string, string>>({})
 
   const [form, setForm] = useState({
     // Шаг 1 — данные ученика
@@ -124,6 +134,11 @@ export default function Survey3Page() {
       })
   }, [token])
 
+  function set(key: string, value: any) {
+    setForm(f => ({ ...f, [key]: value }))
+    setErrors(e => { const next = { ...e }; delete next[key]; return next })
+  }
+
   function toggleGoal(goal: string) {
     setForm(f => ({
       ...f,
@@ -141,14 +156,54 @@ export default function Survey3Page() {
       signer_first_name: parts[1] || f.signer_first_name,
       signer_middle_name: parts[2] || f.signer_middle_name,
     }))
+    setErrors(e => { const next = { ...e }; delete next.contract_with; return next })
+  }
+
+  function validateStep1() {
+    const errs: Record<string, string> = {}
+    if (!form.last_name.trim()) errs.last_name = 'Введите фамилию'
+    if (!form.first_name.trim()) errs.first_name = 'Введите имя'
+    return errs
+  }
+
+  function validateStep2() {
+    const errs: Record<string, string> = {}
+    if (!form.contract_with) errs.contract_with = 'Укажите кто подписывает договор'
+    return errs
+  }
+
+  function validateStep3() {
+    const errs: Record<string, string> = {}
+    if (!form.signer_last_name.trim()) errs.signer_last_name = 'Введите фамилию'
+    if (!form.signer_first_name.trim()) errs.signer_first_name = 'Введите имя'
+    if (!form.signer_address_reg.trim()) errs.signer_address_reg = 'Укажите адрес регистрации'
+    return errs
+  }
+
+  function goNext(nextStep: number, validate: () => Record<string, string>) {
+    const errs = validate()
+    if (Object.keys(errs).length > 0) {
+      setErrors(errs)
+      // Scroll to first error
+      setTimeout(() => {
+        const el = document.querySelector('[data-error="true"]')
+        el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }, 50)
+      return
+    }
+    setErrors({})
+    setStep(nextStep)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  function goBack(prevStep: number) {
+    setErrors({})
+    setStep(prevStep)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   async function submit() {
     if (!profile) return
-    if (!form.consent_rules || !form.consent_contract || !form.consent_personal_data) {
-      alert('Пожалуйста, подтвердите все три пункта внизу')
-      return
-    }
     setSubmitting(true)
     await supabase.from('student_profiles').update({
       ...form,
@@ -235,15 +290,19 @@ export default function Survey3Page() {
       <ProgressBar step={1} total={4} />
       <h2 className="text-lg font-bold text-gray-800 mb-4">Данные ученика</h2>
       <div className="space-y-3">
-        {[
-          ['last_name', 'Фамилия *', 'text'],
-          ['first_name', 'Имя *', 'text'],
-          ['middle_name', 'Отчество', 'text'],
-        ].map(([key, label]) => (
-          <div key={key}>
+        {([
+          ['last_name', 'Фамилия *'],
+          ['first_name', 'Имя *'],
+          ['middle_name', 'Отчество'],
+        ] as [string, string][]).map(([key, label]) => (
+          <div key={key} data-error={!!errors[key] || undefined}>
             <label className="text-xs text-gray-500 block mb-1">{label}</label>
-            <input value={(form as any)[key]} onChange={e => setForm(f => ({...f, [key]: e.target.value}))}
-              className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-gray-400" />
+            <input
+              value={(form as any)[key]}
+              onChange={e => set(key, e.target.value)}
+              className={inputClass(!!errors[key])}
+            />
+            <FieldError msg={errors[key]} />
           </div>
         ))}
         <div>
@@ -254,41 +313,41 @@ export default function Survey3Page() {
         </div>
         <div>
           <label className="text-xs text-gray-500 block mb-1">Telegram ученика (@никнейм)</label>
-          <input value={form.student_telegram} onChange={e => setForm(f => ({...f, student_telegram: e.target.value}))}
+          <input value={form.student_telegram} onChange={e => set('student_telegram', e.target.value)}
             placeholder="@username"
-            className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none" />
+            className={inputClass(false)} />
         </div>
         <div>
           <label className="text-xs text-gray-500 block mb-1">Email</label>
-          <input type="email" value={form.email} onChange={e => setForm(f => ({...f, email: e.target.value}))}
+          <input type="email" value={form.email} onChange={e => set('email', e.target.value)}
             placeholder="example@mail.ru"
-            className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none" />
+            className={inputClass(false)} />
         </div>
         <div>
           <label className="text-xs text-gray-500 block mb-1">Адрес проживания</label>
-          <input value={form.address} onChange={e => setForm(f => ({...f, address: e.target.value}))}
+          <input value={form.address} onChange={e => set('address', e.target.value)}
             placeholder="ул. Ленина, д.1, кв.1"
-            className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none" />
+            className={inputClass(false)} />
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="text-xs text-gray-500 block mb-1">Школа / учебное заведение</label>
-            <input value={form.school_name} onChange={e => setForm(f => ({...f, school_name: e.target.value}))}
+            <input value={form.school_name} onChange={e => set('school_name', e.target.value)}
               placeholder="Школа №1"
-              className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none" />
+              className={inputClass(false)} />
           </div>
           <div>
             <label className="text-xs text-gray-500 block mb-1">Класс / курс</label>
-            <input value={form.school_grade} onChange={e => setForm(f => ({...f, school_grade: e.target.value}))}
+            <input value={form.school_grade} onChange={e => set('school_grade', e.target.value)}
               placeholder="5А"
-              className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none" />
+              className={inputClass(false)} />
           </div>
         </div>
         <div>
           <label className="text-xs text-gray-500 block mb-2">Рост</label>
           <div className="flex gap-2">
             {HEIGHT_OPTIONS.map(h => (
-              <button key={h.value} onClick={() => setForm(f => ({...f, height_category: h.value}))}
+              <button key={h.value} onClick={() => set('height_category', h.value)}
                 className={`flex-1 py-2 rounded-xl text-xs font-medium border transition-colors
                   ${form.height_category === h.value ? 'bg-black text-white border-black' : 'border-gray-200 text-gray-600'}`}>
                 {h.label}
@@ -301,17 +360,23 @@ export default function Survey3Page() {
           <input
             type="month"
             value={form.training_start_date ? form.training_start_date.slice(0, 7) : ''}
-            onChange={e => setForm(f => ({ ...f, training_start_date: e.target.value ? e.target.value + '-01' : '' }))}
-            className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-gray-400"
+            onChange={e => set('training_start_date', e.target.value ? e.target.value + '-01' : '')}
+            className={inputClass(false)}
           />
           <p className="text-xs text-gray-400 mt-0.5">Примерно, если не помнишь точно</p>
         </div>
       </div>
       <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-100">
-        <button onClick={() => { if (!form.last_name || !form.first_name) { alert('Заполните фамилию и имя'); return } setStep(2) }}
-          className="w-full bg-black text-white py-3.5 rounded-2xl font-medium text-sm max-w-lg mx-auto block">
-          Далее →
-        </button>
+        <div className="flex gap-3 max-w-lg mx-auto">
+          <button onClick={() => goBack(0)}
+            className="px-5 py-3.5 rounded-2xl border border-gray-200 text-sm font-medium text-gray-600">
+            ← Назад
+          </button>
+          <button onClick={() => goNext(2, validateStep1)}
+            className="flex-1 bg-black text-white py-3.5 rounded-2xl font-medium text-sm">
+            Далее →
+          </button>
+        </div>
       </div>
     </div>
   )
@@ -326,15 +391,15 @@ export default function Survey3Page() {
       <div className="space-y-4">
         <div className="bg-gray-50 rounded-2xl p-4 space-y-3">
           <p className="text-sm font-semibold text-gray-700">👨 Отец</p>
-          {[['father_name','ФИО отца','text'],['father_phone','Телефон','tel'],['father_telegram','Telegram (@никнейм)','text']].map(([key,label,type]) => (
+          {([['father_name','ФИО отца','text'],['father_phone','Телефон','tel'],['father_telegram','Telegram (@никнейм)','text']] as [string,string,string][]).map(([key,label,type]) => (
             <div key={key}>
               <label className="text-xs text-gray-500 block mb-1">{label}</label>
-              <input type={type} value={(form as any)[key]} onChange={e => setForm(f => ({...f, [key]: e.target.value}))}
+              <input type={type} value={(form as any)[key]} onChange={e => set(key, e.target.value)}
                 className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none bg-white" />
             </div>
           ))}
           <label className="flex items-center gap-3 cursor-pointer">
-            <input type="checkbox" checked={form.father_in_group} onChange={e => setForm(f => ({...f, father_in_group: e.target.checked}))}
+            <input type="checkbox" checked={form.father_in_group} onChange={e => set('father_in_group', e.target.checked)}
               className="w-4 h-4 accent-black" />
             <span className="text-sm text-gray-600">Добавить в информационную группу Telegram</span>
           </label>
@@ -342,23 +407,24 @@ export default function Survey3Page() {
 
         <div className="bg-gray-50 rounded-2xl p-4 space-y-3">
           <p className="text-sm font-semibold text-gray-700">👩 Мать</p>
-          {[['mother_name','ФИО матери','text'],['mother_phone','Телефон','tel'],['mother_telegram','Telegram (@никнейм)','text']].map(([key,label,type]) => (
+          {([['mother_name','ФИО матери','text'],['mother_phone','Телефон','tel'],['mother_telegram','Telegram (@никнейм)','text']] as [string,string,string][]).map(([key,label,type]) => (
             <div key={key}>
               <label className="text-xs text-gray-500 block mb-1">{label}</label>
-              <input type={type} value={(form as any)[key]} onChange={e => setForm(f => ({...f, [key]: e.target.value}))}
+              <input type={type} value={(form as any)[key]} onChange={e => set(key, e.target.value)}
                 className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none bg-white" />
             </div>
           ))}
           <label className="flex items-center gap-3 cursor-pointer">
-            <input type="checkbox" checked={form.mother_in_group} onChange={e => setForm(f => ({...f, mother_in_group: e.target.checked}))}
+            <input type="checkbox" checked={form.mother_in_group} onChange={e => set('mother_in_group', e.target.checked)}
               className="w-4 h-4 accent-black" />
             <span className="text-sm text-gray-600">Добавить в информационную группу Telegram</span>
           </label>
         </div>
 
         {/* Кто подписывает договор */}
-        <div className="bg-blue-50 rounded-2xl p-4 space-y-3">
-          <p className="text-sm font-semibold text-gray-700">📄 Кто подписывает договор?</p>
+        <div className={`rounded-2xl p-4 space-y-3 ${errors.contract_with ? 'bg-red-50 border border-red-200' : 'bg-blue-50'}`}
+          data-error={!!errors.contract_with || undefined}>
+          <p className="text-sm font-semibold text-gray-700">📄 Кто подписывает договор? *</p>
           <p className="text-xs text-gray-500">Договор об оказании услуг оформляется на законного представителя ребёнка</p>
           <div className="flex gap-2">
             {(['мама', 'папа', 'другой'] as const).map(val => (
@@ -369,25 +435,28 @@ export default function Survey3Page() {
               </button>
             ))}
           </div>
+          <FieldError msg={errors.contract_with} />
         </div>
 
         <div>
           <label className="text-xs text-gray-500 block mb-1">Как узнали о Школе Самурая?</label>
-          <input value={form.referral_source} onChange={e => setForm(f => ({...f, referral_source: e.target.value}))}
+          <input value={form.referral_source} onChange={e => set('referral_source', e.target.value)}
             placeholder="Instagram, от знакомых, реклама..."
-            className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none" />
+            className={inputClass(false)} />
         </div>
       </div>
 
       <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-100">
-        <button
-          onClick={() => {
-            if (!form.contract_with) { alert('Укажите кто подписывает договор'); return }
-            setStep(3)
-          }}
-          className="w-full bg-black text-white py-3.5 rounded-2xl font-medium text-sm max-w-lg mx-auto block">
-          Далее →
-        </button>
+        <div className="flex gap-3 max-w-lg mx-auto">
+          <button onClick={() => goBack(1)}
+            className="px-5 py-3.5 rounded-2xl border border-gray-200 text-sm font-medium text-gray-600">
+            ← Назад
+          </button>
+          <button onClick={() => goNext(3, validateStep2)}
+            className="flex-1 bg-black text-white py-3.5 rounded-2xl font-medium text-sm">
+            Далее →
+          </button>
+        </div>
       </div>
     </div>
   )
@@ -405,71 +474,73 @@ export default function Survey3Page() {
       <div className="space-y-3 mb-6">
         <p className="text-sm font-semibold text-gray-700">Данные подписанта договора</p>
 
-        {[
+        {([
           ['signer_last_name', 'Фамилия *'],
           ['signer_first_name', 'Имя *'],
           ['signer_middle_name', 'Отчество'],
-        ].map(([key, label]) => (
-          <div key={key}>
+        ] as [string, string][]).map(([key, label]) => (
+          <div key={key} data-error={!!errors[key] || undefined}>
             <label className="text-xs text-gray-500 block mb-1">{label}</label>
-            <input value={(form as any)[key]} onChange={e => setForm(f => ({...f, [key]: e.target.value}))}
-              className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-gray-400" />
+            <input value={(form as any)[key]} onChange={e => set(key, e.target.value)}
+              className={inputClass(!!errors[key])} />
+            <FieldError msg={errors[key]} />
           </div>
         ))}
 
         <div>
           <label className="text-xs text-gray-500 block mb-1">Дата рождения</label>
           <input type="date" value={form.signer_birth_date}
-            onChange={e => setForm(f => ({...f, signer_birth_date: e.target.value}))}
-            className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-gray-400" />
+            onChange={e => set('signer_birth_date', e.target.value)}
+            className={inputClass(false)} />
         </div>
 
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="text-xs text-gray-500 block mb-1">Серия паспорта</label>
             <input value={form.signer_passport_series}
-              onChange={e => setForm(f => ({...f, signer_passport_series: e.target.value}))}
+              onChange={e => set('signer_passport_series', e.target.value)}
               placeholder="1234" maxLength={4}
-              className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-gray-400" />
+              className={inputClass(false)} />
           </div>
           <div>
             <label className="text-xs text-gray-500 block mb-1">Номер паспорта</label>
             <input value={form.signer_passport_number}
-              onChange={e => setForm(f => ({...f, signer_passport_number: e.target.value}))}
+              onChange={e => set('signer_passport_number', e.target.value)}
               placeholder="567890" maxLength={6}
-              className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-gray-400" />
+              className={inputClass(false)} />
           </div>
         </div>
 
         <div>
           <label className="text-xs text-gray-500 block mb-1">Кем выдан</label>
           <input value={form.signer_passport_issued_by}
-            onChange={e => setForm(f => ({...f, signer_passport_issued_by: e.target.value}))}
+            onChange={e => set('signer_passport_issued_by', e.target.value)}
             placeholder="Отделом МВД России по г. ..."
-            className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-gray-400" />
+            className={inputClass(false)} />
         </div>
 
         <div>
           <label className="text-xs text-gray-500 block mb-1">Дата выдачи паспорта</label>
           <input type="date" value={form.signer_passport_issued_date}
-            onChange={e => setForm(f => ({...f, signer_passport_issued_date: e.target.value}))}
-            className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-gray-400" />
+            onChange={e => set('signer_passport_issued_date', e.target.value)}
+            className={inputClass(false)} />
         </div>
 
-        <div>
+        <div data-error={!!errors.signer_address_reg || undefined}>
           <label className="text-xs text-gray-500 block mb-1">Адрес регистрации (прописки) *</label>
           <input value={form.signer_address_reg}
-            onChange={e => setForm(f => ({...f, signer_address_reg: e.target.value}))}
+            onChange={e => set('signer_address_reg', e.target.value)}
             placeholder="г. Москва, ул. Ленина, д.1, кв.1"
-            className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-gray-400" />
+            className={inputClass(!!errors.signer_address_reg)} />
+          <FieldError msg={errors.signer_address_reg} />
         </div>
 
         <div>
           <label className="text-xs text-gray-500 block mb-1">Адрес фактического проживания</label>
           <input value={form.signer_address_fact}
-            onChange={e => setForm(f => ({...f, signer_address_fact: e.target.value}))}
+            onChange={e => set('signer_address_fact', e.target.value)}
             placeholder="Если отличается от прописки"
-            className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-gray-400" />
+            className={inputClass(false)} />
         </div>
       </div>
 
@@ -480,7 +551,7 @@ export default function Survey3Page() {
           <label className="text-xs text-gray-500 block mb-2">Тип документа</label>
           <div className="flex gap-2">
             {(['свидетельство', 'паспорт'] as const).map(val => (
-              <button key={val} onClick={() => setForm(f => ({...f, child_doc_type: val}))}
+              <button key={val} onClick={() => set('child_doc_type', val)}
                 className={`flex-1 py-2.5 rounded-xl text-sm font-medium border transition-colors
                   ${form.child_doc_type === val ? 'bg-black text-white border-black' : 'bg-white border-gray-200 text-gray-600'}`}>
                 {val === 'свидетельство' ? '📜 Свидетельство о рождении' : '🪪 Паспорт'}
@@ -495,37 +566,38 @@ export default function Survey3Page() {
             <div>
               <label className="text-xs text-gray-500 block mb-1">Серия и номер</label>
               <input value={form.child_doc_number}
-                onChange={e => setForm(f => ({...f, child_doc_number: e.target.value}))}
+                onChange={e => set('child_doc_number', e.target.value)}
                 placeholder={form.child_doc_type === 'свидетельство' ? 'I-АБ 123456' : '1234 567890'}
-                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-gray-400" />
+                className={inputClass(false)} />
             </div>
             <div>
               <label className="text-xs text-gray-500 block mb-1">Кем выдан</label>
               <input value={form.child_doc_issued_by}
-                onChange={e => setForm(f => ({...f, child_doc_issued_by: e.target.value}))}
+                onChange={e => set('child_doc_issued_by', e.target.value)}
                 placeholder={form.child_doc_type === 'свидетельство' ? 'Отдел ЗАГС ...' : 'Отдел МВД России ...'}
-                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-gray-400" />
+                className={inputClass(false)} />
             </div>
             <div>
               <label className="text-xs text-gray-500 block mb-1">Дата выдачи</label>
               <input type="date" value={form.child_doc_issued_date}
-                onChange={e => setForm(f => ({...f, child_doc_issued_date: e.target.value}))}
-                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-gray-400" />
+                onChange={e => set('child_doc_issued_date', e.target.value)}
+                className={inputClass(false)} />
             </div>
           </>
         )}
       </div>
 
       <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-100">
-        <button
-          onClick={() => {
-            if (!form.signer_last_name || !form.signer_first_name) { alert('Заполните фамилию и имя подписанта'); return }
-            if (!form.signer_address_reg) { alert('Укажите адрес регистрации'); return }
-            setStep(4)
-          }}
-          className="w-full bg-black text-white py-3.5 rounded-2xl font-medium text-sm max-w-lg mx-auto block">
-          Далее →
-        </button>
+        <div className="flex gap-3 max-w-lg mx-auto">
+          <button onClick={() => goBack(2)}
+            className="px-5 py-3.5 rounded-2xl border border-gray-200 text-sm font-medium text-gray-600">
+            ← Назад
+          </button>
+          <button onClick={() => goNext(4, validateStep3)}
+            className="flex-1 bg-black text-white py-3.5 rounded-2xl font-medium text-sm">
+            Далее →
+          </button>
+        </div>
       </div>
     </div>
   )
@@ -550,27 +622,33 @@ export default function Survey3Page() {
       <div className="bg-gray-50 rounded-2xl p-4 space-y-3 mb-6">
         <p className="text-sm font-semibold text-gray-700 mb-1">Подтверждение</p>
         <label className="flex items-start gap-3 cursor-pointer">
-          <input type="checkbox" checked={form.consent_rules} onChange={e => setForm(f => ({...f, consent_rules: e.target.checked}))}
+          <input type="checkbox" checked={form.consent_rules} onChange={e => set('consent_rules', e.target.checked)}
             className="w-4 h-4 accent-black mt-0.5 shrink-0" />
           <span className="text-sm text-gray-600">Ознакомлен(а) с <strong>Правилами посещения</strong> Центра ФРиС «Школа Самурая» и обязуюсь их соблюдать</span>
         </label>
         <label className="flex items-start gap-3 cursor-pointer">
-          <input type="checkbox" checked={form.consent_contract} onChange={e => setForm(f => ({...f, consent_contract: e.target.checked}))}
+          <input type="checkbox" checked={form.consent_contract} onChange={e => set('consent_contract', e.target.checked)}
             className="w-4 h-4 accent-black mt-0.5 shrink-0" />
           <span className="text-sm text-gray-600">Ознакомлен(а) с условиями <strong>Договора на приобретение абонемента</strong> и принимаю их</span>
         </label>
         <label className="flex items-start gap-3 cursor-pointer">
-          <input type="checkbox" checked={form.consent_personal_data} onChange={e => setForm(f => ({...f, consent_personal_data: e.target.checked}))}
+          <input type="checkbox" checked={form.consent_personal_data} onChange={e => set('consent_personal_data', e.target.checked)}
             className="w-4 h-4 accent-black mt-0.5 shrink-0" />
           <span className="text-sm text-gray-600">Согласен(а) на <strong>обработку персональных данных</strong> согласно 152-ФЗ в целях оказания услуг Центром ФРиС</span>
         </label>
       </div>
 
       <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-100">
-        <button onClick={submit} disabled={submitting || !form.consent_rules || !form.consent_contract || !form.consent_personal_data}
-          className="w-full bg-black text-white py-3.5 rounded-2xl font-medium text-sm max-w-lg mx-auto block disabled:opacity-40">
-          {submitting ? 'Сохраняю...' : 'Отправить анкету ✓'}
-        </button>
+        <div className="flex gap-3 max-w-lg mx-auto">
+          <button onClick={() => goBack(3)}
+            className="px-5 py-3.5 rounded-2xl border border-gray-200 text-sm font-medium text-gray-600">
+            ← Назад
+          </button>
+          <button onClick={submit} disabled={submitting || !form.consent_rules || !form.consent_contract || !form.consent_personal_data}
+            className="flex-1 bg-black text-white py-3.5 rounded-2xl font-medium text-sm disabled:opacity-40">
+            {submitting ? 'Сохраняю...' : 'Отправить анкету ✓'}
+          </button>
+        </div>
       </div>
     </div>
   )
