@@ -7,26 +7,37 @@ import { useAuth } from '@/components/AuthProvider'
 import { localDateStr } from '@/lib/dates'
 import { OnboardingHint } from '@/components/OnboardingHint'
 
+type Sub = { id: string; type: string | null; sessions_left: number | null; end_date: string | null }
 type Student = {
   id: string
   name: string
   group_name: string | null
-  sessions_left: number | null
+  subs: Sub[]
   sub_id: string | null
+  sessions_left: number | null
 }
 
 const GROUPS = ['Дети 4-9', 'Подростки (нач)', 'Подростки (оп)', 'Цигун', 'Индивидуальные']
 
+function subLabel(sub: Sub): string {
+  const name = sub.type?.includes('|') ? sub.type.split('|')[1] : (sub.type || 'Абонемент')
+  return `${name} — ${sub.sessions_left ?? '∞'} зан.`
+}
+
 async function loadWithSub(students: { id: string; name: string; group_name: string | null }[]): Promise<Student[]> {
+  const today = localDateStr()
   return Promise.all(students.map(async s => {
-    const { data: sub } = await supabase
+    const { data } = await supabase
       .from('subscriptions')
-      .select('id, sessions_left')
+      .select('id, type, sessions_left, end_date')
       .eq('student_id', s.id)
       .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
-    return { ...s, sessions_left: sub?.sessions_left ?? null, sub_id: sub?.id ?? null }
+    const activeSubs: Sub[] = (data || []).filter(sub =>
+      (sub.sessions_left === null || sub.sessions_left > 0) &&
+      (!sub.end_date || sub.end_date >= today)
+    )
+    const first = activeSubs[0] ?? null
+    return { ...s, subs: activeSubs, sub_id: first?.id ?? null, sessions_left: first?.sessions_left ?? null }
   }))
 }
 
@@ -43,6 +54,7 @@ export default function AttendancePage() {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [originalPresent, setOriginalPresent] = useState<Set<string>>(new Set())
+  const [selectedSubs, setSelectedSubs] = useState<Record<string, string>>({}) // studentId → subId
 
   useEffect(() => {
     async function load() {
@@ -107,6 +119,11 @@ export default function AttendancePage() {
     })
   }
 
+  function getChosenSub(s: Student): Sub | null {
+    const chosenId = selectedSubs[s.id] || s.sub_id
+    return s.subs.find(sub => sub.id === chosenId) || s.subs[0] || null
+  }
+
   async function save() {
     setSaving(true)
 
@@ -127,27 +144,34 @@ export default function AttendancePage() {
     }))
     await supabase.from('attendance').upsert([...mainRows, ...guestRows], { onConflict: 'student_id,date' })
 
-    // Adjust sessions only for the diff (newly added → -1, newly removed → +1)
+    // Adjust sessions only for the diff, using the chosen sub
     for (const s of allStudents) {
       const wasPresent = originalPresent.has(s.id)
       const isPresent = present.has(s.id)
-      if (!wasPresent && isPresent && s.sub_id && s.sessions_left !== null && s.sessions_left > 0) {
-        // Newly marked — deduct
-        await supabase.from('subscriptions').update({ sessions_left: s.sessions_left - 1 }).eq('id', s.sub_id)
-      } else if (wasPresent && !isPresent && s.sub_id && s.sessions_left !== null) {
-        // Unchecked — return session
-        await supabase.from('subscriptions').update({ sessions_left: s.sessions_left + 1 }).eq('id', s.sub_id)
+      const sub = getChosenSub(s)
+      if (!wasPresent && isPresent && sub && sub.sessions_left !== null && sub.sessions_left > 0) {
+        await supabase.from('subscriptions').update({ sessions_left: sub.sessions_left - 1 }).eq('id', sub.id)
+      } else if (wasPresent && !isPresent && sub && sub.sessions_left !== null) {
+        await supabase.from('subscriptions').update({ sessions_left: sub.sessions_left + 1 }).eq('id', sub.id)
       }
     }
 
-    // Update local sessions_left to reflect changes
+    // Update local subs to reflect changes
     const adjust = (list: Student[]) => list.map(s => {
       const wasPresent = originalPresent.has(s.id)
       const isPresent = present.has(s.id)
-      if (!wasPresent && isPresent && s.sessions_left !== null && s.sessions_left > 0)
-        return { ...s, sessions_left: s.sessions_left - 1 }
-      if (wasPresent && !isPresent && s.sessions_left !== null)
-        return { ...s, sessions_left: s.sessions_left + 1 }
+      const sub = getChosenSub(s)
+      if (!sub) return s
+      if (!wasPresent && isPresent && sub.sessions_left !== null && sub.sessions_left > 0) {
+        const updatedSubs = s.subs.map(sb => sb.id === sub.id ? { ...sb, sessions_left: sb.sessions_left! - 1 } : sb)
+        const newFirst = updatedSubs.find(sb => sb.id === (selectedSubs[s.id] || s.sub_id)) || updatedSubs[0]
+        return { ...s, subs: updatedSubs, sessions_left: newFirst?.sessions_left ?? null }
+      }
+      if (wasPresent && !isPresent && sub.sessions_left !== null) {
+        const updatedSubs = s.subs.map(sb => sb.id === sub.id ? { ...sb, sessions_left: sb.sessions_left! + 1 } : sb)
+        const newFirst = updatedSubs.find(sb => sb.id === (selectedSubs[s.id] || s.sub_id)) || updatedSubs[0]
+        return { ...s, subs: updatedSubs, sessions_left: newFirst?.sessions_left ?? null }
+      }
       return s
     })
     setStudents(prev => adjust(prev))
@@ -158,17 +182,16 @@ export default function AttendancePage() {
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
 
-    // Warn about present students with no subscription
-    const noSubPresent = allStudents.filter(s => present.has(s.id) && !originalPresent.has(s.id) && s.sub_id === null)
+    const noSubPresent = allStudents.filter(s => present.has(s.id) && !originalPresent.has(s.id) && s.subs.length === 0)
     if (noSubPresent.length > 0) {
       alert(`⚠️ Не забудь внести абонемент!\n\nПрисутствовали без абонемента:\n${noSubPresent.map(s => `• ${s.name}`).join('\n')}`)
     }
   }
 
-  function sessionsColor(s: Student) {
-    if (s.sessions_left === null) return ''
-    if (s.sessions_left === 0) return 'text-red-500 font-bold'
-    if (s.sessions_left <= 2) return 'text-orange-500 font-medium'
+  function sessionsColor(n: number | null) {
+    if (n === null) return ''
+    if (n === 0) return 'text-red-500 font-bold'
+    if (n <= 2) return 'text-orange-500 font-medium'
     return 'text-gray-400'
   }
 
@@ -201,21 +224,37 @@ export default function AttendancePage() {
       ) : (
         <>
           <div className="space-y-2 mb-4">
-            {students.map(s => (
-              <button key={s.id} onClick={() => toggle(s.id)}
-                className={`w-full flex items-center px-4 py-3 rounded-xl border transition-colors
-                  ${present.has(s.id) ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200'}`}>
-                <span className="text-xl mr-3">{present.has(s.id) ? '✅' : '⬜'}</span>
-                <span className="font-medium text-gray-800 flex-1 text-left">{s.name}</span>
-                {s.sub_id === null ? (
-                  <span className="text-xs bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full ml-2">Нет абонемента</span>
-                ) : s.sessions_left !== null && (
-                  <span className={`text-sm ml-2 ${sessionsColor(s)}`}>
-                    {s.sessions_left === 0 ? '❗ 0 занятий' : `${s.sessions_left} зан.`}
-                  </span>
-                )}
-              </button>
-            ))}
+            {students.map(s => {
+              const chosenSub = getChosenSub(s)
+              return (
+                <div key={s.id} className={`rounded-xl border transition-colors ${present.has(s.id) ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200'}`}>
+                  <button onClick={() => toggle(s.id)} className="w-full flex items-center px-4 py-3">
+                    <span className="text-xl mr-3">{present.has(s.id) ? '✅' : '⬜'}</span>
+                    <span className="font-medium text-gray-800 flex-1 text-left">{s.name}</span>
+                    {s.subs.length === 0 ? (
+                      <span className="text-xs bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full ml-2">Нет абонемента</span>
+                    ) : chosenSub && (
+                      <span className={`text-sm ml-2 ${sessionsColor(chosenSub.sessions_left)}`}>
+                        {chosenSub.sessions_left === 0 ? '❗ 0 занятий' : `${chosenSub.sessions_left} зан.`}
+                      </span>
+                    )}
+                  </button>
+                  {present.has(s.id) && s.subs.length > 1 && (
+                    <div className="px-4 pb-3">
+                      <select
+                        value={selectedSubs[s.id] || s.sub_id || ''}
+                        onChange={e => setSelectedSubs(prev => ({ ...prev, [s.id]: e.target.value }))}
+                        onClick={e => e.stopPropagation()}
+                        className="w-full text-xs border border-green-300 rounded-lg px-2 py-1.5 bg-white outline-none">
+                        {s.subs.map(sub => (
+                          <option key={sub.id} value={sub.id}>{subLabel(sub)}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
           </div>
 
           {/* Guests section */}
@@ -246,7 +285,7 @@ export default function AttendancePage() {
                         </span>
                       )}
                       {g.sessions_left !== null && (
-                        <span className={`text-sm ${sessionsColor(g)}`}>
+                        <span className={`text-sm ${sessionsColor(g.sessions_left)}`}>
                           {g.sessions_left === 0 ? '❗ 0' : `${g.sessions_left} зан.`}
                         </span>
                       )}
