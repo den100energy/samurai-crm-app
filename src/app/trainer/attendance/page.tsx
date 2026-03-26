@@ -61,6 +61,7 @@ function AttendanceContent() {
   const [guestsLoaded, setGuestsLoaded] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [originalPresent, setOriginalPresent] = useState<Set<string>>(new Set())
 
   // Pre-fill from URL params (?date=&group=)
   useEffect(() => {
@@ -105,12 +106,12 @@ function AttendanceContent() {
 
     const withSubs = await loadWithSub(data || [])
     setStudents(withSubs)
-    setPresent(new Set())  // по умолчанию никто не отмечен
     setGuests([])
     setGuestsLoaded(false)
     setShowGuests(false)
 
     // Загрузить уже сохранённые отметки за эту дату (если есть)
+    let savedPresent = new Set<string>()
     if (withSubs.length > 0) {
       const { data: attData } = await supabase
         .from('attendance')
@@ -119,11 +120,11 @@ function AttendanceContent() {
         .in('student_id', withSubs.map(s => s.id))
 
       if (attData && attData.length > 0) {
-        const attMap = new Set<string>()
-        attData.forEach(a => { if (a.present) attMap.add(a.student_id) })
-        setPresent(attMap)
+        attData.forEach(a => { if (a.present) savedPresent.add(a.student_id) })
       }
     }
+    setPresent(new Set(savedPresent))
+    setOriginalPresent(new Set(savedPresent))
   }
 
   async function loadGuests() {
@@ -157,7 +158,7 @@ function AttendanceContent() {
   async function save() {
     setSaving(true)
 
-    const allStudents = [...students, ...guests.filter(g => present.has(g.id))]
+    const allStudents = [...students, ...guests]
 
     const mainRows = students.map(s => ({
       student_id: s.id,
@@ -173,30 +174,35 @@ function AttendanceContent() {
     }))
     await supabase.from('attendance').upsert([...mainRows, ...guestRows], { onConflict: 'student_id,date' })
 
-    // Deduct sessions for everyone who attended
+    // Adjust sessions only for the diff (newly added → -1, newly removed → +1)
     for (const s of allStudents) {
-      if (present.has(s.id) && s.sub_id && s.sessions_left !== null && s.sessions_left > 0) {
-        await supabase
-          .from('subscriptions')
-          .update({ sessions_left: s.sessions_left - 1 })
-          .eq('id', s.sub_id)
+      const wasPresent = originalPresent.has(s.id)
+      const isPresent = present.has(s.id)
+      if (!wasPresent && isPresent && s.sub_id && s.sessions_left !== null && s.sessions_left > 0) {
+        await supabase.from('subscriptions').update({ sessions_left: s.sessions_left - 1 }).eq('id', s.sub_id)
+      } else if (wasPresent && !isPresent && s.sub_id && s.sessions_left !== null) {
+        await supabase.from('subscriptions').update({ sessions_left: s.sessions_left + 1 }).eq('id', s.sub_id)
       }
     }
+
+    const adjust = (list: Student[]) => list.map(s => {
+      const wasPresent = originalPresent.has(s.id)
+      const isPresent = present.has(s.id)
+      if (!wasPresent && isPresent && s.sessions_left !== null && s.sessions_left > 0)
+        return { ...s, sessions_left: s.sessions_left - 1 }
+      if (wasPresent && !isPresent && s.sessions_left !== null)
+        return { ...s, sessions_left: s.sessions_left + 1 }
+      return s
+    })
+    setStudents(prev => adjust(prev))
+    setGuests(prev => adjust(prev))
+    setOriginalPresent(new Set(present))
 
     setSaving(false)
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
 
-    setStudents(prev => prev.map(s =>
-      present.has(s.id) && s.sessions_left !== null && s.sessions_left > 0
-        ? { ...s, sessions_left: s.sessions_left - 1 } : s
-    ))
-    setGuests(prev => prev.map(g =>
-      present.has(g.id) && g.sessions_left !== null && g.sessions_left > 0
-        ? { ...g, sessions_left: g.sessions_left - 1 } : g
-    ))
-
-    const noSubPresent = [...students, ...guests].filter(s => present.has(s.id) && s.sub_id === null)
+    const noSubPresent = allStudents.filter(s => present.has(s.id) && !originalPresent.has(s.id) && s.sub_id === null)
     if (noSubPresent.length > 0) {
       alert(`⚠️ Не забудь внести абонемент!\n\nПрисутствовали без абонемента:\n${noSubPresent.map(s => `• ${s.name}`).join('\n')}`)
     }
