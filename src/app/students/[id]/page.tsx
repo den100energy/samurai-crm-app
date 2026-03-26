@@ -232,6 +232,8 @@ export default function StudentPage() {
   const [studentTickets, setStudentTickets] = useState<StudentTicket[]>([])
   const [showAddAttendance, setShowAddAttendance] = useState(false)
   const [addAttDate, setAddAttDate] = useState(new Date().toISOString().split('T')[0])
+  const [editingAttId, setEditingAttId] = useState<string | null>(null)
+  const [editingAttDate, setEditingAttDate] = useState('')
   const [contacts, setContacts] = useState<Contact[]>([])
   const [showAddContact, setShowAddContact] = useState(false)
   const [contactForm, setContactForm] = useState({ name: '', role: 'мама', phone: '' })
@@ -420,6 +422,31 @@ export default function StudentPage() {
     })
     setShowAddAttendance(false)
     setAddAttDate(new Date().toISOString().split('T')[0])
+  }
+
+  async function deleteAttendance(a: Attendance) {
+    if (!confirm(`Удалить запись о посещении ${a.date}?`)) return
+    await supabase.from('attendance').delete().eq('id', a.id)
+    // Return session if student was present
+    if (a.present) {
+      const { data: sub } = await supabase.from('subscriptions').select('id, sessions_left')
+        .eq('student_id', id).order('created_at', { ascending: false }).limit(1).maybeSingle()
+      if (sub && sub.sessions_left !== null) {
+        await supabase.from('subscriptions').update({ sessions_left: sub.sessions_left + 1 }).eq('id', sub.id)
+        setSubs(prev => prev.map(s => s.id === sub.id ? { ...s, sessions_left: sub.sessions_left + 1 } : s))
+      }
+    }
+    setAttendance(prev => prev.filter(x => x.id !== a.id))
+  }
+
+  async function saveAttendanceDate(a: Attendance, newDate: string) {
+    if (!newDate || newDate === a.date) { setEditingAttId(null); return }
+    await supabase.from('attendance').update({ date: newDate }).eq('id', a.id)
+    setAttendance(prev =>
+      prev.map(x => x.id === a.id ? { ...x, date: newDate } : x)
+        .sort((a, b) => b.date.localeCompare(a.date))
+    )
+    setEditingAttId(null)
   }
 
   async function unfreezeSubscription(sub: Subscription) {
@@ -1236,9 +1263,29 @@ export default function StudentPage() {
         ) : (
           <div className="space-y-1">
             {attendance.map(a => (
-              <div key={a.id} className="flex items-center justify-between text-sm">
-                <span className="text-gray-600">{a.date}</span>
-                <span>{a.present ? '✅ Был' : '❌ Не был'}</span>
+              <div key={a.id} className="flex items-center justify-between text-sm gap-2">
+                {editingAttId === a.id ? (
+                  <input
+                    type="date"
+                    defaultValue={a.date}
+                    autoFocus
+                    className="border border-gray-300 rounded-lg px-2 py-0.5 text-sm outline-none"
+                    onBlur={e => saveAttendanceDate(a, e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') saveAttendanceDate(a, (e.target as HTMLInputElement).value)
+                      if (e.key === 'Escape') setEditingAttId(null)
+                    }}
+                  />
+                ) : (
+                  <span className="text-gray-600">{a.date}</span>
+                )}
+                <div className="flex items-center gap-2 shrink-0">
+                  <span>{a.present ? '✅ Был' : '❌ Не был'}</span>
+                  <button onClick={() => { setEditingAttId(a.id); setEditingAttDate(a.date) }}
+                    className="text-gray-400 hover:text-gray-700 text-xs px-1">✎</button>
+                  <button onClick={() => deleteAttendance(a)}
+                    className="text-red-400 hover:text-red-600 text-xs px-1">✕</button>
+                </div>
               </div>
             ))}
           </div>
