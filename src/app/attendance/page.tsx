@@ -228,17 +228,23 @@ export default function AttendancePage() {
               const chosenSub = getChosenSub(s)
               return (
                 <div key={s.id} className={`rounded-xl border transition-colors ${present.has(s.id) ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200'}`}>
-                  <button onClick={() => toggle(s.id)} className="w-full flex items-center px-4 py-3">
-                    <span className="text-xl mr-3">{present.has(s.id) ? '✅' : '⬜'}</span>
-                    <span className="font-medium text-gray-800 flex-1 text-left">{s.name}</span>
-                    {s.subs.length === 0 ? (
-                      <span className="text-xs bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full ml-2">Нет абонемента</span>
-                    ) : chosenSub && (
-                      <span className={`text-sm ml-2 ${sessionsColor(chosenSub.sessions_left)}`}>
-                        {chosenSub.sessions_left === 0 ? '❗ 0 занятий' : `${chosenSub.sessions_left} зан.`}
-                      </span>
-                    )}
-                  </button>
+                  <div className="flex items-center">
+                    <button onClick={() => toggle(s.id)} className="flex items-center px-4 py-3 flex-1 min-w-0">
+                      <span className="text-xl mr-3">{present.has(s.id) ? '✅' : '⬜'}</span>
+                      <span className="font-medium text-gray-800 text-left truncate">{s.name}</span>
+                    </button>
+                    <Link href={`/students/${s.id}`} onClick={e => e.stopPropagation()}
+                      className="flex items-center gap-1 pr-4 py-3 shrink-0">
+                      {s.subs.length === 0 ? (
+                        <span className="text-xs bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full">Нет абонемента</span>
+                      ) : chosenSub && (
+                        <span className={`text-sm ${sessionsColor(chosenSub.sessions_left)}`}>
+                          {chosenSub.sessions_left === 0 ? '❗ 0 зан.' : `${chosenSub.sessions_left} зан.`}
+                        </span>
+                      )}
+                      <span className="text-gray-300 text-sm ml-1">›</span>
+                    </Link>
+                  </div>
                   {present.has(s.id) && s.subs.length > 1 && (
                     <div className="px-4 pb-3">
                       <select
