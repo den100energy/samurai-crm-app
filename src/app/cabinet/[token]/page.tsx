@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useSearchParams } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
 import { FujiScene } from '@/components/FujiScene'
 import { localDateStr } from '@/lib/dates'
@@ -297,6 +297,8 @@ function QualityBar({ label, values, colors }: { label: string; values: number[]
 
 export default function CabinetPage() {
   const { token } = useParams<{ token: string }>()
+  const searchParams = useSearchParams()
+  const isAdminView = searchParams.get('back') === '1'
   const [student, setStudent] = useState<Student | null>(null)
   const [subscription, setSubscription] = useState<Subscription | null>(null)
   const [firstSubDate, setFirstSubDate] = useState<string | null>(null)
@@ -505,6 +507,15 @@ export default function CabinetPage() {
         slides={CABINET_TOUR_SLIDES}
         personName={student.name.split(' ')[0]}
       />
+      {/* Кнопка возврата для администратора */}
+      {isAdminView && (
+        <div className="fixed top-3 right-3 z-50">
+          <button onClick={() => window.close()}
+            className="flex items-center gap-1.5 bg-black/70 backdrop-blur-sm text-white text-sm px-3 py-1.5 rounded-full shadow-lg">
+            ✕ Закрыть
+          </button>
+        </div>
+      )}
       {/* Шапка */}
       <div className="relative overflow-hidden">
         <FujiScene dark={true} bgColor="#111827" />

@@ -696,7 +696,7 @@ export default function StudentPage() {
 
   function openStudentCabinet() {
     if (!student?.cabinet_token) return alert('Токен кабинета не найден')
-    window.open(`${window.location.origin}/cabinet/${student.cabinet_token}`, '_blank')
+    window.open(`${window.location.origin}/cabinet/${student.cabinet_token}?back=1`, '_blank')
   }
 
   function copyParentLink() {
