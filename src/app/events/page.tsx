@@ -14,7 +14,7 @@ type Event = {
   price: number | null
   description: string | null
   bonus_type: string | null
-  group_restriction: string | null
+  group_restriction: string[] | null
   trainer_name: string | null
   trainer_name_extra: string | null
   participant_count?: number
@@ -37,7 +37,7 @@ export default function EventsPage() {
   const [trainers, setTrainers] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState({ name: '', date: '', time_start: '', time_end: '', price: '', description: '', bonus_type: '', group_restriction: '', trainer_name: '', trainer_name_extra: '' })
+  const [form, setForm] = useState<{ name: string; date: string; time_start: string; time_end: string; price: string; description: string; bonus_type: string; group_restriction: string[]; trainer_name: string; trainer_name_extra: string }>({ name: '', date: '', time_start: '', time_end: '', price: '', description: '', bonus_type: '', group_restriction: [], trainer_name: '', trainer_name_extra: '' })
   const [saving, setSaving] = useState(false)
 
   async function load() {
@@ -69,11 +69,11 @@ export default function EventsPage() {
       price: form.price ? parseFloat(form.price) : null,
       description: form.description || null,
       bonus_type: form.bonus_type || null,
-      group_restriction: form.group_restriction || null,
+      group_restriction: form.group_restriction.length > 0 ? form.group_restriction : null,
       trainer_name: form.trainer_name || null,
       trainer_name_extra: form.trainer_name_extra || null,
     })
-    setForm({ name: '', date: '', time_start: '', time_end: '', price: '', description: '', bonus_type: '', group_restriction: '', trainer_name: '', trainer_name_extra: '' })
+    setForm({ name: '', date: '', time_start: '', time_end: '', price: '', description: '', bonus_type: '', group_restriction: [], trainer_name: '', trainer_name_extra: '' })
     setShowForm(false)
     setSaving(false)
     load()
@@ -130,11 +130,19 @@ export default function EventsPage() {
               placeholder="Стоимость (₽)" type="number"
               className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none" />
           )}
-          <select value={form.group_restriction} onChange={e => setForm({...form, group_restriction: e.target.value})}
-            className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none bg-white">
-            <option value="">Все группы</option>
-            {GROUPS.map(g => <option key={g} value={g}>{g}</option>)}
-          </select>
+          <div className="border border-gray-200 rounded-xl px-3 py-2.5">
+            <div className="text-xs text-gray-400 mb-2">Группы (пусто = все)</div>
+            <div className="flex flex-wrap gap-2">
+              {GROUPS.map(g => (
+                <label key={g} className="flex items-center gap-1.5 cursor-pointer">
+                  <input type="checkbox" checked={form.group_restriction.includes(g)}
+                    onChange={e => setForm({...form, group_restriction: e.target.checked ? [...form.group_restriction, g] : form.group_restriction.filter(x => x !== g)})}
+                    className="rounded" />
+                  <span className="text-sm text-gray-700">{g}</span>
+                </label>
+              ))}
+            </div>
+          </div>
           <select value={form.trainer_name} onChange={e => setForm({...form, trainer_name: e.target.value})}
             className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none bg-white">
             <option value="">Ответственный тренер</option>
@@ -196,9 +204,9 @@ function EventCard({ event, bonusColors, onDelete, canEdit }: { event: Event; bo
                 {event.bonus_type}
               </span>
             )}
-            {event.group_restriction && (
-              <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">{event.group_restriction}</span>
-            )}
+            {event.group_restriction && event.group_restriction.map(g => (
+              <span key={g} className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">{g}</span>
+            ))}
           </div>
           <div className="text-sm text-gray-400 mt-0.5">
             📅 {event.date}

@@ -32,7 +32,7 @@ type Event = {
   price: number | null
   description: string | null
   bonus_type: string | null
-  group_restriction: string | null
+  group_restriction: string[] | null
   trainer_name: string | null
   trainer_name_extra: string | null
 }
@@ -60,7 +60,7 @@ export default function EventDetailPage() {
 
   // Edit state
   const [editing, setEditing] = useState(false)
-  const [editForm, setEditForm] = useState<{ name: string; date: string; time_start: string; time_end: string; price: string; description: string; bonus_type: string; group_restriction: string; trainer_name: string; trainer_name_extra: string }>({ name: '', date: '', time_start: '', time_end: '', price: '', description: '', bonus_type: '', group_restriction: '', trainer_name: '', trainer_name_extra: '' })
+  const [editForm, setEditForm] = useState<{ name: string; date: string; time_start: string; time_end: string; price: string; description: string; bonus_type: string; group_restriction: string[]; trainer_name: string; trainer_name_extra: string }>({ name: '', date: '', time_start: '', time_end: '', price: '', description: '', bonus_type: '', group_restriction: [], trainer_name: '', trainer_name_extra: '' })
   const [saving, setSaving] = useState(false)
   const [notifying, setNotifying] = useState(false)
   const [notifyResult, setNotifyResult] = useState<string | null>(null)
@@ -84,8 +84,8 @@ export default function EventDetailPage() {
     }
     setSubMap(map)
 
-    const filtered = ev?.group_restriction
-      ? (students || []).filter(s => s.group_name === ev.group_restriction)
+    const filtered = ev?.group_restriction && ev.group_restriction.length > 0
+      ? (students || []).filter(s => s.group_name && ev.group_restriction!.includes(s.group_name))
       : (students || [])
     setAllStudents(filtered)
   }
@@ -102,7 +102,7 @@ export default function EventDetailPage() {
       price: event.price != null ? String(event.price) : '',
       description: event.description || '',
       bonus_type: event.bonus_type || '',
-      group_restriction: event.group_restriction || '',
+      group_restriction: event.group_restriction || [],
       trainer_name: event.trainer_name || '',
       trainer_name_extra: event.trainer_name_extra || '',
     })
@@ -120,7 +120,7 @@ export default function EventDetailPage() {
       price: editForm.price ? parseFloat(editForm.price) : null,
       description: editForm.description || null,
       bonus_type: editForm.bonus_type || null,
-      group_restriction: editForm.group_restriction || null,
+      group_restriction: editForm.group_restriction.length > 0 ? editForm.group_restriction : null,
       trainer_name: editForm.trainer_name || null,
       trainer_name_extra: editForm.trainer_name_extra || null,
     }).eq('id', id)
@@ -207,12 +207,14 @@ export default function EventDetailPage() {
         <Link href="/events" className="text-gray-500 hover:text-black text-xl font-bold leading-none">←</Link>
         <div className="flex-1">
           <h1 className="text-xl font-bold text-gray-800">{event.name}</h1>
-          {event.bonus_type && (
-            <div className="flex gap-2 mt-0.5">
-              <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">{event.bonus_type}</span>
-              {event.group_restriction && (
-                <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">{event.group_restriction}</span>
+          {(event.bonus_type || (event.group_restriction && event.group_restriction.length > 0)) && (
+            <div className="flex flex-wrap gap-2 mt-0.5">
+              {event.bonus_type && (
+                <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">{event.bonus_type}</span>
               )}
+              {event.group_restriction && event.group_restriction.map(g => (
+                <span key={g} className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">{g}</span>
+              ))}
             </div>
           )}
         </div>
@@ -253,11 +255,19 @@ export default function EventDetailPage() {
           <input value={editForm.price || ''} onChange={e => setEditForm({...editForm, price: e.target.value})}
             placeholder="Стоимость (₽)" type="number"
             className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none" />
-          <select value={editForm.group_restriction || ''} onChange={e => setEditForm({...editForm, group_restriction: e.target.value})}
-            className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none bg-white">
-            <option value="">Все группы</option>
-            {GROUPS.map(g => <option key={g} value={g}>{g}</option>)}
-          </select>
+          <div className="border border-gray-200 rounded-xl px-3 py-2">
+            <div className="text-xs text-gray-400 mb-2">Группы (пусто = все)</div>
+            <div className="flex flex-wrap gap-2">
+              {GROUPS.map(g => (
+                <label key={g} className="flex items-center gap-1.5 cursor-pointer">
+                  <input type="checkbox" checked={editForm.group_restriction.includes(g)}
+                    onChange={e => setEditForm({...editForm, group_restriction: e.target.checked ? [...editForm.group_restriction, g] : editForm.group_restriction.filter(x => x !== g)})}
+                    className="rounded" />
+                  <span className="text-sm text-gray-700">{g}</span>
+                </label>
+              ))}
+            </div>
+          </div>
           <select value={editForm.trainer_name || ''} onChange={e => setEditForm({...editForm, trainer_name: e.target.value})}
             className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none bg-white">
             <option value="">Ответственный тренер</option>
