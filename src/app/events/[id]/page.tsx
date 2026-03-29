@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 
@@ -49,6 +49,7 @@ const GROUPS = ['Дети 4-9', 'Подростки (нач)', 'Подростк
 
 export default function EventDetailPage() {
   const { id } = useParams<{ id: string }>()
+  const router = useRouter()
   const [event, setEvent] = useState<Event | null>(null)
   const [participants, setParticipants] = useState<Participant[]>([])
   const [allStudents, setAllStudents] = useState<Student[]>([])
@@ -182,6 +183,12 @@ export default function EventDetailPage() {
     load()
   }
 
+  async function deleteEvent() {
+    if (!confirm('Удалить мероприятие? Это действие нельзя отменить.')) return
+    await supabase.from('events').delete().eq('id', id)
+    router.push('/events')
+  }
+
   async function removeParticipant(partId: string) {
     await supabase.from('event_participants').delete().eq('id', partId)
     setParticipants(prev => prev.filter(p => p.id !== partId))
@@ -230,6 +237,10 @@ export default function EventDetailPage() {
         <button onClick={startEdit}
           className="text-sm border border-gray-200 px-3 py-1.5 rounded-xl text-gray-600 hover:border-gray-400">
           ✎ Изменить
+        </button>
+        <button onClick={deleteEvent}
+          className="text-sm border border-red-100 px-3 py-1.5 rounded-xl text-red-400 hover:border-red-300 hover:text-red-600">
+          🗑
         </button>
       </div>
 

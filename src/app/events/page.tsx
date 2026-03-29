@@ -220,9 +220,13 @@ function EventCard({ event, bonusColors, onDelete, canEdit }: { event: Event; bo
           )}
           {event.description && <div className="text-sm text-gray-500 mt-1">{event.description}</div>}
         </div>
-        <div className="text-right ml-3">
+        <div className="text-right ml-3 flex flex-col items-end gap-1">
           {event.price && <div className="font-semibold text-gray-800">{event.price} ₽</div>}
-          <div className="text-xs text-gray-400 mt-1">👥 {event.participant_count} чел.</div>
+          <div className="text-xs text-gray-400">👥 {event.participant_count} чел.</div>
+          {canEdit && (
+            <button onClick={e => { e.preventDefault(); onDelete(event.id) }}
+              className="text-gray-300 hover:text-red-400 text-lg leading-none mt-1">×</button>
+          )}
         </div>
       </div>
     </Link>
