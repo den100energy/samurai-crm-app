@@ -54,6 +54,7 @@ type Subscription = {
   freeze_start: string | null
   freeze_end: string | null
   freeze_days_used: number
+  is_pending: boolean
 }
 
 type Attendance = {
@@ -218,7 +219,7 @@ export default function StudentPage() {
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState<Partial<Student>>({})
   const [showSubForm, setShowSubForm] = useState(false)
-  const [subForm, setSubForm] = useState({ type: '', sessions_total: '', start_date: '', end_date: '', amount: '', paid: false, bonuses: {} as Record<string, number> })
+  const [subForm, setSubForm] = useState({ type: '', sessions_total: '', start_date: '', end_date: '', amount: '', paid: false, is_pending: false, bonuses: {} as Record<string, number> })
   const [showBeltForm, setShowBeltForm] = useState<'aikido' | 'wushu' | null>(null)
   const [beltForm, setBeltForm] = useState({ belt_name: '', date: new Date().toISOString().split('T')[0], notes: '' })
   const [subTypes, setSubTypes] = useState<{ id: string; name: string; group_type: string | null; sessions_count: number | null; price: number | null; bonuses: Record<string, number> | null; duration_months: number | null }[]>([])
@@ -334,6 +335,7 @@ export default function StudentPage() {
       end_date: subForm.end_date || null,
       amount: subForm.amount ? parseFloat(subForm.amount) : null,
       paid: subForm.paid,
+      is_pending: subForm.is_pending,
       bonuses: subForm.bonuses,
       bonuses_used: {},
     }).select().single()
@@ -345,7 +347,12 @@ export default function StudentPage() {
       }
     }
     setShowSubForm(false)
-    setSubForm({ type: '', sessions_total: '', start_date: '', end_date: '', amount: '', paid: false, bonuses: {} })
+    setSubForm({ type: '', sessions_total: '', start_date: '', end_date: '', amount: '', paid: false, is_pending: false, bonuses: {} })
+  }
+
+  async function activatePendingSub(sub: Subscription) {
+    await supabase.from('subscriptions').update({ is_pending: false }).eq('id', sub.id)
+    setSubs(prev => prev.map(s => s.id === sub.id ? { ...s, is_pending: false } : s))
   }
 
   async function freezeSubscription(e: React.FormEvent, sub: Subscription) {
@@ -962,11 +969,35 @@ export default function StudentPage() {
               <input type="checkbox" checked={subForm.paid} onChange={e => setSubForm({...subForm, paid: e.target.checked})} />
               Оплачен
             </label>
+            <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+              <input type="checkbox" checked={subForm.is_pending} onChange={e => setSubForm({...subForm, is_pending: e.target.checked})} />
+              Отложенный (продан, но ещё не начался)
+            </label>
             <button type="submit" className="w-full bg-black text-white py-2 rounded-xl text-sm font-medium">
               Сохранить
             </button>
           </form>
         )}
+
+        {(() => {
+          const today = new Date().toISOString().split('T')[0]
+          const activeSubs = subs.filter(s => !s.is_pending && (s.sessions_left === null || s.sessions_left > 0) && (!s.end_date || s.end_date >= today))
+          const pendingSubs = subs.filter(s => s.is_pending)
+          if (activeSubs.length === 0 && pendingSubs.length > 0) {
+            return (
+              <div className="mb-3 p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-center justify-between gap-2">
+                <div className="text-sm text-amber-800">
+                  ⏳ Активный абонемент закончился. Есть отложенный: <b>{pendingSubs[0].type.includes('|') ? pendingSubs[0].type.split('|')[1] : pendingSubs[0].type}</b>
+                </div>
+                <button onClick={() => activatePendingSub(pendingSubs[0])}
+                  className="shrink-0 text-xs bg-amber-600 text-white px-3 py-1.5 rounded-lg hover:bg-amber-700">
+                  Активировать
+                </button>
+              </div>
+            )
+          }
+          return null
+        })()}
 
         {subs.length === 0 ? (
           <div className="text-sm text-gray-400 text-center py-2">Абонементов нет</div>
@@ -982,6 +1013,9 @@ export default function StudentPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <div className="text-sm font-medium">{s.type.includes('|') ? s.type.split('|').join(' · ') : s.type}</div>
+                        {s.is_pending && (
+                          <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">⏳ Ожидает</span>
+                        )}
                         {s.is_frozen && (
                           <span className="text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full">🧊 Заморожен</span>
                         )}
@@ -996,6 +1030,12 @@ export default function StudentPage() {
                       )}
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
+                      {s.is_pending && (
+                        <button onClick={() => activatePendingSub(s)}
+                          className="text-xs bg-green-600 text-white px-2 py-1 rounded-lg hover:bg-green-700">
+                          ▶ Активировать
+                        </button>
+                      )}
                       <button onClick={() => editSubId === s.id ? setEditSubId(null) : startEditSub(s)}
                         className="text-xs text-gray-400 border border-gray-200 px-2 py-1 rounded-lg">
                         {editSubId === s.id ? 'Отмена' : '✎'}

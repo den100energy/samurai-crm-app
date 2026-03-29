@@ -20,7 +20,8 @@ export default function Home() {
   const [churn, setChurn] = useState<{ id: string; name: string; daysSince: number | null }[]>([])
   const [totalStudents, setTotalStudents] = useState(0)
   const [notifying, setNotifying] = useState(false)
-  const [modal, setModal] = useState<'noSessions' | 'expiring' | 'churn' | null>(null)
+  const [pendingReady, setPendingReady] = useState<{ id: string; name: string }[]>([])
+  const [modal, setModal] = useState<'noSessions' | 'expiring' | 'churn' | 'pendingReady' | null>(null)
   const [loaded, setLoaded] = useState(false)
   type SurveyStage = 'needSurvey' | 'notified' | 'trainerDone' | 'filled'
   const [surveyFunnel, setSurveyFunnel] = useState<Record<SurveyStage, { id: string; name: string }[]> | null>(null)
@@ -37,16 +38,20 @@ export default function Home() {
 
       const [{ data: students }, { data: allSubs }, { data: recentAtt }, { data: allSurveys }] = await Promise.all([
         supabase.from('students').select('id, name, crm_status').eq('status', 'active'),
-        supabase.from('subscriptions').select('student_id, sessions_left, end_date').order('created_at', { ascending: false }),
+        supabase.from('subscriptions').select('student_id, sessions_left, end_date, is_pending').order('created_at', { ascending: false }),
         supabase.from('attendance').select('student_id, date').eq('present', true).gte('date', ago30days).order('date', { ascending: false }),
         supabase.from('progress_surveys').select('student_id, filled_at, parent_sent_at, trainer_filled_at, created_at').order('created_at', { ascending: false }),
       ])
 
       if (!students) return
 
-      const subMap = new Map<string, { sessions_left: number | null; end_date: string | null }>()
+      // Для каждого студента: первый НЕ-pending абонемент (последний по created_at)
+      const subMap = new Map<string, { sessions_left: number | null; end_date: string | null; is_pending: boolean }>()
+      // Также собираем pending абонементы
+      const pendingMap = new Map<string, boolean>()
       for (const s of (allSubs || [])) {
-        if (!subMap.has(s.student_id)) subMap.set(s.student_id, s)
+        if (!s.is_pending && !subMap.has(s.student_id)) subMap.set(s.student_id, s)
+        if (s.is_pending) pendingMap.set(s.student_id, true)
       }
 
       const lastDateMap = new Map<string, string>()
@@ -57,10 +62,15 @@ export default function Home() {
       const noSessArr: any[] = []
       const expiringArr: any[] = []
       const churnArr: { id: string; name: string; daysSince: number | null }[] = []
+      const pendingReadyArr: { id: string; name: string }[] = []
 
       for (const student of students) {
         const sub = subMap.get(student.id)
+        const hasPending = pendingMap.has(student.id)
         if (!sub || sub.sessions_left === 0) noSessArr.push({ id: student.id, name: student.name })
+        // Если нет активного абонемента, но есть pending — добавляем в "ожидают активации"
+        const hasActiveSub2 = sub && (sub.sessions_left === null || sub.sessions_left > 0) && (!sub.end_date || sub.end_date >= today)
+        if (!hasActiveSub2 && hasPending) pendingReadyArr.push({ id: student.id, name: student.name })
         if (sub?.end_date && sub.end_date >= today && sub.end_date <= in7days) expiringArr.push({ id: student.id, name: student.name })
         const hasActiveSub = sub && (sub.sessions_left ?? 0) > 0 && (!sub.end_date || sub.end_date >= today)
         if (hasActiveSub) {
@@ -75,6 +85,7 @@ export default function Home() {
       setNoSessions(noSessArr)
       setExpiring(expiringArr)
       setChurn(churnArr)
+      setPendingReady(pendingReadyArr)
 
       // Воронка срезов
       const threeMonthsAgo = new Date()
@@ -163,6 +174,16 @@ export default function Home() {
       border: expiring.length > 0 ? 'border-amber-500/40' : theme === 'dark' ? 'border-[#3A3A3C]' : 'border-[#E5E4E0]',
       numColor: expiring.length > 0 ? 'text-amber-500' : theme === 'dark' ? 'text-[#48484A]' : 'text-[#C0BFBB]',
       onClick: expiring.length > 0 ? () => setModal('expiring') : null,
+    },
+    {
+      value: pendingReady.length,
+      label: 'Ждут активации',
+      kanji: '待',
+      sub: 'отложенный абонемент',
+      glow: pendingReady.length > 0 ? 'glow-amber' : '',
+      border: pendingReady.length > 0 ? 'border-amber-500/40' : theme === 'dark' ? 'border-[#3A3A3C]' : 'border-[#E5E4E0]',
+      numColor: pendingReady.length > 0 ? 'text-amber-500' : theme === 'dark' ? 'text-[#48484A]' : 'text-[#C0BFBB]',
+      onClick: pendingReady.length > 0 ? () => setModal('pendingReady') : null,
     },
     {
       value: churn.length,
@@ -407,9 +428,10 @@ export default function Home() {
             </div>
             <div className="flex items-center justify-between px-5 pt-2 pb-3 border-b" style={{ borderColor: 'var(--border)' }}>
               <div className="font-semibold text-sm" style={{ color: 'var(--text-1)' }}>
-                {modal === 'noSessions' && `Без занятий · ${noSessions.length} чел.`}
-                {modal === 'expiring'   && `Истекает абонемент · ${expiring.length} чел.`}
-                {modal === 'churn'      && `Не приходили 7+ дней · ${churn.length} чел.`}
+                {modal === 'noSessions'    && `Без занятий · ${noSessions.length} чел.`}
+                {modal === 'expiring'     && `Истекает абонемент · ${expiring.length} чел.`}
+                {modal === 'churn'        && `Не приходили 7+ дней · ${churn.length} чел.`}
+                {modal === 'pendingReady' && `Ждут активации · ${pendingReady.length} чел.`}
               </div>
               <button onClick={() => setModal(null)}
                 className="w-8 h-8 rounded-full bg-[#2C2C2E] flex items-center justify-center text-[#8E8E93] text-lg border border-[#3A3A3C]">
@@ -436,6 +458,13 @@ export default function Home() {
                   className="flex items-center justify-between py-3 border-b border-[#2C2C2E] hover:text-[#E8121E] transition-colors">
                   <span className="text-sm text-[#E5E5E7]">{s.name}</span>
                   <span className="text-orange-500 text-xs font-medium">{s.daysSince !== null ? `${s.daysSince} дн.` : '—'}</span>
+                </Link>
+              ))}
+              {modal === 'pendingReady' && pendingReady.map(s => (
+                <Link key={s.id} href={`/students/${s.id}`} onClick={() => setModal(null)}
+                  className="flex items-center justify-between py-3 border-b border-[#2C2C2E] hover:text-amber-500 transition-colors">
+                  <span className="text-sm text-[#E5E5E7]">{s.name}</span>
+                  <span className="text-amber-500 text-xs font-medium">⏳ активировать</span>
                 </Link>
               ))}
             </div>

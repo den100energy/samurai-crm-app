@@ -29,10 +29,11 @@ async function loadWithSub(students: { id: string; name: string; group_name: str
   return Promise.all(students.map(async s => {
     const { data } = await supabase
       .from('subscriptions')
-      .select('id, type, sessions_left, end_date')
+      .select('id, type, sessions_left, end_date, is_pending')
       .eq('student_id', s.id)
       .order('created_at', { ascending: false })
     const activeSubs: Sub[] = (data || []).filter(sub =>
+      !sub.is_pending &&
       (sub.sessions_left === null || sub.sessions_left > 0) &&
       (!sub.end_date || sub.end_date >= today)
     )
