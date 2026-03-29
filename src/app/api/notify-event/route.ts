@@ -35,8 +35,8 @@ export async function POST(req: NextRequest) {
     .eq('status', 'active')
     .not('telegram_chat_id', 'is', null)
 
-  if (event.group_restriction) {
-    query = query.eq('group_name', event.group_restriction)
+  if (event.group_restriction && event.group_restriction.length > 0) {
+    query = query.in('group_name', event.group_restriction)
   }
 
   const { data: students } = await query
@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
   if (event.trainer_name) text += `👤 Тренер: ${event.trainer_name}\n`
   if (event.trainer_name_extra) text += `👤 Доп. тренер: ${event.trainer_name_extra}\n`
   if (event.price) text += `💰 Стоимость: ${event.price.toLocaleString('ru-RU')} ₽\n`
-  if (event.group_restriction) text += `👥 Группа: ${event.group_restriction}\n`
+  if (event.group_restriction && event.group_restriction.length > 0) text += `👥 Группы: ${event.group_restriction.join(', ')}\n`
   if (event.bonus_type) text += `🎁 Тип: ${event.bonus_type}\n`
   if (event.description) text += `\n${event.description}`
 
