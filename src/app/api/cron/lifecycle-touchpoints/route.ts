@@ -50,7 +50,7 @@ export async function GET(req: NextRequest) {
   // Все активные ученики
   const { data: students } = await admin
     .from('students')
-    .select('id, name, created_at, birth_date, telegram_chat_id')
+    .select('id, name, created_at, enrollment_date, birth_date, telegram_chat_id')
     .eq('status', 'active')
 
   if (!students?.length) return NextResponse.json({ ok: true, actions: 0 })
@@ -128,8 +128,9 @@ export async function GET(req: NextRequest) {
   let actions = 0
 
   for (const student of students) {
+    const enrollmentDate = student.enrollment_date || student.created_at
     const daysSinceEnrollment = Math.floor(
-      (now.getTime() - new Date(student.created_at).getTime()) / 86400000
+      (now.getTime() - new Date(enrollmentDate).getTime()) / 86400000
     )
     const visits = totalVisits.get(student.id) ?? 0
     const hasRecentVisit = recentSet.has(student.id)

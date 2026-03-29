@@ -12,6 +12,7 @@ type Student = {
   name: string
   phone: string | null
   birth_date: string | null
+  enrollment_date: string | null
   group_name: string | null
   status: string
   parent_token: string | null
@@ -296,6 +297,7 @@ export default function StudentPage() {
       name: form.name,
       phone: form.phone || null,
       birth_date: form.birth_date || null,
+      enrollment_date: form.enrollment_date || null,
       group_name: form.group_name || null,
       status: form.status || 'active',
       health_notes: form.health_notes || null,
@@ -816,7 +818,11 @@ export default function StudentPage() {
               placeholder="Телефон" type="tel"
               className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none" />
             <input value={form.birth_date || ''} onChange={e => setForm({...form, birth_date: e.target.value})}
-              type="date" className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none" />
+              type="date" placeholder="Дата рождения"
+              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none" />
+            <input value={form.enrollment_date || ''} onChange={e => setForm({...form, enrollment_date: e.target.value})}
+              type="date" placeholder="Дата зачисления"
+              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none" />
             <select value={form.group_name || ''} onChange={e => setForm({...form, group_name: e.target.value})}
               className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none bg-white">
               <option value="">Группа</option>
@@ -852,6 +858,7 @@ export default function StudentPage() {
               </div>
             )}
             {student.birth_date && <div className="flex justify-between"><span className="text-gray-400">Дата рождения</span><span>{student.birth_date}</span></div>}
+            {student.enrollment_date && <div className="flex justify-between"><span className="text-gray-400">В школе с</span><span>{student.enrollment_date}</span></div>}
             <div className="flex justify-between"><span className="text-gray-400">Посещений (последние 20)</span><span>{presentCount}</span></div>
             <div className="flex justify-between items-center">
               <span className="text-gray-400">Статус</span>
