@@ -195,6 +195,15 @@ export default function EventDetailPage() {
   const { hasBonusAvailable, bonusLeft } = selectedId ? getBonusStatus(selectedId) : { hasBonusAvailable: false, bonusLeft: 0 }
   const isBonusEvent = !!event.bonus_type
   const isMasterClass = event.bonus_type === 'мастер-класс'
+  const isWeaponTraining = event.bonus_type === 'тренировка с оружием'
+
+  function getWeaponTrainingType(studentId: string): 'bonus' | 'session' | 'paid' {
+    const { hasBonusAvailable } = getBonusStatus(studentId)
+    if (hasBonusAvailable) return 'bonus'
+    const sub = subMap[studentId]
+    if (sub && sub.sessions_left != null && sub.sessions_left > 0) return 'session'
+    return 'paid'
+  }
 
   const bonusCnt = participants.filter(p => p.attendance_type === 'bonus').length
   const sessionCnt = participants.filter(p => p.attendance_type === 'session').length
@@ -397,32 +406,50 @@ export default function EventDetailPage() {
           {/* Кнопки оплаты — появляются после выбора */}
           {selectedId && (
             <div className="px-4 py-3 border-t border-gray-100 space-y-2">
-              {isBonusEvent && (
-                <div className={`text-xs px-3 py-2 rounded-xl ${hasBonusAvailable ? 'bg-purple-50 text-purple-700' : 'bg-gray-50 text-gray-500'}`}>
-                  {hasBonusAvailable
-                    ? `✅ Есть бонус «${event.bonus_type}» — осталось ${bonusLeft}`
-                    : `❌ Бонуса «${event.bonus_type}» нет`}
-                  {selectedSub?.sessions_left != null && ` · Занятий: ${selectedSub.sessions_left}`}
-                </div>
+              {isWeaponTraining ? (() => {
+                const autoType = getWeaponTrainingType(selectedId)
+                const labels = {
+                  bonus: { text: `🎁 Бонус (осталось ${bonusLeft})`, cls: 'bg-purple-500 text-white' },
+                  session: { text: `✅ Занятие с абонемента (${selectedSub?.sessions_left ?? 0} зан.)`, cls: 'bg-gray-700 text-white' },
+                  paid: { text: '💰 Платный (нет абонемента)', cls: 'bg-green-600 text-white' },
+                }
+                const { text, cls } = labels[autoType]
+                return (
+                  <button onClick={() => addParticipant(autoType)}
+                    className={`w-full py-2 rounded-xl text-sm font-medium ${cls}`}>
+                    {text}
+                  </button>
+                )
+              })() : (
+                <>
+                  {isBonusEvent && (
+                    <div className={`text-xs px-3 py-2 rounded-xl ${hasBonusAvailable ? 'bg-purple-50 text-purple-700' : 'bg-gray-50 text-gray-500'}`}>
+                      {hasBonusAvailable
+                        ? `✅ Есть бонус «${event.bonus_type}» — осталось ${bonusLeft}`
+                        : `❌ Бонуса «${event.bonus_type}» нет`}
+                      {selectedSub?.sessions_left != null && ` · Занятий: ${selectedSub.sessions_left}`}
+                    </div>
+                  )}
+                  <div className="flex flex-wrap gap-2">
+                    {isBonusEvent && hasBonusAvailable && (
+                      <button onClick={() => addParticipant('bonus')}
+                        className="flex-1 bg-purple-500 text-white py-2 rounded-xl text-sm font-medium">
+                        🎁 Бонус
+                      </button>
+                    )}
+                    {!isMasterClass && (
+                      <button onClick={() => addParticipant('session')}
+                        className="flex-1 bg-gray-700 text-white py-2 rounded-xl text-sm font-medium">
+                        ✅ Занятие
+                      </button>
+                    )}
+                    <button onClick={() => addParticipant('paid')}
+                      className="flex-1 bg-green-600 text-white py-2 rounded-xl text-sm font-medium">
+                      💰 Платный
+                    </button>
+                  </div>
+                </>
               )}
-              <div className="flex flex-wrap gap-2">
-                {isBonusEvent && hasBonusAvailable && (
-                  <button onClick={() => addParticipant('bonus')}
-                    className="flex-1 bg-purple-500 text-white py-2 rounded-xl text-sm font-medium">
-                    🎁 Бонус
-                  </button>
-                )}
-                {!isMasterClass && (
-                  <button onClick={() => addParticipant('session')}
-                    className="flex-1 bg-gray-700 text-white py-2 rounded-xl text-sm font-medium">
-                    ✅ Занятие
-                  </button>
-                )}
-                <button onClick={() => addParticipant('paid')}
-                  className="flex-1 bg-green-600 text-white py-2 rounded-xl text-sm font-medium">
-                  💰 Платный
-                </button>
-              </div>
             </div>
           )}
         </div>
