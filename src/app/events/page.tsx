@@ -9,6 +9,8 @@ type Event = {
   id: string
   name: string
   date: string
+  time_start: string | null
+  time_end: string | null
   price: number | null
   description: string | null
   bonus_type: string | null
@@ -35,7 +37,7 @@ export default function EventsPage() {
   const [trainers, setTrainers] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState({ name: '', date: '', price: '', description: '', bonus_type: '', group_restriction: '', trainer_name: '', trainer_name_extra: '' })
+  const [form, setForm] = useState({ name: '', date: '', time_start: '', time_end: '', price: '', description: '', bonus_type: '', group_restriction: '', trainer_name: '', trainer_name_extra: '' })
   const [saving, setSaving] = useState(false)
 
   async function load() {
@@ -62,6 +64,8 @@ export default function EventsPage() {
     await supabase.from('events').insert({
       name: form.name,
       date: form.date,
+      time_start: form.time_start || null,
+      time_end: form.time_end || null,
       price: form.price ? parseFloat(form.price) : null,
       description: form.description || null,
       bonus_type: form.bonus_type || null,
@@ -69,7 +73,7 @@ export default function EventsPage() {
       trainer_name: form.trainer_name || null,
       trainer_name_extra: form.trainer_name_extra || null,
     })
-    setForm({ name: '', date: '', price: '', description: '', bonus_type: '', group_restriction: '', trainer_name: '', trainer_name_extra: '' })
+    setForm({ name: '', date: '', time_start: '', time_end: '', price: '', description: '', bonus_type: '', group_restriction: '', trainer_name: '', trainer_name_extra: '' })
     setShowForm(false)
     setSaving(false)
     load()
@@ -104,6 +108,18 @@ export default function EventsPage() {
             placeholder="Название *" className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none" />
           <input required value={form.date} onChange={e => setForm({...form, date: e.target.value})}
             type="date" className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none" />
+          <div className="flex gap-2">
+            <div className="flex-1">
+              <label className="text-xs text-gray-400 mb-1 block">Начало</label>
+              <input value={form.time_start} onChange={e => setForm({...form, time_start: e.target.value})}
+                type="time" className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none" />
+            </div>
+            <div className="flex-1">
+              <label className="text-xs text-gray-400 mb-1 block">Конец</label>
+              <input value={form.time_end} onChange={e => setForm({...form, time_end: e.target.value})}
+                type="time" className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none" />
+            </div>
+          </div>
           <select value={form.bonus_type} onChange={e => setForm({...form, bonus_type: e.target.value, price: e.target.value === 'тренировка с оружием' ? '' : form.price})}
             className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none bg-white">
             <option value="">Тип бонуса (если применяется)</option>
@@ -184,7 +200,10 @@ function EventCard({ event, bonusColors, onDelete, canEdit }: { event: Event; bo
               <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">{event.group_restriction}</span>
             )}
           </div>
-          <div className="text-sm text-gray-400 mt-0.5">📅 {event.date}</div>
+          <div className="text-sm text-gray-400 mt-0.5">
+            📅 {event.date}
+            {event.time_start && <span className="ml-2">🕐 {event.time_start.slice(0, 5)}{event.time_end ? `–${event.time_end.slice(0, 5)}` : ''}</span>}
+          </div>
           {(event.trainer_name || event.trainer_name_extra) && (
             <div className="text-xs text-gray-500 mt-0.5">
               {event.trainer_name && <span>👤 {event.trainer_name}</span>}

@@ -27,6 +27,8 @@ type Event = {
   id: string
   name: string
   date: string
+  time_start: string | null
+  time_end: string | null
   price: number | null
   description: string | null
   bonus_type: string | null
@@ -58,7 +60,7 @@ export default function EventDetailPage() {
 
   // Edit state
   const [editing, setEditing] = useState(false)
-  const [editForm, setEditForm] = useState<{ name: string; date: string; price: string; description: string; bonus_type: string; group_restriction: string; trainer_name: string; trainer_name_extra: string }>({ name: '', date: '', price: '', description: '', bonus_type: '', group_restriction: '', trainer_name: '', trainer_name_extra: '' })
+  const [editForm, setEditForm] = useState<{ name: string; date: string; time_start: string; time_end: string; price: string; description: string; bonus_type: string; group_restriction: string; trainer_name: string; trainer_name_extra: string }>({ name: '', date: '', time_start: '', time_end: '', price: '', description: '', bonus_type: '', group_restriction: '', trainer_name: '', trainer_name_extra: '' })
   const [saving, setSaving] = useState(false)
   const [notifying, setNotifying] = useState(false)
   const [notifyResult, setNotifyResult] = useState<string | null>(null)
@@ -95,6 +97,8 @@ export default function EventDetailPage() {
     setEditForm({
       name: event.name,
       date: event.date,
+      time_start: event.time_start || '',
+      time_end: event.time_end || '',
       price: event.price != null ? String(event.price) : '',
       description: event.description || '',
       bonus_type: event.bonus_type || '',
@@ -111,6 +115,8 @@ export default function EventDetailPage() {
     await supabase.from('events').update({
       name: editForm.name,
       date: editForm.date,
+      time_start: editForm.time_start || null,
+      time_end: editForm.time_end || null,
       price: editForm.price ? parseFloat(editForm.price) : null,
       description: editForm.description || null,
       bonus_type: editForm.bonus_type || null,
@@ -227,6 +233,18 @@ export default function EventDetailPage() {
             placeholder="Название *" className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none" />
           <input required value={editForm.date || ''} onChange={e => setEditForm({...editForm, date: e.target.value})}
             type="date" className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none" />
+          <div className="flex gap-2">
+            <div className="flex-1">
+              <label className="text-xs text-gray-400 mb-1 block">Начало</label>
+              <input value={editForm.time_start || ''} onChange={e => setEditForm({...editForm, time_start: e.target.value})}
+                type="time" className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none" />
+            </div>
+            <div className="flex-1">
+              <label className="text-xs text-gray-400 mb-1 block">Конец</label>
+              <input value={editForm.time_end || ''} onChange={e => setEditForm({...editForm, time_end: e.target.value})}
+                type="time" className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none" />
+            </div>
+          </div>
           <select value={editForm.bonus_type || ''} onChange={e => setEditForm({...editForm, bonus_type: e.target.value})}
             className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none bg-white">
             <option value="">Тип бонуса</option>
@@ -269,7 +287,7 @@ export default function EventDetailPage() {
       {/* Event info */}
       <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm mb-4">
         <div className="space-y-1.5 text-sm">
-          <div className="flex justify-between"><span className="text-gray-400">Дата</span><span>{event.date}</span></div>
+          <div className="flex justify-between"><span className="text-gray-400">Дата</span><span>{event.date}{event.time_start && ` · ${event.time_start.slice(0, 5)}${event.time_end ? `–${event.time_end.slice(0, 5)}` : ''}`}</span></div>
           {event.trainer_name && <div className="flex justify-between"><span className="text-gray-400">Тренер</span><span>👤 {event.trainer_name}</span></div>}
           {event.trainer_name_extra && <div className="flex justify-between"><span className="text-gray-400">Доп. тренер</span><span>👤 {event.trainer_name_extra}</span></div>}
           {event.price && <div className="flex justify-between"><span className="text-gray-400">Стоимость</span><span>{event.price.toLocaleString()} ₽</span></div>}
