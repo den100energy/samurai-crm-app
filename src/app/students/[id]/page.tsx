@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { QRCodeSVG } from 'qrcode.react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/components/AuthProvider'
+import { localDateStr } from '@/lib/dates'
 
 type Student = {
   id: string
@@ -1007,12 +1008,19 @@ export default function StudentPage() {
               const bonuses = s.bonuses || {}
               const bonusesUsed = s.bonuses_used || {}
               const bonusKeys = Object.keys(bonuses)
+              const today = localDateStr()
+              const isExpiredByDate = s.end_date ? s.end_date < today : false
+              const isExpiredBySessions = s.sessions_left !== null && s.sessions_left <= 0
+              const isExpired = !s.is_pending && !s.is_frozen && (isExpiredByDate || isExpiredBySessions)
               return (
-                <div key={s.id} className="p-3 bg-gray-50 rounded-xl">
+                <div key={s.id} className={`p-3 rounded-xl ${isExpired ? 'bg-red-50 border border-red-200' : 'bg-gray-50'}`}>
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <div className="text-sm font-medium">{s.type.includes('|') ? s.type.split('|').join(' · ') : s.type}</div>
+                        {isExpired && (
+                          <span className="text-xs bg-red-500 text-white px-2 py-0.5 rounded-full">❌ Окончен</span>
+                        )}
                         {s.is_pending && (
                           <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">⏳ Ожидает</span>
                         )}

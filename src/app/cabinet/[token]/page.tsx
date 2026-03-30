@@ -25,7 +25,7 @@ const QUALITY_LABELS: Record<string,string> = {
 
 type Student = { id: string; name: string; group_name: string | null; birth_date: string | null; photo_url: string | null; created_at: string }
 type TrainerInfo = { name: string; phone: string | null; telegram_username: string | null; vk_url: string | null; days: string[] }
-type Subscription = { sessions_left: number | null; sessions_total: number | null; end_date: string | null; type: string }
+type Subscription = { sessions_left: number | null; sessions_total: number | null; start_date: string | null; end_date: string | null; type: string; amount: number | null; bonuses: Record<string, number> | null; bonuses_used: Record<string, number> | null }
 type Survey = { id: string; filled_at: string | null; created_at: string } & Record<string, number | null | string>
 type Task = { id: string; title: string; description: string | null; due_date: string | null; completed: boolean }
 type Cert = { id: string; type: string; title: string; date: string | null; notes: string | null }
@@ -341,8 +341,8 @@ export default function CabinetPage() {
     const sunday = weekDates[7]
 
     const [subRes, surveysRes, tasksRes, certsRes, attRes, tkRes, diagRes, schedRes, ovRes, firstSubRes, profileRes] = await Promise.all([
-      supabase.from('subscriptions').select('sessions_left, sessions_total, end_date, type')
-        .eq('student_id', sid).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+      supabase.from('subscriptions').select('sessions_left, sessions_total, start_date, end_date, type, amount, bonuses, bonuses_used')
+        .eq('student_id', sid).eq('is_pending', false).order('created_at', { ascending: false }).limit(1).maybeSingle(),
       supabase.from('progress_surveys').select('*').eq('student_id', sid).order('created_at'),
       supabase.from('trainer_tasks').select('id, title, description, due_date, completed')
         .eq('student_id', sid).order('created_at', { ascending: false }),
@@ -619,75 +619,130 @@ export default function CabinetPage() {
             )}
 
             {/* Абонемент */}
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="font-semibold text-gray-800">🎫 Абонемент</h2>
-                {subscription && (
-                  <span className="text-xs text-gray-400">{subscription.type}</span>
-                )}
-              </div>
-              {subscription ? (
-                <>
-                  <div className="flex justify-between items-center mb-3">
-                    <div className="text-center">
-                      <div className={`text-3xl font-bold ${
-                        (subscription.sessions_left ?? 0) <= 2 ? 'text-red-500' :
-                        (subscription.sessions_left ?? 0) <= 5 ? 'text-yellow-500' : 'text-green-600'
-                      }`}>
-                        {subscription.sessions_left ?? 0}
-                      </div>
-                      <div className="text-xs text-gray-400">осталось занятий</div>
-                    </div>
-                    <div className="text-center">
-                      <div className={`text-3xl font-bold ${daysLeft !== null && daysLeft <= 7 ? 'text-red-500' : 'text-gray-800'}`}>
-                        {daysLeft ?? '—'}
-                      </div>
-                      <div className="text-xs text-gray-400">дней до конца</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-3xl font-bold text-gray-800">{subscription.sessions_total ?? '—'}</div>
-                      <div className="text-xs text-gray-400">всего в абоне</div>
-                    </div>
+            {(() => {
+              const today = localDateStr()
+              const isExpiredByDate = subscription?.end_date ? subscription.end_date < today : false
+              const isExpiredBySessions = subscription !== null && subscription.sessions_left !== null && subscription.sessions_left <= 0
+              const isExpired = isExpiredByDate || isExpiredBySessions
+              const bonusEntries = subscription?.bonuses ? Object.entries(subscription.bonuses) : []
+              return (
+                <div className={`bg-white rounded-2xl border shadow-sm p-4 ${isExpired ? 'border-red-200' : 'border-gray-100'}`}>
+                  <div className="flex items-center justify-between mb-3">
+                    <h2 className="font-semibold text-gray-800">🎫 Абонемент</h2>
+                    {subscription && (
+                      <span className="text-xs text-gray-400">{subscription.type}</span>
+                    )}
                   </div>
-                  {subscription.sessions_total && subscription.sessions_left !== null && (
-                    <div className="bg-gray-100 rounded-full h-2 overflow-hidden">
-                      <div className="h-full bg-black rounded-full transition-all"
-                        style={{ width: `${Math.round((subscription.sessions_left / subscription.sessions_total) * 100)}%` }} />
+                  {isExpired && (
+                    <div className="bg-red-500 text-white text-sm font-medium text-center py-2 rounded-xl mb-3">
+                      ❌ Абонемент окончен — необходимо продление
                     </div>
                   )}
-                  {subscription.end_date && (
-                    <div className="text-xs text-gray-400 text-right mt-2">
-                      до {new Date(subscription.end_date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}
-                    </div>
+                  {subscription ? (
+                    <>
+                      <div className="flex justify-between items-center mb-3">
+                        <div className="text-center">
+                          <div className={`text-3xl font-bold ${
+                            isExpiredBySessions ? 'text-red-500' :
+                            (subscription.sessions_left ?? 0) <= 2 ? 'text-red-500' :
+                            (subscription.sessions_left ?? 0) <= 5 ? 'text-yellow-500' : 'text-green-600'
+                          }`}>
+                            {subscription.sessions_left ?? 0}
+                          </div>
+                          <div className="text-xs text-gray-400">осталось занятий</div>
+                        </div>
+                        <div className="text-center">
+                          <div className={`text-3xl font-bold ${daysLeft !== null && daysLeft <= 7 ? 'text-red-500' : 'text-gray-800'}`}>
+                            {daysLeft ?? '—'}
+                          </div>
+                          <div className="text-xs text-gray-400">дней до конца</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-3xl font-bold text-gray-800">{subscription.sessions_total ?? '—'}</div>
+                          <div className="text-xs text-gray-400">всего в абоне</div>
+                        </div>
+                      </div>
+                      {subscription.sessions_total && subscription.sessions_left !== null && (
+                        <div className="bg-gray-100 rounded-full h-2 overflow-hidden mb-3">
+                          <div className="h-full bg-black rounded-full transition-all"
+                            style={{ width: `${Math.round((subscription.sessions_left / subscription.sessions_total) * 100)}%` }} />
+                        </div>
+                      )}
+                      <div className="flex justify-between text-xs text-gray-400 mb-2">
+                        {subscription.start_date && (
+                          <span>с {new Date(subscription.start_date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}</span>
+                        )}
+                        {subscription.end_date && (
+                          <span className={isExpiredByDate ? 'text-red-500 font-medium' : ''}>
+                            до {new Date(subscription.end_date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}
+                          </span>
+                        )}
+                      </div>
+                      {subscription.amount && (
+                        <div className="text-xs text-gray-400 mb-2">💳 Стоимость: <span className="text-gray-600 font-medium">{subscription.amount.toLocaleString('ru-RU')} ₽</span></div>
+                      )}
+                      {bonusEntries.length > 0 && (
+                        <div className="mt-2 space-y-1">
+                          <div className="text-xs text-gray-400 mb-1">🎁 Бонусы:</div>
+                          {bonusEntries.map(([key, total]) => {
+                            const used = subscription.bonuses_used?.[key] ?? 0
+                            const left = total - used
+                            return (
+                              <div key={key} className={`text-xs flex justify-between px-2 py-1 rounded-lg ${left > 0 ? 'bg-purple-50 text-purple-700' : 'bg-gray-50 text-gray-400'}`}>
+                                <span>{key}</span>
+                                <span>{left > 0 ? `осталось ${left} из ${total}` : 'использован'}</span>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
+                      {!isExpired && (subscription.sessions_left ?? 0) <= 2 && (
+                        <div className="mt-3 bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-600">
+                          ⚠️ Заканчиваются занятия — пора продлить абонемент
+                          {trainersInfo[0]?.phone && (
+                            <a href={`tel:${trainersInfo[0].phone}`}
+                              className="block mt-2 text-center bg-red-600 text-white rounded-lg py-1.5 font-medium text-sm">
+                              📞 Позвонить тренеру
+                            </a>
+                          )}
+                          {trainersInfo[0]?.telegram_username && (
+                            <a href={`https://t.me/${trainersInfo[0].telegram_username}`} target="_blank"
+                              className="block mt-1.5 text-center bg-white border border-red-200 text-red-600 rounded-lg py-1.5 font-medium text-sm">
+                              ✈️ Написать в Telegram
+                            </a>
+                          )}
+                          {trainersInfo[0]?.vk_url && (
+                            <a href={trainersInfo[0].vk_url} target="_blank"
+                              className="block mt-1.5 text-center bg-white border border-red-200 text-red-600 rounded-lg py-1.5 font-medium text-sm">
+                              ВК Написать ВКонтакте
+                            </a>
+                          )}
+                        </div>
+                      )}
+                      {isExpired && (
+                        <div className="mt-3 bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-600">
+                          Для продления абонемента свяжитесь с тренером:
+                          {trainersInfo[0]?.phone && (
+                            <a href={`tel:${trainersInfo[0].phone}`}
+                              className="block mt-2 text-center bg-red-600 text-white rounded-lg py-1.5 font-medium text-sm">
+                              📞 Позвонить тренеру
+                            </a>
+                          )}
+                          {trainersInfo[0]?.telegram_username && (
+                            <a href={`https://t.me/${trainersInfo[0].telegram_username}`} target="_blank"
+                              className="block mt-1.5 text-center bg-white border border-red-200 text-red-600 rounded-lg py-1.5 font-medium text-sm">
+                              ✈️ Написать в Telegram
+                            </a>
+                          )}
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="text-sm text-gray-400 text-center py-4">Абонемент не найден</div>
                   )}
-                  {(subscription.sessions_left ?? 0) <= 2 && (
-                    <div className="mt-3 bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-600">
-                      ⚠️ Заканчиваются занятия — пора продлить абонемент
-                      {trainersInfo[0]?.phone && (
-                        <a href={`tel:${trainersInfo[0].phone}`}
-                          className="block mt-2 text-center bg-red-600 text-white rounded-lg py-1.5 font-medium text-sm">
-                          📞 Позвонить тренеру
-                        </a>
-                      )}
-                      {trainersInfo[0]?.telegram_username && (
-                        <a href={`https://t.me/${trainersInfo[0].telegram_username}`} target="_blank"
-                          className="block mt-1.5 text-center bg-white border border-red-200 text-red-600 rounded-lg py-1.5 font-medium text-sm">
-                          ✈️ Написать в Telegram
-                        </a>
-                      )}
-                      {trainersInfo[0]?.vk_url && (
-                        <a href={trainersInfo[0].vk_url} target="_blank"
-                          className="block mt-1.5 text-center bg-white border border-red-200 text-red-600 rounded-lg py-1.5 font-medium text-sm">
-                          ВК Написать ВКонтакте
-                        </a>
-                      )}
-                    </div>
-                  )}
-                </>
-              ) : (
-                <div className="text-sm text-gray-400 text-center py-4">Абонемент не найден</div>
-              )}
-            </div>
+                </div>
+              )
+            })()}
 
             {/* Расписание на эту неделю */}
             {scheduleSlots.length > 0 && (() => {

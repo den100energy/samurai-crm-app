@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/components/ThemeProvider'
+import { localDateStr } from '@/lib/dates'
 
 type Student = {
   id: string
@@ -24,6 +25,10 @@ type Subscription = {
   start_date: string | null
   end_date: string | null
   paid: boolean
+  amount: number | null
+  bonuses: Record<string, number> | null
+  bonuses_used: Record<string, number> | null
+  is_pending: boolean
 }
 
 type Attendance = {
@@ -59,13 +64,13 @@ export default function TrainerStudentCard() {
   async function loadData() {
     const [{ data: s }, { data: subData }, { data: attData }] = await Promise.all([
       supabase.from('students').select('id, name, group_name, birth_date, health_notes, photo_url, status').eq('id', id).single(),
-      supabase.from('subscriptions').select('id, type, sessions_total, sessions_left, start_date, end_date, paid')
+      supabase.from('subscriptions').select('id, type, sessions_total, sessions_left, start_date, end_date, paid, amount, bonuses, bonuses_used, is_pending')
         .eq('student_id', id).order('created_at', { ascending: false }).limit(1).maybeSingle(),
       supabase.from('attendance').select('date, present').eq('student_id', id)
         .order('date', { ascending: false }).limit(20),
     ])
     setStudent(s)
-    setSub(subData)
+    setSub(subData?.is_pending ? null : subData)
     setAttendance(attData || [])
     setLoading(false)
   }
@@ -128,37 +133,82 @@ export default function TrainerStudentCard() {
       )}
 
       {/* Subscription */}
-      <div className={`rounded-2xl border p-4 mb-4 ${card}`}>
-        <div className={`text-xs font-semibold uppercase tracking-wide mb-3 ${textMuted}`}>Абонемент</div>
-        {sub ? (
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <span className={`text-sm ${textPrimary}`}>{sub.type}</span>
-              {!sub.paid && (
-                <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full">Не оплачен</span>
-              )}
-            </div>
-            {sub.sessions_total !== null && (
-              <div className={`flex items-center justify-between border-t pt-2 ${divider}`}>
-                <span className={`text-sm ${textSecondary}`}>Занятий осталось</span>
-                <span className={`text-sm ${sessionsColor(sub.sessions_left)}`}>
-                  {sub.sessions_left ?? '—'} / {sub.sessions_total}
-                </span>
+      {(() => {
+        const today = localDateStr()
+        const isExpiredByDate = sub?.end_date ? sub.end_date < today : false
+        const isExpiredBySessions = sub !== null && sub.sessions_left !== null && sub.sessions_left <= 0
+        const isExpired = isExpiredByDate || isExpiredBySessions
+        const bonusEntries = sub?.bonuses ? Object.entries(sub.bonuses) : []
+        return (
+          <div className={`rounded-2xl border p-4 mb-4 ${card} ${isExpired ? 'border-red-400' : ''}`}>
+            <div className={`text-xs font-semibold uppercase tracking-wide mb-3 ${textMuted}`}>Абонемент</div>
+            {isExpired && (
+              <div className="bg-red-500 text-white text-xs font-medium text-center py-1.5 rounded-xl mb-3">
+                ❌ Абонемент окончен
               </div>
             )}
-            {sub.end_date && (
-              <div className={`flex items-center justify-between border-t pt-2 ${divider}`}>
-                <span className={`text-sm ${textSecondary}`}>Действует до</span>
-                <span className={`text-sm ${textPrimary}`}>
-                  {new Date(sub.end_date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}
-                </span>
+            {sub ? (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className={`text-sm ${textPrimary}`}>{sub.type}</span>
+                  {!sub.paid && (
+                    <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full">Не оплачен</span>
+                  )}
+                </div>
+                {sub.sessions_total !== null && (
+                  <div className={`flex items-center justify-between border-t pt-2 ${divider}`}>
+                    <span className={`text-sm ${textSecondary}`}>Занятий осталось</span>
+                    <span className={`text-sm ${sessionsColor(sub.sessions_left)}`}>
+                      {sub.sessions_left ?? '—'} / {sub.sessions_total}
+                    </span>
+                  </div>
+                )}
+                {sub.start_date && (
+                  <div className={`flex items-center justify-between border-t pt-2 ${divider}`}>
+                    <span className={`text-sm ${textSecondary}`}>Начало</span>
+                    <span className={`text-sm ${textPrimary}`}>
+                      {new Date(sub.start_date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}
+                    </span>
+                  </div>
+                )}
+                {sub.end_date && (
+                  <div className={`flex items-center justify-between border-t pt-2 ${divider}`}>
+                    <span className={`text-sm ${textSecondary}`}>Действует до</span>
+                    <span className={`text-sm ${isExpiredByDate ? 'text-red-500 font-medium' : textPrimary}`}>
+                      {new Date(sub.end_date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}
+                    </span>
+                  </div>
+                )}
+                {sub.amount && (
+                  <div className={`flex items-center justify-between border-t pt-2 ${divider}`}>
+                    <span className={`text-sm ${textSecondary}`}>Стоимость</span>
+                    <span className={`text-sm ${textPrimary}`}>{sub.amount.toLocaleString('ru-RU')} ₽</span>
+                  </div>
+                )}
+                {bonusEntries.length > 0 && (
+                  <div className={`border-t pt-2 ${divider}`}>
+                    <div className={`text-xs mb-1 ${textMuted}`}>🎁 Бонусы:</div>
+                    <div className="space-y-1">
+                      {bonusEntries.map(([key, total]) => {
+                        const used = sub.bonuses_used?.[key] ?? 0
+                        const left = total - used
+                        return (
+                          <div key={key} className={`text-xs flex justify-between px-2 py-1 rounded-lg ${left > 0 ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-400'}`}>
+                            <span>{key}</span>
+                            <span>{left > 0 ? `${left} из ${total}` : 'использован'}</span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
+            ) : (
+              <div className="text-sm text-orange-500 font-medium">⚠️ Нет абонемента</div>
             )}
           </div>
-        ) : (
-          <div className="text-sm text-orange-500 font-medium">⚠️ Нет абонемента</div>
-        )}
-      </div>
+        )
+      })()}
 
       {/* Attendance */}
       <div className={`rounded-2xl border p-4 ${card}`}>

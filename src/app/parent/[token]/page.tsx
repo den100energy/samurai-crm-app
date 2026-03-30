@@ -14,7 +14,7 @@ type ScheduleOverride = { date: string; trainer_name: string | null; cancelled: 
 
 const DAYS = ['', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
 const DAYS_FULL = ['', 'понедельник', 'вторник', 'среда', 'четверг', 'пятница', 'суббота', 'воскресенье']
-type Subscription = { id: string; type: string; sessions_total: number | null; sessions_left: number | null; start_date: string | null; end_date: string | null }
+type Subscription = { id: string; type: string; sessions_total: number | null; sessions_left: number | null; start_date: string | null; end_date: string | null; amount: number | null; bonuses: Record<string, number> | null; bonuses_used: Record<string, number> | null; is_pending: boolean }
 type Attendance = { id: string; date: string; present: boolean }
 type Survey = { id: string; survey_number: number; title: string | null; filled_at: string | null; created_at: string } & Record<string, number | null>
 type Ticket = { id: string; type: string; description: string | null; status: string; resolution_note: string | null; created_at: string }
@@ -148,7 +148,7 @@ export default function ParentPage() {
           ? supabase.from('schedule_overrides').select('date, trainer_name, cancelled').eq('group_name', s.group_name).gte('date', mondayStr).lte('date', sundayStr)
           : Promise.resolve({ data: [] }),
       ])
-      if (subs && subs.length > 0) setActiveSub(subs[0])
+      if (subs && subs.length > 0) setActiveSub(subs.find((s: Subscription) => !s.is_pending) || null)
       setAttendance(att || [])
       setSurveys(sv || [])
       setTickets(tk || [])
@@ -293,51 +293,87 @@ export default function ParentPage() {
           {/* ── АБОНЕМЕНТ ── */}
           {tab === 'sub' && (
             <>
-              <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
-                <div className="text-xs text-gray-400 uppercase tracking-wide mb-3">Текущий абонемент</div>
-                {activeSub ? (
-                  <div>
-                    <div className="text-sm font-medium text-gray-700 mb-3">{activeSub.type}</div>
-                    {activeSub.sessions_left !== null && (
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-sm text-gray-500">Осталось занятий</span>
-                        <span className={`text-2xl font-bold ${sessionsColor(activeSub.sessions_left)}`}>
-                          {activeSub.sessions_left}
-                          {activeSub.sessions_total ? <span className="text-sm font-normal text-gray-400"> / {activeSub.sessions_total}</span> : ''}
-                        </span>
+              {(() => {
+                const today = localDateStr()
+                const isExpiredByDate = activeSub?.end_date ? activeSub.end_date < today : false
+                const isExpiredBySessions = activeSub !== null && activeSub.sessions_left !== null && activeSub.sessions_left <= 0
+                const isExpired = isExpiredByDate || isExpiredBySessions
+                const bonusEntries = activeSub?.bonuses ? Object.entries(activeSub.bonuses) : []
+                return (
+                  <div className={`bg-white rounded-2xl p-5 border shadow-sm ${isExpired ? 'border-red-200' : 'border-gray-100'}`}>
+                    <div className="text-xs text-gray-400 uppercase tracking-wide mb-3">Текущий абонемент</div>
+                    {isExpired && (
+                      <div className="bg-red-500 text-white text-sm font-medium text-center py-2 rounded-xl mb-3">
+                        ❌ Абонемент окончен — необходимо продление
                       </div>
                     )}
-                    {activeSub.end_date && (
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-gray-500">Действует до</span>
-                        <span className="text-sm font-medium text-gray-700">{fmtDate(activeSub.end_date)}</span>
+                    {activeSub ? (
+                      <div>
+                        <div className="text-sm font-medium text-gray-700 mb-3">{activeSub.type}</div>
+                        {activeSub.sessions_left !== null && (
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-sm text-gray-500">Осталось занятий</span>
+                            <span className={`text-2xl font-bold ${sessionsColor(activeSub.sessions_left)}`}>
+                              {activeSub.sessions_left}
+                              {activeSub.sessions_total ? <span className="text-sm font-normal text-gray-400"> / {activeSub.sessions_total}</span> : ''}
+                            </span>
+                          </div>
+                        )}
+                        {activeSub.start_date && (
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-sm text-gray-500">Начало</span>
+                            <span className="text-sm text-gray-600">{fmtDate(activeSub.start_date)}</span>
+                          </div>
+                        )}
+                        {activeSub.end_date && (
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-sm text-gray-500">Действует до</span>
+                            <span className={`text-sm font-medium ${isExpiredByDate ? 'text-red-500' : 'text-gray-700'}`}>{fmtDate(activeSub.end_date)}</span>
+                          </div>
+                        )}
+                        {activeSub.amount && (
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-sm text-gray-500">Стоимость</span>
+                            <span className="text-sm font-medium text-gray-700">{activeSub.amount.toLocaleString('ru-RU')} ₽</span>
+                          </div>
+                        )}
+                        {bonusEntries.length > 0 && (
+                          <div className="mt-2 space-y-1">
+                            <div className="text-xs text-gray-400 mb-1">🎁 Бонусы:</div>
+                            {bonusEntries.map(([key, total]) => {
+                              const used = activeSub.bonuses_used?.[key] ?? 0
+                              const left = total - used
+                              return (
+                                <div key={key} className={`text-xs flex justify-between px-2 py-1 rounded-lg ${left > 0 ? 'bg-purple-50 text-purple-700' : 'bg-gray-50 text-gray-400'}`}>
+                                  <span>{key}</span>
+                                  <span>{left > 0 ? `осталось ${left} из ${total}` : 'использован'}</span>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )}
+                        {!isExpired && activeSub.sessions_left !== null && activeSub.sessions_left <= 2 && activeSub.sessions_left > 0 && (
+                          <div className="mt-3 p-2 bg-orange-50 rounded-xl text-xs text-orange-600 text-center">
+                            Скоро закончится — пора продлить абонемент
+                          </div>
+                        )}
+                        {/* Апсейл */}
+                        {!isExpired && activeSub.sessions_left !== null && activeSub.sessions_total !== null &&
+                          activeSub.sessions_total >= 8 &&
+                          activeSub.sessions_left <= Math.ceil(activeSub.sessions_total * 0.15) &&
+                          activeSub.sessions_left > 0 && (
+                          <div className="mt-3 p-3 bg-purple-50 border border-purple-200 rounded-xl text-xs text-purple-700">
+                            <div className="font-semibold mb-1">💡 {student.name} ходит на полную!</div>
+                            <div className="text-purple-600">Ваш ребёнок использует абонемент максимально. Спросите тренера о безлимитном варианте — обычно выгоднее при такой активности.</div>
+                          </div>
+                        )}
                       </div>
-                    )}
-                    {activeSub.sessions_left !== null && activeSub.sessions_left <= 2 && activeSub.sessions_left > 0 && (
-                      <div className="mt-3 p-2 bg-orange-50 rounded-xl text-xs text-orange-600 text-center">
-                        Скоро закончится — пора продлить абонемент
-                      </div>
-                    )}
-                    {activeSub.sessions_left === 0 && (
-                      <div className="mt-3 p-2 bg-red-50 rounded-xl text-xs text-red-600 text-center">
-                        Занятия закончились — обратитесь к тренеру для продления
-                      </div>
-                    )}
-                    {/* 4D: Апсейл — ученик регулярно ходит и «у потолка» абонемента */}
-                    {activeSub.sessions_left !== null && activeSub.sessions_total !== null &&
-                      activeSub.sessions_total >= 8 &&
-                      activeSub.sessions_left <= Math.ceil(activeSub.sessions_total * 0.15) &&
-                      activeSub.sessions_left > 0 && (
-                      <div className="mt-3 p-3 bg-purple-50 border border-purple-200 rounded-xl text-xs text-purple-700">
-                        <div className="font-semibold mb-1">💡 {student.name} ходит на полную!</div>
-                        <div className="text-purple-600">Ваш ребёнок использует абонемент максимально. Спросите тренера о безлимитном варианте — обычно выгоднее при такой активности.</div>
-                      </div>
+                    ) : (
+                      <div className="text-sm text-gray-400 text-center py-2">Абонемент не найден</div>
                     )}
                   </div>
-                ) : (
-                  <div className="text-sm text-gray-400 text-center py-2">Абонемент не найден</div>
-                )}
-              </div>
+                )
+              })()}
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm text-center">
                   <div className="text-2xl font-bold text-gray-800">{presentCount}</div>
