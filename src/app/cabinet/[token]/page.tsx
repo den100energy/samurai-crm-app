@@ -354,7 +354,7 @@ export default function CabinetPage() {
       supabase.from('attendance').select('date, present').eq('student_id', sid)
         .order('date', { ascending: false }).limit(180),
       supabase.from('tickets').select('id, type, description, status, resolution_note, created_at')
-        .eq('student_id', sid).order('created_at', { ascending: false }),
+        .eq('student_id', sid).neq('type', 'crm_задача').order('created_at', { ascending: false }),
       supabase.from('diagnostic_surveys').select('ai_program').eq('student_id', sid)
         .order('created_at', { ascending: false }).limit(1).maybeSingle(),
       studentData.group_name

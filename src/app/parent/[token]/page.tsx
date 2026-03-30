@@ -142,7 +142,7 @@ export default function ParentPage() {
         supabase.from('subscriptions').select('*').eq('student_id', s.id).order('created_at', { ascending: false }).limit(1),
         supabase.from('attendance').select('*').eq('student_id', s.id).order('date', { ascending: false }).limit(90),
         supabase.from('progress_surveys').select('*').eq('student_id', s.id).not('filled_at', 'is', null).order('created_at'),
-        supabase.from('tickets').select('id, type, description, status, resolution_note, created_at').eq('student_id', s.id).order('created_at', { ascending: false }),
+        supabase.from('tickets').select('id, type, description, status, resolution_note, created_at').eq('student_id', s.id).neq('type', 'crm_задача').order('created_at', { ascending: false }),
         supabase.from('certifications').select('id, type, title, date').eq('student_id', s.id).order('date', { ascending: false }),
         s.group_name
           ? supabase.from('schedule').select('day_of_week, time_start, trainer_name').eq('group_name', s.group_name).order('day_of_week').order('time_start')
