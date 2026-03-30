@@ -316,6 +316,7 @@ export default function CabinetPage() {
   const [showTicketForm, setShowTicketForm] = useState(false)
   const [ticketSending, setTicketSending] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [bonusTotalValue, setBonusTotalValue] = useState<number | null>(null)
   const [tab, setTab] = useState<'home' | 'progress' | 'tasks' | 'achievements' | 'tickets'>('home')
   const [togglingTask, setTogglingTask] = useState<string | null>(null)
 
@@ -369,6 +370,12 @@ export default function CabinetPage() {
     ])
 
     setSubscription(subRes.data)
+    if (subRes.data?.type) {
+      const { data: stData } = await supabase
+        .from('subscription_types').select('bonus_total_value')
+        .eq('name', subRes.data.type).maybeSingle()
+      setBonusTotalValue(stData?.bonus_total_value ?? null)
+    }
     setFirstSubDate((firstSubRes as any).data?.start_date || null)
     setTrainingStartDate((profileRes as any).data?.training_start_date || null)
     setSurveys(surveysRes.data || [])
@@ -682,15 +689,29 @@ export default function CabinetPage() {
                         <div className="text-xs text-gray-400 mb-2">💳 Стоимость: <span className="text-gray-600 font-medium">{subscription.amount.toLocaleString('ru-RU')} ₽</span></div>
                       )}
                       {bonusEntries.length > 0 && (
-                        <div className="mt-2 space-y-1">
-                          <div className="text-xs text-gray-400 mb-1">🎁 Бонусы:</div>
+                        <div className="mt-3 pt-2 border-t border-gray-100 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <div className="text-xs font-medium text-gray-500">🎁 Бонусы абонемента</div>
+                            {bonusTotalValue ? (
+                              <div className="text-xs font-semibold text-green-600">на {bonusTotalValue.toLocaleString('ru-RU')} ₽</div>
+                            ) : null}
+                          </div>
                           {bonusEntries.map(([key, total]) => {
                             const used = subscription.bonuses_used?.[key] ?? 0
                             const left = total - used
                             return (
-                              <div key={key} className={`text-xs flex justify-between px-2 py-1 rounded-lg ${left > 0 ? 'bg-purple-50 text-purple-700' : 'bg-gray-50 text-gray-400'}`}>
-                                <span>{key}</span>
-                                <span>{left > 0 ? `осталось ${left} из ${total}` : 'использован'}</span>
+                              <div key={key} className={`px-3 py-2 rounded-xl ${left > 0 ? 'bg-purple-50' : 'bg-gray-50'}`}>
+                                <div className="flex items-center justify-between mb-1">
+                                  <span className={`text-xs font-medium ${left > 0 ? 'text-purple-700' : 'text-gray-400'}`}>{key}</span>
+                                  <span className={`text-xs ${left > 0 ? 'text-purple-500' : 'text-gray-400'}`}>
+                                    {left > 0 ? `осталось ${left} из ${total}` : '✓ использован'}
+                                  </span>
+                                </div>
+                                <div className="flex gap-1">
+                                  {Array.from({ length: total }).map((_, i) => (
+                                    <div key={i} className={`w-4 h-4 rounded-full ${i < used ? 'bg-gray-300' : 'bg-purple-400'}`} />
+                                  ))}
+                                </div>
                               </div>
                             )
                           })}

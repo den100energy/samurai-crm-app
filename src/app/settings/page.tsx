@@ -10,8 +10,12 @@ type SubType = {
   group_type: string | null
   sessions_count: number | null
   price: number | null
+  price_per_session: number | null
+  duration_months: number | null
   description: string | null
   bonuses: Record<string, number> | null
+  bonus_total_value: number | null
+  is_for_newcomers: boolean | null
 }
 
 type TgGroup = {
@@ -26,7 +30,7 @@ const STUDENT_GROUPS = ['Дети 4-9', 'Подростки (нач)', 'Подр
 
 type BonusRow = { name: string; count: string }
 
-const emptyForm = { name: '', group_type: 'Старт', sessions_count: '', price: '', description: '', duration_months: '' }
+const emptyForm = { name: '', group_type: 'Старт', sessions_count: '', price: '', price_per_session: '', description: '', duration_months: '', bonus_total_value: '', is_for_newcomers: false }
 const emptyTgForm = { name: '', invite_link: '', description: '', group_names: [] as string[] }
 
 export default function SettingsPage() {
@@ -99,8 +103,11 @@ export default function SettingsPage() {
       group_type: t.group_type || 'Старт',
       sessions_count: t.sessions_count?.toString() || '',
       price: t.price?.toString() || '',
+      price_per_session: t.price_per_session?.toString() || '',
       description: t.description || '',
-      duration_months: (t as any).duration_months?.toString() || '',
+      duration_months: t.duration_months?.toString() || '',
+      bonus_total_value: t.bonus_total_value?.toString() || '',
+      is_for_newcomers: t.is_for_newcomers || false,
     })
     const rows: BonusRow[] = Object.entries(t.bonuses || {}).map(([name, count]) => ({
       name,
@@ -142,9 +149,12 @@ export default function SettingsPage() {
       group_type: form.group_type || null,
       sessions_count: form.sessions_count ? parseInt(form.sessions_count) : null,
       price: form.price ? parseFloat(form.price) : null,
+      price_per_session: form.price_per_session ? parseFloat(form.price_per_session) : null,
       description: form.description || null,
       duration_months: form.duration_months ? parseFloat(form.duration_months) : null,
       bonuses,
+      bonus_total_value: form.bonus_total_value ? parseFloat(form.bonus_total_value) : null,
+      is_for_newcomers: form.is_for_newcomers,
     }
     if (editId) {
       await supabase.from('subscription_types').update(payload).eq('id', editId)
@@ -210,10 +220,28 @@ export default function SettingsPage() {
                 placeholder="Цена (₽)"
                 className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none" />
             </div>
-            <input type="number" step="0.5" value={form.duration_months}
-              onChange={e => setForm({ ...form, duration_months: e.target.value })}
-              placeholder="Срок действия (мес), например 1.5"
+            <div className="flex gap-2">
+              <input type="number" value={form.price_per_session}
+                onChange={e => setForm({ ...form, price_per_session: e.target.value })}
+                placeholder="Цена 1 трен. (₽)"
+                className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none" />
+              <input type="number" step="0.5" value={form.duration_months}
+                onChange={e => setForm({ ...form, duration_months: e.target.value })}
+                placeholder="Срок (мес), напр. 1.5"
+                className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none" />
+            </div>
+
+            <input type="number" value={form.bonus_total_value}
+              onChange={e => setForm({ ...form, bonus_total_value: e.target.value })}
+              placeholder="Сумма бонусов (₽)"
               className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none" />
+
+            <label className="flex items-center gap-2 px-1 cursor-pointer">
+              <input type="checkbox" checked={form.is_for_newcomers}
+                onChange={e => setForm({ ...form, is_for_newcomers: e.target.checked })}
+                className="w-4 h-4 rounded" />
+              <span className="text-sm text-gray-700">Только для новичков (первая покупка)</span>
+            </label>
 
             <input value={form.description} onChange={e => setForm({ ...form, description: e.target.value })}
               placeholder="Описание (необязательно)"
@@ -382,14 +410,22 @@ function TypeCard({ t, onEdit, onRemove }: { t: SubType; onEdit: (t: SubType) =>
   return (
     <div className="flex items-start justify-between p-3 bg-gray-50 rounded-xl gap-2">
       <div className="flex-1 min-w-0">
-        <div className="font-medium text-gray-800 text-sm">{t.name}</div>
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <div className="font-medium text-gray-800 text-sm">{t.name}</div>
+          {t.is_for_newcomers && (
+            <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full font-medium">Новичок</span>
+          )}
+        </div>
         <div className="text-xs text-gray-400 mt-0.5">
           {t.sessions_count ? `${t.sessions_count} зан.` : 'Безлимит'}
+          {t.duration_months ? ` · ${t.duration_months} мес.` : ''}
           {t.price ? ` · ${t.price.toLocaleString('ru-RU')} ₽` : ''}
+          {t.price_per_session ? ` · ${t.price_per_session} ₽/трен.` : ''}
         </div>
         {bonusKeys.length > 0 && (
           <div className="text-xs text-blue-500 mt-0.5">
             {bonusKeys.map(b => `${b} ×${t.bonuses![b]}`).join(' · ')}
+            {t.bonus_total_value ? ` = ${t.bonus_total_value.toLocaleString('ru-RU')} ₽` : ''}
           </div>
         )}
         {t.description && <div className="text-xs text-gray-400 mt-0.5">{t.description}</div>}

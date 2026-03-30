@@ -223,7 +223,7 @@ export default function StudentPage() {
   const [subForm, setSubForm] = useState({ type: '', sessions_total: '', start_date: '', end_date: '', amount: '', paid: false, is_pending: false, bonuses: {} as Record<string, number> })
   const [showBeltForm, setShowBeltForm] = useState<'aikido' | 'wushu' | null>(null)
   const [beltForm, setBeltForm] = useState({ belt_name: '', date: new Date().toISOString().split('T')[0], notes: '' })
-  const [subTypes, setSubTypes] = useState<{ id: string; name: string; group_type: string | null; sessions_count: number | null; price: number | null; bonuses: Record<string, number> | null; duration_months: number | null }[]>([])
+  const [subTypes, setSubTypes] = useState<{ id: string; name: string; group_type: string | null; sessions_count: number | null; price: number | null; price_per_session: number | null; bonus_total_value: number | null; is_for_newcomers: boolean | null; bonuses: Record<string, number> | null; duration_months: number | null }[]>([])
   const [showQR, setShowQR] = useState(false)
   const [saving, setSaving] = useState(false)
   const [editSubId, setEditSubId] = useState<string | null>(null)
@@ -262,7 +262,7 @@ export default function StudentPage() {
         supabase.from('subscriptions').select('*').eq('student_id', id).order('created_at', { ascending: false }),
         supabase.from('attendance').select('*').eq('student_id', id).order('date', { ascending: false }).limit(20),
         supabase.from('belts').select('*').eq('student_id', id).order('date', { ascending: false }),
-        supabase.from('subscription_types').select('id, name, group_type, sessions_count, price, bonuses, duration_months').order('created_at'),
+        supabase.from('subscription_types').select('id, name, group_type, sessions_count, price, price_per_session, bonus_total_value, is_for_newcomers, bonuses, duration_months').order('created_at'),
         supabase.from('student_contacts').select('*').eq('student_id', id).order('created_at'),
         supabase.from('diagnostic_surveys').select('*').eq('student_id', id).maybeSingle(),
         supabase.from('progress_surveys').select('*').eq('student_id', id).order('created_at', { ascending: false }),
@@ -1012,6 +1012,7 @@ export default function StudentPage() {
               const isExpiredByDate = s.end_date ? s.end_date < today : false
               const isExpiredBySessions = s.sessions_left !== null && s.sessions_left <= 0
               const isExpired = !s.is_pending && !s.is_frozen && (isExpiredByDate || isExpiredBySessions)
+              const matchedType = subTypes.find(t => t.name === s.type)
               return (
                 <div key={s.id} className={`p-3 rounded-xl ${isExpired ? 'bg-red-50 border border-red-200' : 'bg-gray-50'}`}>
                   <div className="flex items-start justify-between gap-2">
@@ -1032,6 +1033,7 @@ export default function StudentPage() {
                         {s.sessions_left != null ? `${s.sessions_left}/${s.sessions_total} занятий` : ''}
                         {s.end_date ? ` · до ${s.end_date}` : ''}
                         {s.amount ? ` · ${s.amount.toLocaleString()} ₽` : ''}
+                        {matchedType?.price_per_session ? ` · ${matchedType.price_per_session} ₽/трен.` : ''}
                       </div>
                       {s.is_frozen && s.freeze_end && (
                         <div className="text-xs text-blue-500 mt-0.5">Заморозка до {s.freeze_end} · {s.freeze_days_used} дн.</div>
@@ -1138,7 +1140,12 @@ export default function StudentPage() {
                   )}
                   {bonusKeys.length > 0 && (
                     <div className="mt-2 pt-2 border-t border-gray-200 space-y-1.5">
-                      <div className="text-xs font-medium text-gray-500">Бонусы:</div>
+                      <div className="flex items-center justify-between">
+                        <div className="text-xs font-medium text-gray-500">Бонусы:</div>
+                        {matchedType?.bonus_total_value ? (
+                          <div className="text-xs text-green-600 font-medium">на {matchedType.bonus_total_value.toLocaleString('ru-RU')} ₽</div>
+                        ) : null}
+                      </div>
                       {bonusKeys.map(bonus => {
                         const total = bonuses[bonus]
                         const used = bonusesUsed[bonus] || 0
