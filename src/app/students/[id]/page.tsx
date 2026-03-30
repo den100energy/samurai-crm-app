@@ -1363,38 +1363,71 @@ export default function StudentPage() {
           </div>
         )}
 
-        {attendance.length === 0 ? (
-          <div className="text-sm text-gray-400 text-center py-2">Нет данных</div>
-        ) : (
-          <div className="space-y-1">
-            {attendance.map(a => (
-              <div key={a.id} className="flex items-center justify-between text-sm gap-2">
-                {editingAttId === a.id ? (
-                  <input
-                    type="date"
-                    defaultValue={a.date}
-                    autoFocus
-                    className="border border-gray-300 rounded-lg px-2 py-0.5 text-sm outline-none"
-                    onBlur={e => saveAttendanceDate(a, e.target.value)}
-                    onKeyDown={e => {
-                      if (e.key === 'Enter') saveAttendanceDate(a, (e.target as HTMLInputElement).value)
-                      if (e.key === 'Escape') setEditingAttId(null)
-                    }}
-                  />
-                ) : (
-                  <span className="text-gray-600">{a.date}</span>
-                )}
-                <div className="flex items-center gap-2 shrink-0">
-                  <span>{a.present ? '✅ Был' : '❌ Не был'}</span>
-                  <button onClick={() => { setEditingAttId(a.id); setEditingAttDate(a.date) }}
-                    className="text-gray-400 hover:text-gray-700 text-xs px-1">✎</button>
-                  <button onClick={() => deleteAttendance(a)}
-                    className="text-red-400 hover:text-red-600 text-xs px-1">✕</button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+        {(() => {
+          // Собираем бонусные записи из всех абонементов
+          const bonusRows: { date: string; label: string }[] = []
+          for (const s of subs) {
+            const bonuses = s.bonuses || {}
+            const bonusesUsed = s.bonuses_used || {}
+            for (const key of Object.keys(bonuses)) {
+              const val = bonusesUsed[key]
+              const dates: string[] = Array.isArray(val) ? val : Array.from({ length: (val as number) || 0 }, () => '')
+              for (const d of dates) {
+                if (d) bonusRows.push({ date: d, label: key })
+              }
+            }
+          }
+          // Объединяем с attendance и сортируем по дате убывания
+          type Row = { date: string } & ({ kind: 'att'; a: typeof attendance[0] } | { kind: 'bonus'; label: string })
+          const rows: Row[] = [
+            ...attendance.map(a => ({ kind: 'att' as const, date: a.date, a })),
+            ...bonusRows.map(b => ({ kind: 'bonus' as const, date: b.date, label: b.label })),
+          ].sort((a, b) => b.date.localeCompare(a.date))
+
+          if (rows.length === 0) return <div className="text-sm text-gray-400 text-center py-2">Нет данных</div>
+
+          return (
+            <div className="space-y-1">
+              {rows.map((row, idx) => {
+                if (row.kind === 'bonus') {
+                  return (
+                    <div key={`bonus-${idx}`} className="flex items-center justify-between text-sm gap-2">
+                      <span className="text-gray-600">{row.date}</span>
+                      <span className="text-purple-600">🎁 {row.label}</span>
+                    </div>
+                  )
+                }
+                const a = row.a
+                return (
+                  <div key={a.id} className="flex items-center justify-between text-sm gap-2">
+                    {editingAttId === a.id ? (
+                      <input
+                        type="date"
+                        defaultValue={a.date}
+                        autoFocus
+                        className="border border-gray-300 rounded-lg px-2 py-0.5 text-sm outline-none"
+                        onBlur={e => saveAttendanceDate(a, e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') saveAttendanceDate(a, (e.target as HTMLInputElement).value)
+                          if (e.key === 'Escape') setEditingAttId(null)
+                        }}
+                      />
+                    ) : (
+                      <span className="text-gray-600">{a.date}</span>
+                    )}
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span>{a.present ? '✅ Был' : '❌ Не был'}</span>
+                      <button onClick={() => { setEditingAttId(a.id); setEditingAttDate(a.date) }}
+                        className="text-gray-400 hover:text-gray-700 text-xs px-1">✎</button>
+                      <button onClick={() => deleteAttendance(a)}
+                        className="text-red-400 hover:text-red-600 text-xs px-1">✕</button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )
+        })()}
       </div>
 
       {/* Contacts */}
