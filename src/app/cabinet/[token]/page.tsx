@@ -7,6 +7,7 @@ import { FujiScene } from '@/components/FujiScene'
 import { localDateStr } from '@/lib/dates'
 import { CabinetTour } from '@/components/CabinetTour'
 import { CABINET_TOUR_SLIDES } from '@/lib/onboarding'
+import { SubscriptionQuiz } from '@/components/SubscriptionQuiz'
 
 const supabase = createBrowserClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -317,6 +318,7 @@ export default function CabinetPage() {
   const [ticketSending, setTicketSending] = useState(false)
   const [loading, setLoading] = useState(true)
   const [bonusTotalValue, setBonusTotalValue] = useState<number | null>(null)
+  const [subTypes, setSubTypes] = useState<any[]>([])
   const [tab, setTab] = useState<'home' | 'progress' | 'tasks' | 'achievements' | 'tickets'>('home')
   const [togglingTask, setTogglingTask] = useState<string | null>(null)
 
@@ -370,6 +372,15 @@ export default function CabinetPage() {
     ])
 
     setSubscription(subRes.data)
+    // Загрузить тарифы группы для квиза
+    const groupType = studentData.group_name?.includes('4-9') || studentData.group_name?.includes('Дети') ? 'Старт' : 'Комбат'
+    const { data: stTypes } = await supabase
+      .from('subscription_types')
+      .select('id, name, group_type, sessions_count, price, price_per_session, duration_months, bonuses, bonus_total_value, is_for_newcomers')
+      .eq('group_type', groupType)
+      .order('sessions_count')
+    setSubTypes(stTypes || [])
+
     if (subRes.data?.type) {
       // Сначала ищем по точному имени (новые абонементы)
       let { data: stData } = await supabase
@@ -781,6 +792,9 @@ export default function CabinetPage() {
                 </div>
               )
             })()}
+
+            {/* Квиз подбора абонемента */}
+            {subTypes.length > 0 && <SubscriptionQuiz types={subTypes} />}
 
             {/* Расписание на эту неделю */}
             {scheduleSlots.length > 0 && (() => {

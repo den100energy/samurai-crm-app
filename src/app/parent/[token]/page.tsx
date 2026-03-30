@@ -7,6 +7,7 @@ import { FujiScene } from '@/components/FujiScene'
 import { localDateStr } from '@/lib/dates'
 import { CabinetTour } from '@/components/CabinetTour'
 import { PARENT_TOUR_SLIDES } from '@/lib/onboarding'
+import { SubscriptionQuiz } from '@/components/SubscriptionQuiz'
 
 type Student = { id: string; name: string; group_name: string | null; birth_date: string | null; photo_url: string | null }
 type ScheduleSlot = { day_of_week: number; time_start: string | null; trainer_name: string | null }
@@ -120,6 +121,7 @@ export default function ParentPage() {
   const [trainers, setTrainers] = useState<{ name: string; phone: string | null; telegram_username: string | null }[]>([])
   const [certs, setCerts] = useState<Cert[]>([])
   const [bonusTotalValue, setBonusTotalValue] = useState<number | null>(null)
+  const [subTypes, setSubTypes] = useState<any[]>([])
 
   useEffect(() => {
     async function load() {
@@ -176,6 +178,15 @@ export default function ParentPage() {
       const slots = (sched as ScheduleSlot[]) || []
       setSchedule(slots)
       setScheduleOverrides((ovs as ScheduleOverride[]) || [])
+      // Загрузить тарифы группы для квиза
+      const groupType = s.group_name?.includes('4-9') || s.group_name?.includes('Дети') ? 'Старт' : 'Комбат'
+      const { data: stData } = await supabase
+        .from('subscription_types')
+        .select('id, name, group_type, sessions_count, price, price_per_session, duration_months, bonuses, bonus_total_value, is_for_newcomers')
+        .eq('group_type', groupType)
+        .order('sessions_count')
+      setSubTypes(stData || [])
+
       // Загрузить контакты тренеров этой группы
       const trainerNames = [...new Set(slots.map(sl => sl.trainer_name).filter(Boolean))] as string[]
       if (trainerNames.length > 0) {
@@ -413,6 +424,10 @@ export default function ParentPage() {
                   </div>
                 )
               })()}
+
+              {/* Квиз подбора абонемента */}
+              {subTypes.length > 0 && <SubscriptionQuiz types={subTypes} />}
+
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm text-center">
                   <div className="text-2xl font-bold text-gray-800">{presentCount}</div>
