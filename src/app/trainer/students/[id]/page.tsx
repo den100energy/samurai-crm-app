@@ -90,6 +90,16 @@ export default function TrainerStudentCard() {
     setBonusDatePicker(null)
   }
 
+  async function cancelBonus(bonusName: string, index: number) {
+    if (!sub) return
+    const val = sub.bonuses_used?.[bonusName]
+    const usedDates: string[] = Array.isArray(val) ? val : Array.from({ length: (val as number) || 0 }, () => '')
+    const newDates = usedDates.filter((_, i) => i !== index)
+    const newUsed = { ...(sub.bonuses_used || {}), [bonusName]: newDates }
+    await supabase.from('subscriptions').update({ bonuses_used: newUsed }).eq('id', sub.id)
+    setSub({ ...sub, bonuses_used: newUsed })
+  }
+
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center text-gray-400" style={{ background: 'var(--bg)' }}>Загрузка...</div>
   )
@@ -216,8 +226,12 @@ export default function TrainerStudentCard() {
                               <div>
                                 <span className={left > 0 ? 'text-purple-700' : 'text-gray-400'}>{key}</span>
                                 <span className={`ml-2 ${left > 0 ? 'text-purple-500' : 'text-gray-400'}`}>{used}/{total}</span>
-                                {usedDates.filter(d => d).map((d, i) => (
-                                  <div key={i} className="text-gray-400 mt-0.5">✓ {d}</div>
+                                {usedDates.map((d, i) => (
+                                  <div key={i} className="flex items-center gap-1 mt-0.5">
+                                    <span className="text-gray-400">✓ {d || '—'}</span>
+                                    <button onClick={() => cancelBonus(key, i)}
+                                      className="text-red-400 hover:text-red-600 leading-none text-xs">✕</button>
+                                  </div>
                                 ))}
                               </div>
                               {left > 0 && !isPickerOpen && (

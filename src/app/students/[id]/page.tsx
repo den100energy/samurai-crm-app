@@ -521,6 +521,14 @@ export default function StudentPage() {
     setSubs(prev => prev.map(s => s.id === subId ? { ...s, bonuses_used: newUsed } : s))
   }
 
+  async function cancelBonus(subId: string, bonusName: string, bonusesUsed: Record<string, number | string[]>, index: number) {
+    const usedDates = getBonusUsedDates(bonusesUsed, bonusName)
+    const newDates = usedDates.filter((_, i) => i !== index)
+    const newUsed = { ...bonusesUsed, [bonusName]: newDates }
+    await supabase.from('subscriptions').update({ bonuses_used: newUsed }).eq('id', subId)
+    setSubs(prev => prev.map(s => s.id === subId ? { ...s, bonuses_used: newUsed } : s))
+  }
+
   async function togglePaid(subId: string, paid: boolean) {
     await supabase.from('subscriptions').update({ paid: !paid }).eq('id', subId)
     setSubs(prev => prev.map(s => s.id === subId ? { ...s, paid: !paid } : s))
@@ -1173,8 +1181,12 @@ export default function StudentPage() {
                                   ))}
                                   <span className="text-xs text-gray-400 ml-1">{used}/{total}</span>
                                 </div>
-                                {usedDates.filter(d => d).map((d, i) => (
-                                  <div key={i} className="text-xs text-gray-400 mt-0.5">✓ {d}</div>
+                                {usedDates.map((d, i) => (
+                                  <div key={i} className="flex items-center gap-1 mt-0.5">
+                                    <span className="text-xs text-gray-400">✓ {d || '—'}</span>
+                                    <button onClick={() => cancelBonus(s.id, bonus, bonusesUsed, i)}
+                                      className="text-xs text-red-400 hover:text-red-600 leading-none">✕</button>
+                                  </div>
                                 ))}
                               </div>
                               {remaining > 0 && !isPickerOpen && (
