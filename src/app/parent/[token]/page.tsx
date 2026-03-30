@@ -14,7 +14,7 @@ type ScheduleOverride = { date: string; trainer_name: string | null; cancelled: 
 
 const DAYS = ['', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
 const DAYS_FULL = ['', 'понедельник', 'вторник', 'среда', 'четверг', 'пятница', 'суббота', 'воскресенье']
-type Subscription = { id: string; type: string; sessions_total: number | null; sessions_left: number | null; start_date: string | null; end_date: string | null; amount: number | null; bonuses: Record<string, number> | null; bonuses_used: Record<string, number> | null; is_pending: boolean }
+type Subscription = { id: string; type: string; sessions_total: number | null; sessions_left: number | null; start_date: string | null; end_date: string | null; amount: number | null; bonuses: Record<string, number> | null; bonuses_used: Record<string, number | string[]> | null; is_pending: boolean }
 type Attendance = { id: string; date: string; present: boolean }
 type Survey = { id: string; survey_number: number; title: string | null; filled_at: string | null; created_at: string } & Record<string, number | null>
 type Ticket = { id: string; type: string; description: string | null; status: string; resolution_note: string | null; created_at: string }
@@ -366,7 +366,9 @@ export default function ParentPage() {
                               ) : null}
                             </div>
                             {bonusEntries.map(([key, total]) => {
-                              const used = activeSub.bonuses_used?.[key] ?? 0
+                              const val = activeSub.bonuses_used?.[key]
+                              const usedDates: string[] = Array.isArray(val) ? val : Array.from({ length: (val as number) || 0 }, () => '')
+                              const used = usedDates.length
                               const left = total - used
                               return (
                                 <div key={key} className={`px-3 py-2 rounded-xl ${left > 0 ? 'bg-purple-50' : 'bg-gray-50'}`}>
@@ -376,11 +378,14 @@ export default function ParentPage() {
                                       {left > 0 ? `осталось ${left} из ${total}` : '✓ использован'}
                                     </span>
                                   </div>
-                                  <div className="flex gap-1">
+                                  <div className="flex gap-1 mb-1">
                                     {Array.from({ length: total }).map((_, i) => (
                                       <div key={i} className={`w-4 h-4 rounded-full ${i < used ? 'bg-gray-300' : 'bg-purple-400'}`} />
                                     ))}
                                   </div>
+                                  {usedDates.filter(d => d).map((d, i) => (
+                                    <div key={i} className="text-xs text-gray-400">✓ {d}</div>
+                                  ))}
                                 </div>
                               )
                             })}

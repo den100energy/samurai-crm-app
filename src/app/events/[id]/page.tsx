@@ -19,7 +19,7 @@ type Student = { id: string; name: string; group_name: string | null }
 type SubInfo = {
   id: string
   bonuses: Record<string, number> | null
-  bonuses_used: Record<string, number> | null
+  bonuses_used: Record<string, number | string[]> | null
   sessions_left: number | null
 }
 
@@ -148,18 +148,26 @@ export default function EventDetailPage() {
     }
   }
 
+  function getBonusUsedCount(bonusesUsed: Record<string, number | string[]> | null, key: string): number {
+    const val = bonusesUsed?.[key]
+    if (!val) return 0
+    if (Array.isArray(val)) return val.length
+    return val as number
+  }
+
   function getBonusStatus(studentId: string): { hasBonusAvailable: boolean; bonusLeft: number } {
     if (!event?.bonus_type) return { hasBonusAvailable: false, bonusLeft: 0 }
     const sub = subMap[studentId]
     if (!sub?.bonuses) return { hasBonusAvailable: false, bonusLeft: 0 }
     const total = sub.bonuses[event.bonus_type] || 0
-    const used = sub.bonuses_used?.[event.bonus_type] || 0
+    const used = getBonusUsedCount(sub.bonuses_used, event.bonus_type)
     return { hasBonusAvailable: total > used, bonusLeft: total - used }
   }
 
   async function addParticipant(attendanceType: string) {
     if (!selectedId) return
     const sub = subMap[selectedId]
+    const eventDate = event?.date || new Date().toISOString().split('T')[0]
 
     await supabase.from('event_participants').insert({
       event_id: id,
@@ -171,7 +179,9 @@ export default function EventDetailPage() {
 
     if (sub && attendanceType === 'bonus' && event?.bonus_type) {
       const currentUsed = sub.bonuses_used || {}
-      const newUsed = { ...currentUsed, [event.bonus_type]: (currentUsed[event.bonus_type] || 0) + 1 }
+      const existing = currentUsed[event.bonus_type]
+      const existingDates: string[] = Array.isArray(existing) ? existing : Array.from({ length: (existing as number) || 0 }, () => '')
+      const newUsed = { ...currentUsed, [event.bonus_type]: [...existingDates.filter(d => d !== ''), eventDate] }
       await supabase.from('subscriptions').update({ bonuses_used: newUsed }).eq('id', sub.id)
     }
     if (sub && attendanceType === 'session' && sub.sessions_left != null) {

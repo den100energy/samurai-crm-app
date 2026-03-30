@@ -50,7 +50,7 @@ type Subscription = {
   paid: boolean
   amount: number | null
   bonuses: Record<string, number> | null
-  bonuses_used: Record<string, number> | null
+  bonuses_used: Record<string, number | string[]> | null
   is_frozen: boolean
   freeze_start: string | null
   freeze_end: string | null
@@ -230,6 +230,8 @@ export default function StudentPage() {
   const [editSubForm, setEditSubForm] = useState({ sessions_total: '', sessions_left: '', start_date: '', end_date: '', amount: '', paid: false })
   const [freezeSubId, setFreezeSubId] = useState<string | null>(null)
   const [freezeForm, setFreezeForm] = useState({ freeze_start: '', freeze_end: '' })
+  const [bonusDatePicker, setBonusDatePicker] = useState<{ subId: string; bonusName: string } | null>(null)
+  const [bonusDate, setBonusDate] = useState(new Date().toISOString().split('T')[0])
   const [showTicketForm, setShowTicketForm] = useState(false)
   const [ticketForm, setTicketForm] = useState({ type: '', description: '' })
   const [studentTickets, setStudentTickets] = useState<StudentTicket[]>([])
@@ -502,11 +504,19 @@ export default function StudentPage() {
     setEditSubId(null)
   }
 
-  async function useBonus(subId: string, bonusName: string, bonuses: Record<string, number>, bonusesUsed: Record<string, number>) {
+  function getBonusUsedDates(bonusesUsed: Record<string, number | string[]> | null, key: string): string[] {
+    const val = bonusesUsed?.[key]
+    if (!val) return []
+    if (Array.isArray(val)) return val
+    // старый формат — число без дат
+    return Array.from({ length: val as number }, () => '')
+  }
+
+  async function useBonus(subId: string, bonusName: string, bonuses: Record<string, number>, bonusesUsed: Record<string, number | string[]>, date: string) {
     const total = bonuses[bonusName] || 0
-    const used = bonusesUsed[bonusName] || 0
-    if (used >= total) return
-    const newUsed = { ...bonusesUsed, [bonusName]: used + 1 }
+    const usedDates = getBonusUsedDates(bonusesUsed, bonusName)
+    if (usedDates.length >= total) return
+    const newUsed = { ...bonusesUsed, [bonusName]: [...usedDates.filter(d => d !== ''), date] }
     await supabase.from('subscriptions').update({ bonuses_used: newUsed }).eq('id', subId)
     setSubs(prev => prev.map(s => s.id === subId ? { ...s, bonuses_used: newUsed } : s))
   }
@@ -1139,7 +1149,7 @@ export default function StudentPage() {
                     </form>
                   )}
                   {bonusKeys.length > 0 && (
-                    <div className="mt-2 pt-2 border-t border-gray-200 space-y-1.5">
+                    <div className="mt-2 pt-2 border-t border-gray-200 space-y-2">
                       <div className="flex items-center justify-between">
                         <div className="text-xs font-medium text-gray-500">Бонусы:</div>
                         {matchedType?.bonus_total_value ? (
@@ -1148,27 +1158,48 @@ export default function StudentPage() {
                       </div>
                       {bonusKeys.map(bonus => {
                         const total = bonuses[bonus]
-                        const used = bonusesUsed[bonus] || 0
+                        const usedDates = getBonusUsedDates(bonusesUsed, bonus)
+                        const used = usedDates.length
                         const remaining = total - used
+                        const isPickerOpen = bonusDatePicker?.subId === s.id && bonusDatePicker?.bonusName === bonus
                         return (
-                          <div key={bonus} className="flex items-center justify-between gap-2">
-                            <div className="flex-1">
-                              <div className="text-xs text-gray-700">{bonus}</div>
-                              <div className="flex gap-0.5 mt-0.5">
-                                {Array.from({ length: total }).map((_, i) => (
-                                  <div key={i} className={`w-3 h-3 rounded-full ${i < used ? 'bg-gray-400' : 'bg-blue-400'}`} />
+                          <div key={bonus}>
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex-1">
+                                <div className="text-xs text-gray-700">{bonus}</div>
+                                <div className="flex gap-0.5 mt-0.5 items-center">
+                                  {Array.from({ length: total }).map((_, i) => (
+                                    <div key={i} className={`w-3 h-3 rounded-full ${i < used ? 'bg-gray-400' : 'bg-blue-400'}`} />
+                                  ))}
+                                  <span className="text-xs text-gray-400 ml-1">{used}/{total}</span>
+                                </div>
+                                {usedDates.filter(d => d).map((d, i) => (
+                                  <div key={i} className="text-xs text-gray-400 mt-0.5">✓ {d}</div>
                                 ))}
-                                <span className="text-xs text-gray-400 ml-1">{used}/{total}</span>
                               </div>
+                              {remaining > 0 && !isPickerOpen && (
+                                <button onClick={() => { setBonusDatePicker({ subId: s.id, bonusName: bonus }); setBonusDate(new Date().toISOString().split('T')[0]) }}
+                                  className="text-xs bg-blue-50 text-blue-600 border border-blue-200 px-2 py-1 rounded-lg shrink-0">
+                                  Использовать
+                                </button>
+                              )}
+                              {remaining === 0 && (
+                                <span className="text-xs text-gray-400 shrink-0">Все использованы</span>
+                              )}
                             </div>
-                            {remaining > 0 && (
-                              <button onClick={() => useBonus(s.id, bonus, bonuses, bonusesUsed)}
-                                className="text-xs bg-blue-50 text-blue-600 border border-blue-200 px-2 py-1 rounded-lg">
-                                Использовать
-                              </button>
-                            )}
-                            {remaining === 0 && (
-                              <span className="text-xs text-gray-400">Использован</span>
+                            {isPickerOpen && (
+                              <div className="mt-1.5 flex gap-2 items-center">
+                                <input type="date" value={bonusDate} onChange={e => setBonusDate(e.target.value)}
+                                  className="flex-1 border border-gray-200 rounded-lg px-2 py-1 text-xs outline-none" />
+                                <button onClick={() => { useBonus(s.id, bonus, bonuses, bonusesUsed, bonusDate); setBonusDatePicker(null) }}
+                                  className="text-xs bg-blue-600 text-white px-3 py-1 rounded-lg">
+                                  Ок
+                                </button>
+                                <button onClick={() => setBonusDatePicker(null)}
+                                  className="text-xs text-gray-400 px-2 py-1 rounded-lg border border-gray-200">
+                                  ✕
+                                </button>
+                              </div>
                             )}
                           </div>
                         )

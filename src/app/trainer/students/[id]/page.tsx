@@ -27,7 +27,7 @@ type Subscription = {
   paid: boolean
   amount: number | null
   bonuses: Record<string, number> | null
-  bonuses_used: Record<string, number> | null
+  bonuses_used: Record<string, number | string[]> | null
   is_pending: boolean
 }
 
@@ -49,6 +49,8 @@ export default function TrainerStudentCard() {
   const [sub, setSub] = useState<Subscription | null>(null)
   const [attendance, setAttendance] = useState<Attendance[]>([])
   const [loading, setLoading] = useState(true)
+  const [bonusDatePicker, setBonusDatePicker] = useState<string | null>(null)
+  const [bonusDate, setBonusDate] = useState(new Date().toISOString().split('T')[0])
 
   const dark = theme === 'dark'
   const card = dark ? 'bg-[#2C2C2E] border-[#3A3A3C]' : 'bg-white border-gray-100 shadow-sm'
@@ -73,6 +75,19 @@ export default function TrainerStudentCard() {
     setSub(subData?.is_pending ? null : subData)
     setAttendance(attData || [])
     setLoading(false)
+  }
+
+  async function useBonus(bonusName: string, date: string) {
+    if (!sub) return
+    const bonuses = sub.bonuses || {}
+    const total = bonuses[bonusName] || 0
+    const val = sub.bonuses_used?.[bonusName]
+    const usedDates: string[] = Array.isArray(val) ? val : Array.from({ length: (val as number) || 0 }, () => '')
+    if (usedDates.length >= total) return
+    const newUsed = { ...(sub.bonuses_used || {}), [bonusName]: [...usedDates.filter(d => d !== ''), date] }
+    await supabase.from('subscriptions').update({ bonuses_used: newUsed }).eq('id', sub.id)
+    setSub({ ...sub, bonuses_used: newUsed })
+    setBonusDatePicker(null)
   }
 
   if (loading) return (
@@ -187,15 +202,42 @@ export default function TrainerStudentCard() {
                 )}
                 {bonusEntries.length > 0 && (
                   <div className={`border-t pt-2 ${divider}`}>
-                    <div className={`text-xs mb-1 ${textMuted}`}>🎁 Бонусы:</div>
-                    <div className="space-y-1">
+                    <div className={`text-xs font-medium mb-2 ${textMuted}`}>🎁 Бонусы:</div>
+                    <div className="space-y-2">
                       {bonusEntries.map(([key, total]) => {
-                        const used = sub.bonuses_used?.[key] ?? 0
+                        const val = sub.bonuses_used?.[key]
+                        const usedDates: string[] = Array.isArray(val) ? val : Array.from({ length: (val as number) || 0 }, () => '')
+                        const used = usedDates.length
                         const left = total - used
+                        const isPickerOpen = bonusDatePicker === key
                         return (
-                          <div key={key} className={`text-xs flex justify-between px-2 py-1 rounded-lg ${left > 0 ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-400'}`}>
-                            <span>{key}</span>
-                            <span>{left > 0 ? `${left} из ${total}` : 'использован'}</span>
+                          <div key={key}>
+                            <div className={`text-xs flex items-center justify-between px-2 py-1.5 rounded-lg ${left > 0 ? 'bg-purple-100' : 'bg-gray-100'}`}>
+                              <div>
+                                <span className={left > 0 ? 'text-purple-700' : 'text-gray-400'}>{key}</span>
+                                <span className={`ml-2 ${left > 0 ? 'text-purple-500' : 'text-gray-400'}`}>{used}/{total}</span>
+                                {usedDates.filter(d => d).map((d, i) => (
+                                  <div key={i} className="text-gray-400 mt-0.5">✓ {d}</div>
+                                ))}
+                              </div>
+                              {left > 0 && !isPickerOpen && (
+                                <button onClick={() => { setBonusDatePicker(key); setBonusDate(new Date().toISOString().split('T')[0]) }}
+                                  className="text-xs bg-purple-600 text-white px-2 py-1 rounded-lg ml-2 shrink-0">
+                                  Использовать
+                                </button>
+                              )}
+                              {left === 0 && <span className="text-gray-400 ml-2">✓ все</span>}
+                            </div>
+                            {isPickerOpen && (
+                              <div className="mt-1 flex gap-2 items-center px-1">
+                                <input type="date" value={bonusDate} onChange={e => setBonusDate(e.target.value)}
+                                  className="flex-1 border border-gray-200 rounded-lg px-2 py-1 text-xs outline-none bg-white text-gray-800" />
+                                <button onClick={() => useBonus(key, bonusDate)}
+                                  className="text-xs bg-purple-600 text-white px-3 py-1 rounded-lg shrink-0">Ок</button>
+                                <button onClick={() => setBonusDatePicker(null)}
+                                  className="text-xs text-gray-400 px-2 py-1 rounded-lg border border-gray-200 shrink-0">✕</button>
+                              </div>
+                            )}
                           </div>
                         )
                       })}
