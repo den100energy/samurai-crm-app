@@ -152,9 +152,21 @@ export default function ParentPage() {
       const foundSub = subs?.find((s: Subscription) => !s.is_pending) || null
       if (subs && subs.length > 0) setActiveSub(foundSub)
       if (foundSub?.type) {
-        const { data: stData } = await supabase
+        // Сначала ищем по точному имени (новые абонементы)
+        let { data: stData } = await supabase
           .from('subscription_types').select('bonus_total_value')
           .eq('name', foundSub.type).maybeSingle()
+        // Если не нашли — старое название вида "Старт16", ищем по кол-ву занятий
+        if (!stData) {
+          const sessCount = foundSub.sessions_total
+          const grp = foundSub.type?.startsWith('Комбат') ? 'Комбат' : 'Старт'
+          if (sessCount) {
+            const { data: stData2 } = await supabase
+              .from('subscription_types').select('bonus_total_value')
+              .eq('sessions_count', sessCount).eq('group_type', grp).eq('is_for_newcomers', false).maybeSingle()
+            stData = stData2
+          }
+        }
         setBonusTotalValue(stData?.bonus_total_value ?? null)
       }
       setAttendance(att || [])

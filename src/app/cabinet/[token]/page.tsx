@@ -371,9 +371,21 @@ export default function CabinetPage() {
 
     setSubscription(subRes.data)
     if (subRes.data?.type) {
-      const { data: stData } = await supabase
+      // Сначала ищем по точному имени (новые абонементы)
+      let { data: stData } = await supabase
         .from('subscription_types').select('bonus_total_value')
         .eq('name', subRes.data.type).maybeSingle()
+      // Если не нашли — старое название вида "Старт16", ищем по кол-ву занятий
+      if (!stData) {
+        const sessCount = subRes.data.sessions_total
+        const grp = subRes.data.type?.startsWith('Комбат') ? 'Комбат' : 'Старт'
+        if (sessCount) {
+          const { data: stData2 } = await supabase
+            .from('subscription_types').select('bonus_total_value')
+            .eq('sessions_count', sessCount).eq('group_type', grp).eq('is_for_newcomers', false).maybeSingle()
+          stData = stData2
+        }
+      }
       setBonusTotalValue(stData?.bonus_total_value ?? null)
     }
     setFirstSubDate((firstSubRes as any).data?.start_date || null)
