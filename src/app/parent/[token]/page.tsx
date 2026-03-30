@@ -122,6 +122,7 @@ export default function ParentPage() {
   const [certs, setCerts] = useState<Cert[]>([])
   const [bonusTotalValue, setBonusTotalValue] = useState<number | null>(null)
   const [subTypes, setSubTypes] = useState<any[]>([])
+  const [eventVisits, setEventVisits] = useState<{ date: string; title: string }[]>([])
 
   useEffect(() => {
     async function load() {
@@ -138,7 +139,7 @@ export default function ParentPage() {
       const mondayStr = localDateStr(monday)
       const sundayStr = localDateStr(sunday)
 
-      const [{ data: subs }, { data: att }, { data: sv }, { data: tk }, { data: certsData }, { data: sched }, { data: ovs }] = await Promise.all([
+      const [{ data: subs }, { data: att }, { data: sv }, { data: tk }, { data: certsData }, { data: sched }, { data: ovs }, { data: evParts }] = await Promise.all([
         supabase.from('subscriptions').select('*').eq('student_id', s.id).order('created_at', { ascending: false }).limit(1),
         supabase.from('attendance').select('*').eq('student_id', s.id).order('date', { ascending: false }).limit(90),
         supabase.from('progress_surveys').select('*').eq('student_id', s.id).not('filled_at', 'is', null).order('created_at'),
@@ -150,7 +151,13 @@ export default function ParentPage() {
         s.group_name
           ? supabase.from('schedule_overrides').select('date, trainer_name, cancelled').eq('group_name', s.group_name).gte('date', mondayStr).lte('date', sundayStr)
           : Promise.resolve({ data: [] }),
+        supabase.from('event_participants').select('events(date, title)').eq('student_id', s.id),
       ])
+      const evVisits = ((evParts || []) as any[])
+        .map(ep => ep.events)
+        .filter(ev => ev?.date && ev?.title)
+        .map(ev => ({ date: ev.date as string, title: ev.title as string }))
+      setEventVisits(evVisits)
       const foundSub = subs?.find((s: Subscription) => !s.is_pending) || null
       if (subs && subs.length > 0) setActiveSub(foundSub)
       if (foundSub?.type) {
@@ -506,20 +513,59 @@ export default function ParentPage() {
           {tab === 'attendance' && (
             <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
               <div className="text-xs text-gray-400 uppercase tracking-wide mb-3">История посещений</div>
-              {attendance.length === 0 ? (
-                <div className="text-sm text-gray-400 text-center py-4">Нет данных</div>
-              ) : (
-                <div className="space-y-2">
-                  {attendance.map(a => (
-                    <div key={a.id} className="flex items-center justify-between text-sm py-0.5">
-                      <span className="text-gray-500">{fmtDate(a.date)}</span>
-                      <span className={a.present ? 'text-green-600 font-medium' : 'text-gray-300'}>
-                        {a.present ? '✓ был' : '— не был'}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
+              {(() => {
+                // Бонусные даты из абонемента
+                const bonusRows: { date: string; label: string; kind: 'bonus' }[] = []
+                if (activeSub?.bonuses && activeSub?.bonuses_used) {
+                  for (const key of Object.keys(activeSub.bonuses)) {
+                    const val = activeSub.bonuses_used[key]
+                    const dates: string[] = Array.isArray(val) ? val : Array.from({ length: (val as number) || 0 }, () => '')
+                    for (const d of dates) {
+                      if (d) bonusRows.push({ date: d, label: key, kind: 'bonus' })
+                    }
+                  }
+                }
+                // Объединяем всё в один список
+                type Row =
+                  | { kind: 'att'; date: string; a: Attendance }
+                  | { kind: 'bonus'; date: string; label: string }
+                  | { kind: 'event'; date: string; label: string }
+                const rows: Row[] = [
+                  ...attendance.map(a => ({ kind: 'att' as const, date: a.date, a })),
+                  ...bonusRows.map(b => ({ kind: 'bonus' as const, date: b.date, label: b.label })),
+                  ...eventVisits.map(ev => ({ kind: 'event' as const, date: ev.date, label: ev.title })),
+                ].sort((a, b) => b.date.localeCompare(a.date))
+
+                if (rows.length === 0) return <div className="text-sm text-gray-400 text-center py-4">Нет данных</div>
+
+                return (
+                  <div className="space-y-2">
+                    {rows.map((row, i) => {
+                      if (row.kind === 'bonus') return (
+                        <div key={`b-${i}`} className="flex items-center justify-between text-sm py-0.5">
+                          <span className="text-gray-500">{fmtDate(row.date)}</span>
+                          <span className="text-purple-600 font-medium">🎁 {row.label}</span>
+                        </div>
+                      )
+                      if (row.kind === 'event') return (
+                        <div key={`e-${i}`} className="flex items-center justify-between text-sm py-0.5">
+                          <span className="text-gray-500">{fmtDate(row.date)}</span>
+                          <span className="text-blue-600 font-medium">🏟 {row.label}</span>
+                        </div>
+                      )
+                      const a = row.a
+                      return (
+                        <div key={a.id} className="flex items-center justify-between text-sm py-0.5">
+                          <span className="text-gray-500">{fmtDate(a.date)}</span>
+                          <span className={a.present ? 'text-green-600 font-medium' : 'text-gray-300'}>
+                            {a.present ? '✓ был' : '— не был'}
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )
+              })()}
             </div>
           )}
 

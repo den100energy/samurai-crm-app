@@ -308,6 +308,7 @@ export default function CabinetPage() {
   const [tasks, setTasks] = useState<Task[]>([])
   const [certs, setCerts] = useState<Cert[]>([])
   const [attendance, setAttendance] = useState<{ date: string; present: boolean }[]>([])
+  const [eventVisits, setEventVisits] = useState<{ date: string; title: string }[]>([])
   const [aiProgram, setAiProgram] = useState<string | null>(null)
   const [scheduleSlots, setScheduleSlots] = useState<ScheduleSlot[]>([])
   const [scheduleOverrides, setScheduleOverrides] = useState<ScheduleOverride[]>([])
@@ -343,7 +344,7 @@ export default function CabinetPage() {
     const monday = weekDates[1]
     const sunday = weekDates[7]
 
-    const [subRes, surveysRes, tasksRes, certsRes, attRes, tkRes, diagRes, schedRes, ovRes, firstSubRes, profileRes] = await Promise.all([
+    const [subRes, surveysRes, tasksRes, certsRes, attRes, evParticipantsRes, tkRes, diagRes, schedRes, ovRes, firstSubRes, profileRes] = await Promise.all([
       supabase.from('subscriptions').select('sessions_left, sessions_total, start_date, end_date, type, amount, bonuses, bonuses_used')
         .eq('student_id', sid).eq('is_pending', false).order('created_at', { ascending: false }).limit(1).maybeSingle(),
       supabase.from('progress_surveys').select('*').eq('student_id', sid).order('created_at'),
@@ -353,6 +354,7 @@ export default function CabinetPage() {
         .eq('student_id', sid).order('date', { ascending: false }),
       supabase.from('attendance').select('date, present').eq('student_id', sid)
         .order('date', { ascending: false }).limit(180),
+      supabase.from('event_participants').select('events(date, title)').eq('student_id', sid),
       supabase.from('tickets').select('id, type, description, status, resolution_note, created_at')
         .eq('student_id', sid).neq('type', 'crm_задача').order('created_at', { ascending: false }),
       supabase.from('diagnostic_surveys').select('ai_program').eq('student_id', sid)
@@ -405,6 +407,11 @@ export default function CabinetPage() {
     setTasks(tasksRes.data || [])
     setCerts(certsRes.data || [])
     setAttendance(attRes.data || [])
+    const evVisits = ((evParticipantsRes.data || []) as any[])
+      .map(ep => ep.events)
+      .filter(ev => ev?.date && ev?.title)
+      .map(ev => ({ date: ev.date as string, title: ev.title as string }))
+    setEventVisits(evVisits)
     setTickets(tkRes.data || [])
     setAiProgram(diagRes.data?.ai_program || null)
     const slots = (schedRes.data as ScheduleSlot[]) || []
@@ -902,6 +909,40 @@ export default function CabinetPage() {
 
             {/* Календарь посещений */}
             <AttendanceCalendar attendance={attendance} />
+
+            {/* Бонусные тренировки и мероприятия */}
+            {(() => {
+              const bonusRows: { date: string; label: string; kind: 'bonus' }[] = []
+              if (subscription?.bonuses && subscription?.bonuses_used) {
+                for (const key of Object.keys(subscription.bonuses)) {
+                  const val = subscription.bonuses_used[key]
+                  const dates: string[] = Array.isArray(val) ? val : Array.from({ length: (val as number) || 0 }, () => '')
+                  for (const d of dates) {
+                    if (d) bonusRows.push({ date: d, label: key, kind: 'bonus' })
+                  }
+                }
+              }
+              const evRows = eventVisits.map(ev => ({ date: ev.date, label: ev.title, kind: 'event' as const }))
+              const extra = [...bonusRows, ...evRows].sort((a, b) => b.date.localeCompare(a.date))
+              if (extra.length === 0) return null
+              return (
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+                  <h2 className="font-semibold text-gray-800 mb-3">🎁 Бонусы и мероприятия</h2>
+                  <div className="space-y-2">
+                    {extra.map((row, i) => (
+                      <div key={i} className="flex items-center justify-between text-sm">
+                        <span className="text-gray-500">
+                          {new Date(row.date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}
+                        </span>
+                        <span className={row.kind === 'bonus' ? 'text-purple-600' : 'text-blue-600'}>
+                          {row.kind === 'bonus' ? '🎁' : '🏟'} {row.label}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )
+            })()}
 
             {/* Задания — плашка если есть */}
             {pendingTasks > 0 && (
