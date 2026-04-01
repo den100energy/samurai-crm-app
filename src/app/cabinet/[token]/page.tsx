@@ -26,7 +26,8 @@ const QUALITY_LABELS: Record<string,string> = {
 
 type Student = { id: string; name: string; group_name: string | null; birth_date: string | null; photo_url: string | null; created_at: string }
 type TrainerInfo = { name: string; phone: string | null; telegram_username: string | null; vk_url: string | null; days: string[] }
-type Subscription = { sessions_left: number | null; sessions_total: number | null; start_date: string | null; end_date: string | null; type: string; amount: number | null; bonuses: Record<string, number> | null; bonuses_used: Record<string, number | string[]> | null }
+type Subscription = { id: string; sessions_left: number | null; sessions_total: number | null; start_date: string | null; end_date: string | null; type: string; amount: number | null; bonuses: Record<string, number> | null; bonuses_used: Record<string, number | string[]> | null }
+type InstallmentPlan = { id: string; total_amount: number; deposit_amount: number; deposit_paid_at: string | null; installment_payments: { id: string; amount: number; due_date: string; status: string; paid_at: string | null; actual_amount: number | null }[] }
 type Survey = { id: string; filled_at: string | null; created_at: string } & Record<string, number | null | string>
 type Task = { id: string; title: string; description: string | null; due_date: string | null; completed: boolean }
 type Cert = { id: string; type: string; title: string; date: string | null; notes: string | null }
@@ -302,6 +303,7 @@ export default function CabinetPage() {
   const isAdminView = searchParams.get('back') === '1'
   const [student, setStudent] = useState<Student | null>(null)
   const [subscription, setSubscription] = useState<Subscription | null>(null)
+  const [installmentPlan, setInstallmentPlan] = useState<InstallmentPlan | null>(null)
   const [firstSubDate, setFirstSubDate] = useState<string | null>(null)
   const [trainingStartDate, setTrainingStartDate] = useState<string | null>(null)
   const [surveys, setSurveys] = useState<Survey[]>([])
@@ -345,7 +347,7 @@ export default function CabinetPage() {
     const sunday = weekDates[7]
 
     const [subRes, surveysRes, tasksRes, certsRes, attRes, evParticipantsRes, tkRes, diagRes, schedRes, ovRes, firstSubRes, profileRes] = await Promise.all([
-      supabase.from('subscriptions').select('sessions_left, sessions_total, start_date, end_date, type, amount, bonuses, bonuses_used')
+      supabase.from('subscriptions').select('id, sessions_left, sessions_total, start_date, end_date, type, amount, bonuses, bonuses_used')
         .eq('student_id', sid).eq('is_pending', false).order('created_at', { ascending: false }).limit(1).maybeSingle(),
       supabase.from('progress_surveys').select('*').eq('student_id', sid).order('created_at'),
       supabase.from('trainer_tasks').select('id, title, description, due_date, completed')
@@ -374,6 +376,18 @@ export default function CabinetPage() {
     ])
 
     setSubscription(subRes.data)
+
+    // Загрузить план рассрочки если есть подписка
+    if (subRes.data?.id) {
+      const { data: iplan } = await supabase
+        .from('installment_plans')
+        .select('id, total_amount, deposit_amount, deposit_paid_at, installment_payments(id, amount, due_date, status, paid_at, actual_amount)')
+        .eq('subscription_id', subRes.data.id)
+        .eq('status', 'active')
+        .maybeSingle()
+      setInstallmentPlan(iplan as InstallmentPlan | null)
+    }
+
     // Загрузить тарифы группы для квиза
     const groupType = studentData.group_name?.includes('4-9') || studentData.group_name?.includes('Дети') ? 'Старт' : 'Комбат'
     const { data: stTypes } = await supabase
@@ -802,6 +816,69 @@ export default function CabinetPage() {
 
             {/* Квиз подбора абонемента */}
             {subTypes.length > 0 && <SubscriptionQuiz types={subTypes} />}
+
+            {/* Рассрочка */}
+            {installmentPlan && (() => {
+              const today = localDateStr()
+              const payments = [...installmentPlan.installment_payments].sort((a, b) => a.due_date.localeCompare(b.due_date))
+              const paidAmount = payments.filter(p => p.status === 'paid').reduce((s, p) => s + (p.actual_amount ?? p.amount), 0) + installmentPlan.deposit_amount
+              const progress = Math.min(100, Math.round((paidAmount / installmentPlan.total_amount) * 100))
+              const nextPending = payments.find(p => p.status === 'pending')
+              const hasOverdue = payments.some(p => p.status === 'overdue' || (p.status === 'pending' && p.due_date < today))
+              const daysToNext = nextPending ? Math.ceil((new Date(nextPending.due_date).getTime() - Date.now()) / 86400000) : null
+              return (
+                <div className={`bg-white rounded-2xl border shadow-sm p-4 ${hasOverdue ? 'border-red-200' : 'border-gray-100'}`}>
+                  <h2 className="font-semibold text-gray-800 mb-3">🗓 Рассрочка</h2>
+                  {hasOverdue && (
+                    <div className="bg-red-50 border border-red-200 rounded-xl px-3 py-2 mb-3 text-sm text-red-700">
+                      ⚠️ Есть просроченный платёж. Занятия могут быть приостановлены.
+                    </div>
+                  )}
+                  {/* Прогресс */}
+                  <div className="flex justify-between text-xs text-gray-500 mb-1">
+                    <span>Оплачено: {paidAmount.toLocaleString('ru-RU')} ₽</span>
+                    <span>{installmentPlan.total_amount.toLocaleString('ru-RU')} ₽</span>
+                  </div>
+                  <div className="h-2 bg-gray-100 rounded-full overflow-hidden mb-3">
+                    <div className={`h-full rounded-full ${progress >= 100 ? 'bg-green-500' : hasOverdue ? 'bg-red-400' : 'bg-blue-500'}`}
+                      style={{ width: `${progress}%` }} />
+                  </div>
+                  {/* Следующий платёж */}
+                  {nextPending && daysToNext !== null && (
+                    <div className={`text-sm rounded-xl px-3 py-2 mb-3 ${daysToNext <= 3 ? 'bg-yellow-50 text-yellow-800 border border-yellow-200' : 'bg-blue-50 text-blue-700'}`}>
+                      {daysToNext <= 0
+                        ? `⚠ Платёж ${nextPending.amount.toLocaleString('ru-RU')} ₽ просрочен`
+                        : daysToNext <= 3
+                        ? `⏰ Ближайший платёж через ${daysToNext} дн. — ${nextPending.amount.toLocaleString('ru-RU')} ₽`
+                        : `Следующий платёж: ${new Date(nextPending.due_date + 'T00:00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })} — ${nextPending.amount.toLocaleString('ru-RU')} ₽`}
+                    </div>
+                  )}
+                  {/* График */}
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between text-xs py-1.5 border-b border-gray-50">
+                      <span className="text-gray-500">Аванс {installmentPlan.deposit_paid_at ? `(${installmentPlan.deposit_paid_at})` : ''}</span>
+                      <span className="text-green-600 font-medium">✓ {installmentPlan.deposit_amount.toLocaleString('ru-RU')} ₽</span>
+                    </div>
+                    {payments.map(p => {
+                      const isOverdue = p.status === 'overdue' || (p.status === 'pending' && p.due_date < today)
+                      const isPaid = p.status === 'paid'
+                      return (
+                        <div key={p.id} className="flex justify-between text-xs py-1.5 border-b border-gray-50 last:border-0">
+                          <span className={isPaid ? 'text-green-600' : isOverdue ? 'text-red-500' : 'text-gray-700'}>
+                            {isPaid ? '✓' : isOverdue ? '⚠' : '○'}{' '}
+                            {new Date(p.due_date + 'T00:00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}
+                          </span>
+                          <span className={`font-medium ${isPaid ? 'text-green-600' : isOverdue ? 'text-red-500' : 'text-gray-700'}`}>
+                            {(p.actual_amount ?? p.amount).toLocaleString('ru-RU')} ₽
+                            {isPaid && p.paid_at && <span className="text-gray-400 font-normal ml-1">({p.paid_at})</span>}
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })()}
 
             {/* Расписание на эту неделю */}
             {scheduleSlots.length > 0 && (() => {

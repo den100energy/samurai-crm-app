@@ -220,7 +220,7 @@ export default function StudentPage() {
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState<Partial<Student>>({})
   const [showSubForm, setShowSubForm] = useState(false)
-  const [subForm, setSubForm] = useState({ type: '', sessions_total: '', start_date: '', end_date: '', amount: '', paid: false, is_pending: false, bonuses: {} as Record<string, number> })
+  const [subForm, setSubForm] = useState({ type: '', sessions_total: '', start_date: '', end_date: '', amount: '', paid: false, is_pending: false, bonuses: {} as Record<string, number>, installment: false, deposit_amount: '', installment_payments: [] as { amount: string; due_date: string }[] })
   const [showBeltForm, setShowBeltForm] = useState<'aikido' | 'wushu' | null>(null)
   const [beltForm, setBeltForm] = useState({ belt_name: '', date: new Date().toISOString().split('T')[0], notes: '' })
   const [subTypes, setSubTypes] = useState<{ id: string; name: string; group_type: string | null; sessions_count: number | null; price: number | null; price_per_session: number | null; bonus_total_value: number | null; is_for_newcomers: boolean | null; bonuses: Record<string, number> | null; duration_months: number | null }[]>([])
@@ -348,9 +348,26 @@ export default function StudentPage() {
       if (attended > 0) {
         alert(`✅ Абонемент добавлен.\n\nАвтоматически списано ${attended} занят. (с ${subForm.start_date}).\nОсталось: ${sessionsLeft} из ${sessions}.`)
       }
+      // Создать рассрочку если галочка стоит
+      if (subForm.installment && subForm.installment_payments.length > 0) {
+        const { data: plan } = await supabase.from('installment_plans').insert({
+          subscription_id: data.id,
+          total_amount: parseFloat(subForm.amount) || 0,
+          deposit_amount: parseFloat(subForm.deposit_amount) || 0,
+          deposit_paid_at: new Date().toISOString().split('T')[0],
+          status: 'active',
+        }).select().single()
+        if (plan) {
+          await supabase.from('installment_payments').insert(
+            subForm.installment_payments
+              .filter(p => p.amount && p.due_date)
+              .map(p => ({ plan_id: plan.id, amount: parseFloat(p.amount), due_date: p.due_date, status: 'pending' }))
+          )
+        }
+      }
     }
     setShowSubForm(false)
-    setSubForm({ type: '', sessions_total: '', start_date: '', end_date: '', amount: '', paid: false, is_pending: false, bonuses: {} })
+    setSubForm({ type: '', sessions_total: '', start_date: '', end_date: '', amount: '', paid: false, is_pending: false, bonuses: {}, installment: false, deposit_amount: '', installment_payments: [] })
   }
 
   async function activatePendingSub(sub: Subscription) {
@@ -992,6 +1009,54 @@ export default function StudentPage() {
               <input type="checkbox" checked={subForm.is_pending} onChange={e => setSubForm({...subForm, is_pending: e.target.checked})} />
               Отложенный (продан, но ещё не начался)
             </label>
+            <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+              <input type="checkbox" checked={subForm.installment} onChange={e => setSubForm({...subForm, installment: e.target.checked, deposit_amount: e.target.checked && subForm.amount ? String(Math.round(parseFloat(subForm.amount) * 0.2)) : '', installment_payments: e.target.checked ? [{ amount: '', due_date: '' }] : []})} />
+              Рассрочка
+            </label>
+            {subForm.installment && (
+              <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 space-y-2">
+                <div>
+                  <label className="text-xs text-blue-700 font-medium">Первоначальный взнос (аванс)</label>
+                  <input value={subForm.deposit_amount} onChange={e => setSubForm({...subForm, deposit_amount: e.target.value})}
+                    placeholder="Аванс (₽)" type="number" min="0"
+                    className="w-full mt-1 border border-blue-200 rounded-lg px-3 py-1.5 text-sm outline-none bg-white" />
+                </div>
+                <div>
+                  <label className="text-xs text-blue-700 font-medium">График платежей</label>
+                  <div className="space-y-1.5 mt-1">
+                    {subForm.installment_payments.map((p, i) => (
+                      <div key={i} className="flex gap-1.5 items-center">
+                        <input type="date" value={p.due_date}
+                          onChange={e => { const arr = [...subForm.installment_payments]; arr[i] = {...arr[i], due_date: e.target.value}; setSubForm({...subForm, installment_payments: arr}) }}
+                          className="flex-1 border border-blue-200 rounded-lg px-2 py-1.5 text-xs outline-none bg-white" />
+                        <input type="number" value={p.amount} placeholder="Сумма ₽"
+                          onChange={e => { const arr = [...subForm.installment_payments]; arr[i] = {...arr[i], amount: e.target.value}; setSubForm({...subForm, installment_payments: arr}) }}
+                          className="w-24 border border-blue-200 rounded-lg px-2 py-1.5 text-xs outline-none bg-white" />
+                        {subForm.installment_payments.length > 1 && (
+                          <button type="button" onClick={() => setSubForm({...subForm, installment_payments: subForm.installment_payments.filter((_, j) => j !== i)})}
+                            className="text-red-400 hover:text-red-600 text-sm leading-none">✕</button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  <button type="button" onClick={() => setSubForm({...subForm, installment_payments: [...subForm.installment_payments, { amount: '', due_date: '' }]})}
+                    className="mt-1.5 text-xs text-blue-600 hover:text-blue-800">+ Добавить платёж</button>
+                </div>
+                {(() => {
+                  const total = parseFloat(subForm.amount) || 0
+                  const deposit = parseFloat(subForm.deposit_amount) || 0
+                  const inSchedule = subForm.installment_payments.reduce((s, p) => s + (parseFloat(p.amount) || 0), 0)
+                  const diff = total - deposit - inSchedule
+                  return (
+                    <div className={`text-xs rounded-lg px-2 py-1.5 ${Math.abs(diff) < 1 ? 'bg-green-50 text-green-700' : 'bg-orange-50 text-orange-700'}`}>
+                      Итого: {total.toLocaleString('ru-RU')} ₽ | Аванс: {deposit.toLocaleString('ru-RU')} ₽ | В графике: {inSchedule.toLocaleString('ru-RU')} ₽
+                      {Math.abs(diff) >= 1 && ` | Остаток: ${diff.toLocaleString('ru-RU')} ₽`}
+                      {Math.abs(diff) < 1 && ' ✓'}
+                    </div>
+                  )
+                })()}
+              </div>
+            )}
             <button type="submit" className="w-full bg-black text-white py-2 rounded-xl text-sm font-medium">
               Сохранить
             </button>

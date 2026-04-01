@@ -19,6 +19,14 @@
     {
       "path": "/api/cron/lifecycle-touchpoints",
       "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/cron/installment-status",
+      "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/cron/installment-reminders",
+      "schedule": "0 8 * * *"
     }
   ]
 }

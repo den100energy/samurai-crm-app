@@ -59,6 +59,12 @@ export const SECTIONS = [
     ],
   },
   {
+    key: 'installments', label: 'Рассрочки', route: '/installments', emoji: '🗓',
+    items: [
+      { key: 'installments.view', label: 'Просмотр рассрочек' },
+    ],
+  },
+  {
     key: 'salary', label: 'Зарплата', route: '/salary', emoji: '💵',
     items: [
       { key: 'salary.view', label: 'Просмотр расчётов' },

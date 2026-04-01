@@ -16,6 +16,7 @@ type ScheduleOverride = { date: string; trainer_name: string | null; cancelled: 
 const DAYS = ['', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
 const DAYS_FULL = ['', 'понедельник', 'вторник', 'среда', 'четверг', 'пятница', 'суббота', 'воскресенье']
 type Subscription = { id: string; type: string; sessions_total: number | null; sessions_left: number | null; start_date: string | null; end_date: string | null; amount: number | null; bonuses: Record<string, number> | null; bonuses_used: Record<string, number | string[]> | null; is_pending: boolean }
+type InstallmentPlan = { id: string; total_amount: number; deposit_amount: number; deposit_paid_at: string | null; installment_payments: { id: string; amount: number; due_date: string; status: string; paid_at: string | null; actual_amount: number | null }[] }
 type Attendance = { id: string; date: string; present: boolean }
 type Survey = { id: string; survey_number: number; title: string | null; filled_at: string | null; created_at: string } & Record<string, number | null>
 type Ticket = { id: string; type: string; description: string | null; status: string; resolution_note: string | null; created_at: string }
@@ -108,6 +109,7 @@ export default function ParentPage() {
   const { token } = useParams<{ token: string }>()
   const [student, setStudent] = useState<Student | null>(null)
   const [activeSub, setActiveSub] = useState<Subscription | null>(null)
+  const [installmentPlan, setInstallmentPlan] = useState<InstallmentPlan | null>(null)
   const [attendance, setAttendance] = useState<Attendance[]>([])
   const [surveys, setSurveys] = useState<Survey[]>([])
   const [tab, setTab] = useState<'sub' | 'attendance' | 'progress' | 'tickets'>('sub')
@@ -160,6 +162,15 @@ export default function ParentPage() {
       setEventVisits(evVisits)
       const foundSub = subs?.find((s: Subscription) => !s.is_pending) || null
       if (subs && subs.length > 0) setActiveSub(foundSub)
+      if (foundSub?.id) {
+        const { data: iplan } = await supabase
+          .from('installment_plans')
+          .select('id, total_amount, deposit_amount, deposit_paid_at, installment_payments(id, amount, due_date, status, paid_at, actual_amount)')
+          .eq('subscription_id', foundSub.id)
+          .eq('status', 'active')
+          .maybeSingle()
+        setInstallmentPlan(iplan as InstallmentPlan | null)
+      }
       if (foundSub?.type) {
         // Сначала ищем по точному имени (новые абонементы)
         let { data: stData } = await supabase
@@ -434,6 +445,65 @@ export default function ParentPage() {
 
               {/* Квиз подбора абонемента */}
               {subTypes.length > 0 && <SubscriptionQuiz types={subTypes} />}
+
+              {/* Рассрочка */}
+              {installmentPlan && (() => {
+                const today = localDateStr()
+                const payments = [...installmentPlan.installment_payments].sort((a, b) => a.due_date.localeCompare(b.due_date))
+                const paidAmount = payments.filter(p => p.status === 'paid').reduce((s, p) => s + (p.actual_amount ?? p.amount), 0) + installmentPlan.deposit_amount
+                const progress = Math.min(100, Math.round((paidAmount / installmentPlan.total_amount) * 100))
+                const nextPending = payments.find(p => p.status === 'pending')
+                const hasOverdue = payments.some(p => p.status === 'overdue' || (p.status === 'pending' && p.due_date < today))
+                const daysToNext = nextPending ? Math.ceil((new Date(nextPending.due_date).getTime() - Date.now()) / 86400000) : null
+                return (
+                  <div className={`bg-white rounded-2xl border shadow-sm p-4 ${hasOverdue ? 'border-red-200' : 'border-gray-100'}`}>
+                    <h2 className="font-semibold text-gray-800 mb-3">🗓 Рассрочка</h2>
+                    {hasOverdue && (
+                      <div className="bg-red-50 border border-red-200 rounded-xl px-3 py-2 mb-3 text-sm text-red-700">
+                        ⚠️ Есть просроченный платёж. Занятия могут быть приостановлены.
+                      </div>
+                    )}
+                    <div className="flex justify-between text-xs text-gray-500 mb-1">
+                      <span>Оплачено: {paidAmount.toLocaleString('ru-RU')} ₽</span>
+                      <span>{installmentPlan.total_amount.toLocaleString('ru-RU')} ₽</span>
+                    </div>
+                    <div className="h-2 bg-gray-100 rounded-full overflow-hidden mb-3">
+                      <div className={`h-full rounded-full ${progress >= 100 ? 'bg-green-500' : hasOverdue ? 'bg-red-400' : 'bg-blue-500'}`}
+                        style={{ width: `${progress}%` }} />
+                    </div>
+                    {nextPending && daysToNext !== null && (
+                      <div className={`text-sm rounded-xl px-3 py-2 mb-3 ${daysToNext <= 3 ? 'bg-yellow-50 text-yellow-800 border border-yellow-200' : 'bg-blue-50 text-blue-700'}`}>
+                        {daysToNext <= 0
+                          ? `⚠ Платёж ${nextPending.amount.toLocaleString('ru-RU')} ₽ просрочен`
+                          : daysToNext <= 3
+                          ? `⏰ Ближайший платёж через ${daysToNext} дн. — ${nextPending.amount.toLocaleString('ru-RU')} ₽`
+                          : `Следующий платёж: ${new Date(nextPending.due_date + 'T00:00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })} — ${nextPending.amount.toLocaleString('ru-RU')} ₽`}
+                      </div>
+                    )}
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between text-xs py-1.5 border-b border-gray-50">
+                        <span className="text-gray-500">Аванс</span>
+                        <span className="text-green-600 font-medium">✓ {installmentPlan.deposit_amount.toLocaleString('ru-RU')} ₽</span>
+                      </div>
+                      {payments.map(p => {
+                        const isOverdue = p.status === 'overdue' || (p.status === 'pending' && p.due_date < today)
+                        const isPaid = p.status === 'paid'
+                        return (
+                          <div key={p.id} className="flex justify-between text-xs py-1.5 border-b border-gray-50 last:border-0">
+                            <span className={isPaid ? 'text-green-600' : isOverdue ? 'text-red-500' : 'text-gray-700'}>
+                              {isPaid ? '✓' : isOverdue ? '⚠' : '○'}{' '}
+                              {new Date(p.due_date + 'T00:00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}
+                            </span>
+                            <span className={`font-medium ${isPaid ? 'text-green-600' : isOverdue ? 'text-red-500' : 'text-gray-700'}`}>
+                              {(p.actual_amount ?? p.amount).toLocaleString('ru-RU')} ₽
+                            </span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )
+              })()}
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm text-center">
