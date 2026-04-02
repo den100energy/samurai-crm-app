@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
   // Все активные ученики
   const { data: students } = await admin
     .from('students')
-    .select('id, name, created_at, enrollment_date, crm_status, crm_status_changed_at')
+    .select('id, name, group_name, created_at, enrollment_date, crm_status, crm_status_changed_at')
     .eq('status', 'active')
 
   if (!students?.length) return NextResponse.json({ ok: true, updated: 0, at_risk_new: 0 })
@@ -107,10 +107,15 @@ export async function GET(req: NextRequest) {
     // — Балл риска —
     let riskScore = 0
 
+    // Цигун занимается 1 раз в неделю — пороги пропуска удвоены
+    const isWeeklyGroup = student.group_name === 'Цигун'
+    const missThresholdLow = isWeeklyGroup ? 14 : 7
+    const missThresholdHigh = isWeeklyGroup ? 21 : 14
+
     if (hasActiveSub) {
       // Пропуск при активном абонементе
-      if (daysSince !== null && daysSince >= 14) riskScore += 3
-      else if (daysSince !== null && daysSince >= 7) riskScore += 1
+      if (daysSince !== null && daysSince >= missThresholdHigh) riskScore += 3
+      else if (daysSince !== null && daysSince >= missThresholdLow) riskScore += 1
     } else {
       // Нет активного абонемента
       riskScore += 3
