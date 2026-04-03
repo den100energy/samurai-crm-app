@@ -1562,18 +1562,18 @@ export default function StudentPage() {
           const MONTH_SHORT = ['Янв','Фев','Март','Апр','Май','Июнь','Июль','Авг','Сент','Окт','Нояб','Дек']
           // Цвета по кварталам (зима=белый, весна=зелёный, лето=голубой, осень=жёлтый)
           const SEASON_COLORS: Record<number, string> = {
-            12: 'bg-gray-100 text-gray-700',   // зима
-            1:  'bg-gray-100 text-gray-700',
-            2:  'bg-gray-100 text-gray-700',
-            3:  'bg-green-100 text-green-800',  // весна
-            4:  'bg-green-100 text-green-800',
-            5:  'bg-green-100 text-green-800',
-            6:  'bg-sky-100 text-sky-800',      // лето
-            7:  'bg-sky-100 text-sky-800',
-            8:  'bg-sky-100 text-sky-800',
-            9:  'bg-yellow-100 text-yellow-800',// осень
-            10: 'bg-yellow-100 text-yellow-800',
-            11: 'bg-yellow-100 text-yellow-800',
+            12: 'bg-slate-200 text-slate-800',   // зима
+            1:  'bg-slate-200 text-slate-800',
+            2:  'bg-slate-200 text-slate-800',
+            3:  'bg-green-600 text-white',        // весна
+            4:  'bg-green-600 text-white',
+            5:  'bg-green-600 text-white',
+            6:  'bg-sky-500 text-white',          // лето
+            7:  'bg-sky-500 text-white',
+            8:  'bg-sky-500 text-white',
+            9:  'bg-amber-400 text-amber-900',    // осень
+            10: 'bg-amber-400 text-amber-900',
+            11: 'bg-amber-400 text-amber-900',
           }
           const lastSub = subs.length > 0 ? subs[0] : null
           const subStart = lastSub?.start_date ?? null
