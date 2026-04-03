@@ -45,7 +45,7 @@ const ATTENDANCE_LABELS: Record<string, { label: string; color: string }> = {
 }
 
 const BONUS_TYPES = ['тренировка с оружием', 'мастер-класс', 'инд.тренировка']
-const GROUPS = ['Дети 4-9', 'Подростки (нач)', 'Подростки (оп)', 'Цигун', 'Индивидуальные']
+const GROUPS = ['Старт', 'Основная (нач.)', 'Основная (оп.)', 'Цигун', 'Индивидуальные']
 
 export default function EventDetailPage() {
   const { id } = useParams<{ id: string }>()

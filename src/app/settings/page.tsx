@@ -26,7 +26,7 @@ type TgGroup = {
   group_names: string[]
 }
 
-const STUDENT_GROUPS = ['Дети 4-9', 'Подростки (нач)', 'Подростки (оп)', 'Цигун', 'Индивидуальные']
+const STUDENT_GROUPS = ['Старт', 'Основная (нач.)', 'Основная (оп.)', 'Цигун', 'Индивидуальные']
 
 type BonusRow = { name: string; count: string }
 

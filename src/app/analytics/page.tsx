@@ -13,7 +13,7 @@ type StudentStat = {
   days_absent: number
 }
 
-const GROUPS = ['Все', 'Дети 4-9', 'Подростки (нач)', 'Подростки (оп)', 'Цигун', 'Индивидуальные']
+const GROUPS = ['Все', 'Старт', 'Основная (нач.)', 'Основная (оп.)', 'Цигун', 'Индивидуальные']
 
 export default function AnalyticsPage() {
   const [stats, setStats] = useState<StudentStat[]>([])

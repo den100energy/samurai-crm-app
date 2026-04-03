@@ -810,7 +810,7 @@ function LeadCard({ lead, expanded, onToggle, onStatusChange, onDelete, canEdit 
               <select value={convertGroup} onChange={e => setConvertGroup(e.target.value)}
                 className="w-full border border-green-200 rounded-lg px-3 py-2 text-sm outline-none bg-white">
                 <option value="">Выберите группу (необязательно)</option>
-                {['Дети 4-9','Подростки (нач)','Подростки (оп)','Цигун','Индивидуальные'].map(g =>
+                {['Старт','Основная (нач.)','Основная (оп.)','Цигун','Индивидуальные'].map(g =>
                   <option key={g} value={g}>{g}</option>
                 )}
               </select>

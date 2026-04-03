@@ -15,7 +15,7 @@ type Student = {
   photo_url: string | null
 }
 
-const GROUPS = ['Все', 'Дети 4-9', 'Подростки (нач)', 'Подростки (оп)', 'Цигун', 'Индивидуальные']
+const GROUPS = ['Все', 'Старт', 'Основная (нач.)', 'Основная (оп.)', 'Цигун', 'Индивидуальные']
 
 export default function StudentsPage() {
   const { role, permissions } = useAuth()

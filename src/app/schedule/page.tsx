@@ -37,22 +37,22 @@ const DAYS = [
   { num: 7, short: 'Вс', full: 'Воскресенье' },
 ]
 
-const GROUPS = ['Дети 4-9', 'Подростки (нач)', 'Подростки (оп)', 'Цигун', 'Индивидуальные']
+const GROUPS = ['Старт', 'Основная (нач.)', 'Основная (оп.)', 'Цигун', 'Индивидуальные']
 
 const GROUP_COLORS_LIGHT: Record<string, { card: string; label: string; sub: string }> = {
-  'Дети 4-9':        { card: 'bg-yellow-50 border-yellow-200', label: 'text-yellow-900', sub: 'text-yellow-700' },
-  'Подростки (нач)': { card: 'bg-blue-50 border-blue-200',     label: 'text-blue-900',   sub: 'text-blue-700' },
-  'Подростки (оп)':  { card: 'bg-purple-50 border-purple-200', label: 'text-purple-900', sub: 'text-purple-700' },
-  'Цигун':           { card: 'bg-green-50 border-green-200',   label: 'text-green-900',  sub: 'text-green-700' },
-  'Индивидуальные':  { card: 'bg-orange-50 border-orange-200', label: 'text-orange-900', sub: 'text-orange-700' },
+  'Старт':             { card: 'bg-yellow-50 border-yellow-200', label: 'text-yellow-900', sub: 'text-yellow-700' },
+  'Основная (нач.)':   { card: 'bg-blue-50 border-blue-200',     label: 'text-blue-900',   sub: 'text-blue-700' },
+  'Основная (оп.)':    { card: 'bg-purple-50 border-purple-200', label: 'text-purple-900', sub: 'text-purple-700' },
+  'Цигун':             { card: 'bg-green-50 border-green-200',   label: 'text-green-900',  sub: 'text-green-700' },
+  'Индивидуальные':    { card: 'bg-orange-50 border-orange-200', label: 'text-orange-900', sub: 'text-orange-700' },
 }
 
 const GROUP_COLORS_DARK: Record<string, { card: string; label: string; sub: string }> = {
-  'Дети 4-9':        { card: 'bg-yellow-950/60 border-yellow-700/40', label: 'text-yellow-200', sub: 'text-yellow-400' },
-  'Подростки (нач)': { card: 'bg-blue-950/60 border-blue-700/40',     label: 'text-blue-200',   sub: 'text-blue-400' },
-  'Подростки (оп)':  { card: 'bg-purple-950/60 border-purple-700/40', label: 'text-purple-200', sub: 'text-purple-400' },
-  'Цигун':           { card: 'bg-green-950/60 border-green-700/40',   label: 'text-green-200',  sub: 'text-green-400' },
-  'Индивидуальные':  { card: 'bg-orange-950/60 border-orange-700/40', label: 'text-orange-200', sub: 'text-orange-400' },
+  'Старт':             { card: 'bg-yellow-950/60 border-yellow-700/40', label: 'text-yellow-200', sub: 'text-yellow-400' },
+  'Основная (нач.)':   { card: 'bg-blue-950/60 border-blue-700/40',     label: 'text-blue-200',   sub: 'text-blue-400' },
+  'Основная (оп.)':    { card: 'bg-purple-950/60 border-purple-700/40', label: 'text-purple-200', sub: 'text-purple-400' },
+  'Цигун':             { card: 'bg-green-950/60 border-green-700/40',   label: 'text-green-200',  sub: 'text-green-400' },
+  'Индивидуальные':    { card: 'bg-orange-950/60 border-orange-700/40', label: 'text-orange-200', sub: 'text-orange-400' },
 }
 
 const GROUP_COLORS_FALLBACK_LIGHT = { card: 'bg-gray-50 border-gray-200', label: 'text-gray-800', sub: 'text-gray-500' }

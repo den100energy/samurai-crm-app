@@ -17,7 +17,7 @@ type Student = {
   sessions_left: number | null
 }
 
-const GROUPS = ['Дети 4-9', 'Подростки (нач)', 'Подростки (оп)', 'Цигун', 'Индивидуальные']
+const GROUPS = ['Старт', 'Основная (нач.)', 'Основная (оп.)', 'Цигун', 'Индивидуальные']
 
 function subLabel(sub: Sub): string {
   const name = sub.type?.includes('|') ? sub.type.split('|')[1] : (sub.type || 'Абонемент')

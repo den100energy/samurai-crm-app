@@ -105,7 +105,7 @@ const TICKET_STATUS_NEXT: Record<string, 'in_review' | 'resolved'> = {
   in_review: 'resolved',
 }
 
-const GROUPS = ['Дети 4-9', 'Подростки (нач)', 'Подростки (оп)', 'Цигун', 'Индивидуальные']
+const GROUPS = ['Старт', 'Основная (нач.)', 'Основная (оп.)', 'Цигун', 'Индивидуальные']
 // Ушу
 const WUSHU_BELTS = [
   'Белый — 10 туди',
