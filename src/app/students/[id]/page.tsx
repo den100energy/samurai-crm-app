@@ -267,7 +267,7 @@ export default function StudentPage() {
       const [{ data: s }, { data: sb }, { data: at }, { data: bl }, { data: st }, { data: ct }, { data: sv }, { data: ps }, { data: sp }, { data: py }, { data: tk }] = await Promise.all([
         supabase.from('students').select('*').eq('id', id).single(),
         supabase.from('subscriptions').select('*').eq('student_id', id).order('created_at', { ascending: false }),
-        supabase.from('attendance').select('*').eq('student_id', id).order('date', { ascending: false }).limit(20),
+        supabase.from('attendance').select('*').eq('student_id', id).order('date', { ascending: false }),
         supabase.from('belts').select('*').eq('student_id', id).order('date', { ascending: false }),
         supabase.from('subscription_types').select('id, name, group_type, sessions_count, price, price_per_session, bonus_total_value, is_for_newcomers, bonuses, duration_months').order('created_at'),
         supabase.from('student_contacts').select('*').eq('student_id', id).order('created_at'),
@@ -482,7 +482,7 @@ export default function StudentPage() {
     }
 
     // Reload attendance
-    const { data: atData } = await supabase.from('attendance').select('*').eq('student_id', id).order('date', { ascending: false }).limit(50)
+    const { data: atData } = await supabase.from('attendance').select('*').eq('student_id', id).order('date', { ascending: false })
     if (atData) setAttendance(atData)
     setShowBulkAtt(false)
     setBulkSelected(new Set())
@@ -1559,7 +1559,7 @@ export default function StudentPage() {
           if (rows.length === 0) return <div className="text-sm text-gray-400 text-center py-2">Нет данных</div>
 
           return (
-            <div className="space-y-1">
+            <div className="space-y-1 max-h-80 overflow-y-auto pr-1">
               {rows.map((row, idx) => {
                 if (row.kind === 'bonus') {
                   return (
