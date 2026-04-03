@@ -1560,10 +1560,25 @@ export default function StudentPage() {
 
           // Счётчик по месяцам — только в рамках последнего абонемента
           const MONTH_SHORT = ['Янв','Фев','Март','Апр','Май','Июнь','Июль','Авг','Сент','Окт','Нояб','Дек']
+          // Цвета по кварталам (зима=белый, весна=зелёный, лето=голубой, осень=жёлтый)
+          const SEASON_COLORS: Record<number, string> = {
+            12: 'bg-gray-100 text-gray-700',   // зима
+            1:  'bg-gray-100 text-gray-700',
+            2:  'bg-gray-100 text-gray-700',
+            3:  'bg-green-100 text-green-800',  // весна
+            4:  'bg-green-100 text-green-800',
+            5:  'bg-green-100 text-green-800',
+            6:  'bg-sky-100 text-sky-800',      // лето
+            7:  'bg-sky-100 text-sky-800',
+            8:  'bg-sky-100 text-sky-800',
+            9:  'bg-yellow-100 text-yellow-800',// осень
+            10: 'bg-yellow-100 text-yellow-800',
+            11: 'bg-yellow-100 text-yellow-800',
+          }
           const lastSub = subs.length > 0 ? subs[0] : null
           const subStart = lastSub?.start_date ?? null
           const subEnd = lastSub?.end_date ?? null
-          const monthCounts: { key: string; label: string; count: number }[] = []
+          const monthCounts: { key: string; label: string; count: number; monthNum: number }[] = []
           if (subStart) {
             const attInSub = attendance.filter(a => a.present && a.date >= subStart && (!subEnd || a.date <= subEnd))
             const monthMap = new Map<string, number>()
@@ -1573,22 +1588,29 @@ export default function StudentPage() {
               monthMap.set(key, (monthMap.get(key) ?? 0) + 1)
             }
             Array.from(monthMap.entries()).sort((a, b) => a[0].localeCompare(b[0])).forEach(([key, count]) => {
-              const [y, m] = key.split('-')
-              monthCounts.push({ key, label: `${MONTH_SHORT[parseInt(m) - 1]}`, count })
+              const [, m] = key.split('-')
+              const monthNum = parseInt(m)
+              monthCounts.push({ key, label: MONTH_SHORT[monthNum - 1], count, monthNum })
             })
           }
+          const totalCount = monthCounts.reduce((sum, m) => sum + m.count, 0)
 
           return (
             <>
             {monthCounts.length > 0 && (
-              <div className="flex flex-wrap gap-2 mb-3">
-                {monthCounts.map(({ key, label, count }) => (
-                  <div key={key} className="flex items-center gap-1 bg-gray-100 rounded-lg px-2 py-1 text-xs text-gray-700">
-                    <span className="font-medium">{label}</span>
-                    <span className="text-gray-400">—</span>
-                    <span className="font-semibold text-gray-900">{count}</span>
+              <div className="flex flex-wrap gap-1.5 mb-3 items-center">
+                {monthCounts.map(({ key, label, count, monthNum }) => (
+                  <div key={key} className={`flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium ${SEASON_COLORS[monthNum]}`}>
+                    <span>{label}</span>
+                    <span className="opacity-50">—</span>
+                    <span className="font-bold">{count}</span>
                   </div>
                 ))}
+                <div className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs bg-gray-800 text-white font-medium ml-1">
+                  <span>Итого</span>
+                  <span className="opacity-50">—</span>
+                  <span className="font-bold">{totalCount}</span>
+                </div>
               </div>
             )}
             <div className="space-y-1 max-h-80 overflow-y-auto pr-1">
