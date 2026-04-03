@@ -1558,7 +1558,39 @@ export default function StudentPage() {
 
           if (rows.length === 0) return <div className="text-sm text-gray-400 text-center py-2">Нет данных</div>
 
+          // Счётчик по месяцам — только в рамках последнего абонемента
+          const MONTH_SHORT = ['Янв','Фев','Март','Апр','Май','Июнь','Июль','Авг','Сент','Окт','Нояб','Дек']
+          const lastSub = subs.length > 0 ? subs[0] : null
+          const subStart = lastSub?.start_date ?? null
+          const subEnd = lastSub?.end_date ?? null
+          const monthCounts: { key: string; label: string; count: number }[] = []
+          if (subStart) {
+            const attInSub = attendance.filter(a => a.present && a.date >= subStart && (!subEnd || a.date <= subEnd))
+            const monthMap = new Map<string, number>()
+            for (const a of attInSub) {
+              const [y, m] = a.date.split('-')
+              const key = `${y}-${m}`
+              monthMap.set(key, (monthMap.get(key) ?? 0) + 1)
+            }
+            Array.from(monthMap.entries()).sort((a, b) => a[0].localeCompare(b[0])).forEach(([key, count]) => {
+              const [y, m] = key.split('-')
+              monthCounts.push({ key, label: `${MONTH_SHORT[parseInt(m) - 1]}`, count })
+            })
+          }
+
           return (
+            <>
+            {monthCounts.length > 0 && (
+              <div className="flex flex-wrap gap-2 mb-3">
+                {monthCounts.map(({ key, label, count }) => (
+                  <div key={key} className="flex items-center gap-1 bg-gray-100 rounded-lg px-2 py-1 text-xs text-gray-700">
+                    <span className="font-medium">{label}</span>
+                    <span className="text-gray-400">—</span>
+                    <span className="font-semibold text-gray-900">{count}</span>
+                  </div>
+                ))}
+              </div>
+            )}
             <div className="space-y-1 max-h-80 overflow-y-auto pr-1">
               {rows.map((row, idx) => {
                 if (row.kind === 'bonus') {
@@ -1598,6 +1630,7 @@ export default function StudentPage() {
                 )
               })}
             </div>
+            </>
           )
         })()}
       </div>
