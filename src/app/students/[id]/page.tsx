@@ -239,6 +239,12 @@ export default function StudentPage() {
   const [addAttDate, setAddAttDate] = useState(new Date().toISOString().split('T')[0])
   const [editingAttId, setEditingAttId] = useState<string | null>(null)
   const [editingAttDate, setEditingAttDate] = useState('')
+  const [showBulkAtt, setShowBulkAtt] = useState(false)
+  const [bulkFrom, setBulkFrom] = useState('')
+  const [bulkTo, setBulkTo] = useState(new Date().toISOString().split('T')[0])
+  const [bulkDays, setBulkDays] = useState<number[]>([])
+  const [bulkPresent, setBulkPresent] = useState(true)
+  const [bulkSaving, setBulkSaving] = useState(false)
   const [contacts, setContacts] = useState<Contact[]>([])
   const [showAddContact, setShowAddContact] = useState(false)
   const [contactForm, setContactForm] = useState({ name: '', role: 'мама', phone: '' })
@@ -451,6 +457,55 @@ export default function StudentPage() {
     })
     setShowAddAttendance(false)
     setAddAttDate(new Date().toISOString().split('T')[0])
+  }
+
+  function getBulkDates(): string[] {
+    if (!bulkFrom || !bulkTo || bulkDays.length === 0) return []
+    const dates: string[] = []
+    const cur = new Date(bulkFrom + 'T00:00:00')
+    const end = new Date(bulkTo + 'T00:00:00')
+    while (cur <= end) {
+      // getDay(): 0=Sun,1=Mon...6=Sat; bulkDays uses 1=Mon...7=Sun
+      const jsDay = cur.getDay()
+      const day = jsDay === 0 ? 7 : jsDay
+      if (bulkDays.includes(day)) {
+        dates.push(cur.toISOString().split('T')[0])
+      }
+      cur.setDate(cur.getDate() + 1)
+    }
+    return dates
+  }
+
+  async function addBulkAttendance() {
+    const dates = getBulkDates()
+    if (dates.length === 0) return
+    if (!confirm(`Добавить ${dates.length} занятий?`)) return
+    setBulkSaving(true)
+    const rows = dates.map(date => ({
+      student_id: id,
+      date,
+      group_name: student?.group_name,
+      present: bulkPresent,
+    }))
+    const { error } = await supabase.from('attendance').upsert(rows, { onConflict: 'student_id,date' })
+    if (error) { alert('Ошибка: ' + error.message); setBulkSaving(false); return }
+
+    // Deduct sessions from subscription if present
+    if (bulkPresent) {
+      const activeSub = subs.find(s => s.sessions_left !== null && s.sessions_left > 0)
+      if (activeSub) {
+        const newLeft = Math.max(0, activeSub.sessions_left! - dates.length)
+        await supabase.from('subscriptions').update({ sessions_left: newLeft }).eq('id', activeSub.id)
+        setSubs(prev => prev.map(s => s.id === activeSub.id ? { ...s, sessions_left: newLeft } : s))
+      }
+    }
+
+    // Reload attendance
+    const { data: atData } = await supabase.from('attendance').select('*').eq('student_id', id).order('date', { ascending: false }).limit(50)
+    if (atData) setAttendance(atData)
+    setShowBulkAtt(false)
+    setBulkFrom('')
+    setBulkDays([])
   }
 
   async function deleteAttendance(a: Attendance) {
@@ -1405,10 +1460,16 @@ export default function StudentPage() {
       <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm mb-4">
         <div className="flex items-center justify-between mb-3">
           <div className="font-semibold text-gray-800">История посещений</div>
-          <button onClick={() => setShowAddAttendance(v => !v)}
-            className="text-sm text-black border border-gray-200 px-3 py-1 rounded-lg hover:bg-gray-50">
-            {showAddAttendance ? 'Отмена' : '+ Занятие'}
-          </button>
+          <div className="flex gap-2">
+            <button onClick={() => { setShowBulkAtt(v => !v); setShowAddAttendance(false) }}
+              className="text-sm text-black border border-gray-200 px-3 py-1 rounded-lg hover:bg-gray-50">
+              {showBulkAtt ? 'Отмена' : '+ Несколько'}
+            </button>
+            <button onClick={() => { setShowAddAttendance(v => !v); setShowBulkAtt(false) }}
+              className="text-sm text-black border border-gray-200 px-3 py-1 rounded-lg hover:bg-gray-50">
+              {showAddAttendance ? 'Отмена' : '+ Занятие'}
+            </button>
+          </div>
         </div>
 
         {showAddAttendance && (
@@ -1427,6 +1488,65 @@ export default function StudentPage() {
             </div>
           </div>
         )}
+
+        {showBulkAtt && (() => {
+          const WEEKDAYS = [
+            { day: 1, label: 'Пн' }, { day: 2, label: 'Вт' }, { day: 3, label: 'Ср' },
+            { day: 4, label: 'Чт' }, { day: 5, label: 'Пт' }, { day: 6, label: 'Сб' }, { day: 7, label: 'Вс' },
+          ]
+          const preview = getBulkDates()
+          return (
+            <div className="mb-3 p-3 bg-gray-50 rounded-xl border border-gray-200 space-y-3">
+              <div className="text-sm font-medium text-gray-700">Массовое добавление занятий</div>
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <div className="text-xs text-gray-500 mb-1">С</div>
+                  <input type="date" value={bulkFrom} onChange={e => setBulkFrom(e.target.value)}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none bg-white" />
+                </div>
+                <div className="flex-1">
+                  <div className="text-xs text-gray-500 mb-1">По</div>
+                  <input type="date" value={bulkTo} onChange={e => setBulkTo(e.target.value)}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none bg-white" />
+                </div>
+              </div>
+              <div>
+                <div className="text-xs text-gray-500 mb-2">Дни недели</div>
+                <div className="flex gap-1 flex-wrap">
+                  {WEEKDAYS.map(({ day, label }) => (
+                    <button key={day}
+                      onClick={() => setBulkDays(prev => prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day])}
+                      className={`px-3 py-1 rounded-lg text-sm font-medium border transition-colors ${bulkDays.includes(day) ? 'bg-black text-white border-black' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <div className="text-xs text-gray-500 mb-2">Статус</div>
+                <div className="flex gap-2">
+                  <button onClick={() => setBulkPresent(true)}
+                    className={`flex-1 text-sm py-2 rounded-lg font-medium border transition-colors ${bulkPresent ? 'bg-green-600 text-white border-green-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}>
+                    ✅ Присутствовал
+                  </button>
+                  <button onClick={() => setBulkPresent(false)}
+                    className={`flex-1 text-sm py-2 rounded-lg font-medium border transition-colors ${!bulkPresent ? 'bg-gray-700 text-white border-gray-700' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}>
+                    ❌ Не пришёл
+                  </button>
+                </div>
+              </div>
+              {preview.length > 0 && (
+                <div className="text-xs text-gray-500 bg-white rounded-lg p-2 border border-gray-200">
+                  Будет добавлено <span className="font-semibold text-gray-800">{preview.length}</span> занятий: {preview.slice(0, 5).join(', ')}{preview.length > 5 ? ` и ещё ${preview.length - 5}...` : ''}
+                </div>
+              )}
+              <button onClick={addBulkAttendance} disabled={bulkSaving || preview.length === 0}
+                className="w-full bg-black text-white text-sm py-2 rounded-lg font-medium hover:bg-gray-800 disabled:opacity-40">
+                {bulkSaving ? 'Сохраняю...' : `Сохранить ${preview.length > 0 ? preview.length + ' занятий' : ''}`}
+              </button>
+            </div>
+          )
+        })()}
 
         {(() => {
           // Собираем бонусные записи из всех абонементов
