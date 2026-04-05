@@ -247,6 +247,8 @@ export default function StudentPage() {
   const [contacts, setContacts] = useState<Contact[]>([])
   const [showAddContact, setShowAddContact] = useState(false)
   const [contactForm, setContactForm] = useState({ name: '', role: 'мама', phone: '' })
+  const [editingContactId, setEditingContactId] = useState<string | null>(null)
+  const [editContactForm, setEditContactForm] = useState({ name: '', role: 'мама', phone: '' })
   const [survey, setSurvey] = useState<any>(null)
   const [showSurvey, setShowSurvey] = useState(false)
   const [editingSurvey, setEditingSurvey] = useState(false)
@@ -623,6 +625,22 @@ export default function StudentPage() {
     if (!confirm('Удалить контакт?')) return
     await supabase.from('student_contacts').delete().eq('id', contactId)
     setContacts(prev => prev.filter(c => c.id !== contactId))
+  }
+
+  function startEditContact(c: Contact) {
+    setEditingContactId(c.id)
+    setEditContactForm({ name: c.name, role: c.role, phone: c.phone || '' })
+  }
+
+  async function saveEditContact(e: React.FormEvent) {
+    e.preventDefault()
+    if (!editingContactId) return
+    const { data } = await supabase.from('student_contacts')
+      .update({ name: editContactForm.name, role: editContactForm.role, phone: editContactForm.phone || null })
+      .eq('id', editingContactId)
+      .select().single()
+    if (data) setContacts(prev => prev.map(c => c.id === editingContactId ? { ...c, ...data } : c))
+    setEditingContactId(null)
   }
 
   function copyContactInviteLink(contact: Contact) {
@@ -1690,30 +1708,55 @@ export default function StudentPage() {
           <div className="space-y-2">
             {contacts.map(c => (
               <div key={c.id} className="border border-gray-100 rounded-xl p-3">
-                <div className="flex items-center justify-between mb-1.5">
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium text-sm text-gray-800">{c.name}</span>
-                    <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">{c.role}</span>
-                    {c.telegram_chat_id
-                      ? <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">✓ Telegram</span>
-                      : <span className="text-xs bg-gray-100 text-gray-400 px-2 py-0.5 rounded-full">Нет Telegram</span>
-                    }
-                  </div>
-                  <button onClick={() => deleteContact(c.id)} className="text-gray-300 hover:text-red-400 text-sm">✕</button>
-                </div>
-                {c.phone && <div className="text-xs text-gray-400 mb-2">{c.phone}</div>}
-                <div className="flex gap-2">
-                  <button onClick={() => copyContactInviteLink(c)}
-                    className="flex-1 border border-blue-200 bg-blue-50 text-blue-700 text-xs py-1.5 rounded-lg">
-                    🔗 Ссылка
-                  </button>
-                  {c.telegram_chat_id && (
-                    <button onClick={() => sendContactReminder(c)}
-                      className="flex-1 border border-gray-200 text-gray-600 text-xs py-1.5 rounded-lg">
-                      📨 Написать
-                    </button>
-                  )}
-                </div>
+                {editingContactId === c.id ? (
+                  <form onSubmit={saveEditContact} className="space-y-2">
+                    <input required value={editContactForm.name} onChange={e => setEditContactForm({...editContactForm, name: e.target.value})}
+                      placeholder="Имя *" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none bg-white" />
+                    <select value={editContactForm.role} onChange={e => setEditContactForm({...editContactForm, role: e.target.value})}
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none bg-white">
+                      <option value="мама">Мама</option>
+                      <option value="папа">Папа</option>
+                      <option value="ученик">Ученик</option>
+                      <option value="другой">Другой</option>
+                    </select>
+                    <input value={editContactForm.phone} onChange={e => setEditContactForm({...editContactForm, phone: e.target.value})}
+                      placeholder="Телефон" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none bg-white" />
+                    <div className="flex gap-2">
+                      <button type="submit" className="flex-1 bg-black text-white py-2 rounded-lg text-sm font-medium">Сохранить</button>
+                      <button type="button" onClick={() => setEditingContactId(null)} className="flex-1 border border-gray-200 text-gray-600 py-2 rounded-lg text-sm">Отмена</button>
+                    </div>
+                  </form>
+                ) : (
+                  <>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-sm text-gray-800">{c.name}</span>
+                        <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">{c.role}</span>
+                        {c.telegram_chat_id
+                          ? <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">✓ Telegram</span>
+                          : <span className="text-xs bg-gray-100 text-gray-400 px-2 py-0.5 rounded-full">Нет Telegram</span>
+                        }
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button onClick={() => startEditContact(c)} className="text-gray-300 hover:text-blue-400 text-sm" title="Редактировать">✎</button>
+                        <button onClick={() => deleteContact(c.id)} className="text-gray-300 hover:text-red-400 text-sm">✕</button>
+                      </div>
+                    </div>
+                    {c.phone && <div className="text-xs text-gray-400 mb-2">{c.phone}</div>}
+                    <div className="flex gap-2">
+                      <button onClick={() => copyContactInviteLink(c)}
+                        className="flex-1 border border-blue-200 bg-blue-50 text-blue-700 text-xs py-1.5 rounded-lg">
+                        🔗 Ссылка
+                      </button>
+                      {c.telegram_chat_id && (
+                        <button onClick={() => sendContactReminder(c)}
+                          className="flex-1 border border-gray-200 text-gray-600 text-xs py-1.5 rounded-lg">
+                          📨 Написать
+                        </button>
+                      )}
+                    </div>
+                  </>
+                )}
               </div>
             ))}
           </div>
