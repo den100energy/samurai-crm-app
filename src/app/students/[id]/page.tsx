@@ -1693,6 +1693,10 @@ export default function StudentPage() {
               className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none bg-white">
               <option value="мама">Мама</option>
               <option value="папа">Папа</option>
+              <option value="бабушка">Бабушка</option>
+              <option value="дедушка">Дедушка</option>
+              <option value="тетя">Тётя</option>
+              <option value="дядя">Дядя</option>
               <option value="ученик">Ученик</option>
               <option value="другой">Другой</option>
             </select>
