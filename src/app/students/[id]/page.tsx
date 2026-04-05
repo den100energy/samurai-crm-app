@@ -223,7 +223,7 @@ export default function StudentPage() {
   const [subForm, setSubForm] = useState({ type: '', sessions_total: '', start_date: '', end_date: '', amount: '', paid: false, is_pending: false, bonuses: {} as Record<string, number>, installment: false, deposit_amount: '', installment_payments: [] as { amount: string; due_date: string }[] })
   const [showBeltForm, setShowBeltForm] = useState<'aikido' | 'wushu' | null>(null)
   const [beltForm, setBeltForm] = useState({ belt_name: '', date: new Date().toISOString().split('T')[0], notes: '' })
-  const [subTypes, setSubTypes] = useState<{ id: string; name: string; group_type: string | null; sessions_count: number | null; price: number | null; price_per_session: number | null; bonus_total_value: number | null; is_for_newcomers: boolean | null; bonuses: Record<string, number> | null; duration_months: number | null }[]>([])
+  const [subTypes, setSubTypes] = useState<{ id: string; name: string; group_type: string | null; sessions_count: number | null; price: number | null; price_per_session: number | null; bonus_total_value: number | null; is_for_newcomers: boolean | null; is_hidden: boolean | null; bonuses: Record<string, number> | null; duration_months: number | null }[]>([])
   const [showQR, setShowQR] = useState(false)
   const [saving, setSaving] = useState(false)
   const [editSubId, setEditSubId] = useState<string | null>(null)
@@ -271,7 +271,7 @@ export default function StudentPage() {
         supabase.from('subscriptions').select('*').eq('student_id', id).order('created_at', { ascending: false }),
         supabase.from('attendance').select('*').eq('student_id', id).order('date', { ascending: false }),
         supabase.from('belts').select('*').eq('student_id', id).order('date', { ascending: false }),
-        supabase.from('subscription_types').select('id, name, group_type, sessions_count, price, price_per_session, bonus_total_value, is_for_newcomers, bonuses, duration_months').eq('is_hidden', false).order('created_at'),
+        supabase.from('subscription_types').select('id, name, group_type, sessions_count, price, price_per_session, bonus_total_value, is_for_newcomers, is_hidden, bonuses, duration_months').order('created_at'),
         supabase.from('student_contacts').select('*').eq('student_id', id).order('created_at'),
         supabase.from('diagnostic_surveys').select('*').eq('student_id', id).maybeSingle(),
         supabase.from('progress_surveys').select('*').eq('student_id', id).order('created_at', { ascending: false }),
@@ -1030,7 +1030,7 @@ export default function StudentPage() {
                 return <optgroup key={group} label={group}>
                   {items.map(t => (
                     <option key={t.id} value={`${t.group_type}|${t.name}`}>
-                      {t.name}{t.sessions_count ? ` (${t.sessions_count} зан.)` : ''}{t.price ? ` — ${t.price.toLocaleString()} ₽` : ''}
+                      {t.is_hidden ? '🔒 ' : ''}{t.name}{t.sessions_count ? ` (${t.sessions_count} зан.)` : ''}{t.price ? ` — ${t.price.toLocaleString()} ₽` : ''}
                     </option>
                   ))}
                 </optgroup>
