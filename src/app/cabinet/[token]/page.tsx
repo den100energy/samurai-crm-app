@@ -394,6 +394,7 @@ export default function CabinetPage() {
       .from('subscription_types')
       .select('id, name, group_type, sessions_count, price, price_per_session, duration_months, bonuses, bonus_total_value, is_for_newcomers')
       .eq('group_type', groupType)
+      .eq('is_hidden', false)
       .order('sessions_count')
     setSubTypes(stTypes || [])
 

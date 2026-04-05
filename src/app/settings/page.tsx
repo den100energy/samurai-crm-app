@@ -16,6 +16,7 @@ type SubType = {
   bonuses: Record<string, number> | null
   bonus_total_value: number | null
   is_for_newcomers: boolean | null
+  is_hidden: boolean | null
 }
 
 type TgGroup = {
@@ -30,7 +31,7 @@ const STUDENT_GROUPS = ['Старт', 'Основная (нач.)', 'Основ�
 
 type BonusRow = { name: string; count: string }
 
-const emptyForm = { name: '', group_type: 'Старт', sessions_count: '', price: '', price_per_session: '', description: '', duration_months: '', bonus_total_value: '', is_for_newcomers: false }
+const emptyForm = { name: '', group_type: 'Старт', sessions_count: '', price: '', price_per_session: '', description: '', duration_months: '', bonus_total_value: '', is_for_newcomers: false, is_hidden: false }
 const emptyTgForm = { name: '', invite_link: '', description: '', group_names: [] as string[] }
 
 export default function SettingsPage() {
@@ -108,6 +109,7 @@ export default function SettingsPage() {
       duration_months: t.duration_months?.toString() || '',
       bonus_total_value: t.bonus_total_value?.toString() || '',
       is_for_newcomers: t.is_for_newcomers || false,
+      is_hidden: t.is_hidden || false,
     })
     const rows: BonusRow[] = Object.entries(t.bonuses || {}).map(([name, count]) => ({
       name,
@@ -155,6 +157,7 @@ export default function SettingsPage() {
       bonuses,
       bonus_total_value: form.bonus_total_value ? parseFloat(form.bonus_total_value) : null,
       is_for_newcomers: form.is_for_newcomers,
+      is_hidden: form.is_hidden,
     }
     if (editId) {
       await supabase.from('subscription_types').update(payload).eq('id', editId)
@@ -241,6 +244,13 @@ export default function SettingsPage() {
                 onChange={e => setForm({ ...form, is_for_newcomers: e.target.checked })}
                 className="w-4 h-4 rounded" />
               <span className="text-sm text-gray-700">Только для новичков (первая покупка)</span>
+            </label>
+
+            <label className="flex items-center gap-2 px-1 cursor-pointer">
+              <input type="checkbox" checked={form.is_hidden}
+                onChange={e => setForm({ ...form, is_hidden: e.target.checked })}
+                className="w-4 h-4 rounded" />
+              <span className="text-sm text-gray-700">Скрыть абонемент (не показывать в конструкторе)</span>
             </label>
 
             <input value={form.description} onChange={e => setForm({ ...form, description: e.target.value })}
@@ -408,12 +418,15 @@ export default function SettingsPage() {
 function TypeCard({ t, onEdit, onRemove }: { t: SubType; onEdit: (t: SubType) => void; onRemove: (id: string) => void }) {
   const bonusKeys = Object.keys(t.bonuses || {})
   return (
-    <div className="flex items-start justify-between p-3 bg-gray-50 rounded-xl gap-2">
+    <div className={`flex items-start justify-between p-3 rounded-xl gap-2 ${t.is_hidden ? 'bg-gray-100 opacity-60' : 'bg-gray-50'}`}>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 flex-wrap">
           <div className="font-medium text-gray-800 text-sm">{t.name}</div>
           {t.is_for_newcomers && (
             <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full font-medium">Новичок</span>
+          )}
+          {t.is_hidden && (
+            <span className="text-xs bg-gray-300 text-gray-600 px-1.5 py-0.5 rounded-full font-medium">Скрыт</span>
           )}
         </div>
         <div className="text-xs text-gray-400 mt-0.5">

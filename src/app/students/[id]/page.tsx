@@ -271,7 +271,7 @@ export default function StudentPage() {
         supabase.from('subscriptions').select('*').eq('student_id', id).order('created_at', { ascending: false }),
         supabase.from('attendance').select('*').eq('student_id', id).order('date', { ascending: false }),
         supabase.from('belts').select('*').eq('student_id', id).order('date', { ascending: false }),
-        supabase.from('subscription_types').select('id, name, group_type, sessions_count, price, price_per_session, bonus_total_value, is_for_newcomers, bonuses, duration_months').order('created_at'),
+        supabase.from('subscription_types').select('id, name, group_type, sessions_count, price, price_per_session, bonus_total_value, is_for_newcomers, bonuses, duration_months').eq('is_hidden', false).order('created_at'),
         supabase.from('student_contacts').select('*').eq('student_id', id).order('created_at'),
         supabase.from('diagnostic_surveys').select('*').eq('student_id', id).maybeSingle(),
         supabase.from('progress_surveys').select('*').eq('student_id', id).order('created_at', { ascending: false }),
