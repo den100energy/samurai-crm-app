@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 
+export const maxDuration = 60
+
 const QUALITIES: [string, string][] = [
   ['strength','Сила'],['speed','Быстрота'],['endurance','Выносливость'],
   ['agility','Ловкость'],['coordination','Координация'],['posture','Осанка'],
@@ -160,7 +162,9 @@ ${hasManySlices ? `**Общий путь за всё время**
 
 Пиши живо, по-русски, тепло и профессионально. Опирайся на конкретные цифры.`
 
-  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+  let response: Response
+  try {
+    response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
@@ -171,9 +175,13 @@ ${hasManySlices ? `**Общий путь за всё время**
     body: JSON.stringify({
       model: 'anthropic/claude-haiku-3-5',
       messages: [{ role: 'user', content: prompt }],
-      max_tokens: 1800,
+      max_tokens: 1200,
     }),
   })
+  } catch (e) {
+    console.error('OpenRouter fetch error:', e)
+    return NextResponse.json({ error: 'Не удалось подключиться к AI. Попробуйте ещё раз.' }, { status: 500 })
+  }
 
   const data = await response.json()
   if (!response.ok) {

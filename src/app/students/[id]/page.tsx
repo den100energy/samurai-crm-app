@@ -2302,18 +2302,23 @@ export default function StudentPage() {
             <button
               onClick={async () => {
                 setGeneratingCompare(true)
-                // All filled progress surveys sorted oldest → newest
-                const filledSurveys = [...progressSurveys]
-                  .filter(s => s.filled_at)
-                  .sort((a, b) => new Date(a.filled_at).getTime() - new Date(b.filled_at).getTime())
-                const res = await fetch('/api/compare-surveys', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ survey1: survey, surveys: filledSurveys, studentName: student?.name }),
-                })
-                const data = await res.json()
-                if (data.program) setCompareProgram(data.program)
-                setGeneratingCompare(false)
+                try {
+                  const filledSurveys = [...progressSurveys]
+                    .filter(s => s.filled_at)
+                    .sort((a, b) => new Date(a.filled_at).getTime() - new Date(b.filled_at).getTime())
+                  const res = await fetch('/api/compare-surveys', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ survey1: survey, surveys: filledSurveys, studentName: student?.name }),
+                  })
+                  const data = await res.json()
+                  if (data.program) setCompareProgram(data.program)
+                  else if (data.error) alert('Ошибка: ' + data.error)
+                } catch (e) {
+                  alert('Ошибка генерации. Попробуйте ещё раз.')
+                } finally {
+                  setGeneratingCompare(false)
+                }
               }}
               disabled={generatingCompare}
               className="w-full bg-black text-white py-2.5 rounded-xl text-sm font-medium disabled:opacity-50">
