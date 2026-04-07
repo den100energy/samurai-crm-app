@@ -2293,7 +2293,7 @@ export default function StudentPage() {
       })()}
 
       {/* AI: Анализ прогресса */}
-      {survey?.filled_at && progressSurveys.some(s => s.filled_at) && (
+      {progressSurveys.some(s => s.filled_at) && (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm mb-2 overflow-hidden">
           <div className="flex items-center px-4 py-3 bg-gray-50 border-b border-gray-100">
             <span className="flex-1 text-sm font-medium text-gray-800">✨ Анализ прогресса (ИИ)</span>
