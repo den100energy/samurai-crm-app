@@ -76,8 +76,16 @@ export default function SubAnalyticsPage() {
 
   const today = now.toISOString().split('T')[0]
   const curKey = `${selYear}-${String(selMonth + 1).padStart(2, '0')}`
-  const last3 = prevMonths(selYear, selMonth, 3)
-  const last6 = prevMonths(selYear, selMonth, 6)
+  const isIncompleteMonth = curKey >= monthKey(today)
+
+  // For trends always use complete months only.
+  // If viewing current (incomplete) month → base = previous month.
+  // If viewing a past month → it's complete, use it as base.
+  const completeBase = isIncompleteMonth
+    ? new Date(selYear, selMonth - 1, 1)
+    : new Date(selYear, selMonth, 1)
+  const last3 = prevMonths(completeBase.getFullYear(), completeBase.getMonth(), 3)
+  const last6 = prevMonths(completeBase.getFullYear(), completeBase.getMonth(), 6)
 
   const paid = subs.filter(s => !s.is_pending && s.start_date)
 
@@ -237,39 +245,61 @@ export default function SubAnalyticsPage() {
 
       {/* Total per month + trend */}
       <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm mb-5">
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center justify-between mb-1">
           <div className="font-semibold text-gray-800 text-sm">Всего продано по месяцам</div>
           <span className={`text-xs font-medium ${totalTrend.color}`}>{totalTrend.emoji} {totalTrend.label}</span>
         </div>
-        {/* Bar chart */}
-        <div className="flex items-end gap-1.5 h-20 mb-1">
-          {last6.map((mk, i) => {
-            const count = totalLast6[i]
-            const maxVal = Math.max(...totalLast6, 1)
-            const pct = Math.max((count / maxVal) * 100, count > 0 ? 8 : 0)
-            const isCurrentMonth = mk === curKey
-            return (
-              <button key={mk}
-                onClick={() => count > 0 && openDrill(null, mk, `Все продажи ${mk}`)}
-                className="flex-1 flex flex-col items-center justify-end gap-0.5 h-full">
-                <span className="text-xs text-gray-500 font-medium">{count > 0 ? count : ''}</span>
-                <div
-                  style={{ height: `${pct}%` }}
-                  className={`w-full rounded-t-md transition-all ${isCurrentMonth ? 'bg-black' : 'bg-gray-200 hover:bg-gray-300'}`} />
-              </button>
-            )
-          })}
-        </div>
-        <div className="flex gap-1.5">
-          {last6.map(mk => {
-            const [y, m] = mk.split('-')
-            return (
-              <div key={mk} className="flex-1 text-center text-xs text-gray-400">
-                {MONTHS_RU[parseInt(m) - 1].slice(0, 3)}
+        {isIncompleteMonth && (
+          <div className="text-xs text-amber-600 mb-2">
+            Тренд по завершённым месяцам: {last3.map(mk => MONTHS_RU[parseInt(mk.split('-')[1]) - 1].slice(0, 3)).join(', ')}
+          </div>
+        )}
+        {/* Bar chart: last 6 complete + current partial if incomplete */}
+        {(() => {
+          const bars = isIncompleteMonth
+            ? [...last6, curKey]
+            : last6
+          const counts = bars.map(mk => subsInMonth(mk).length)
+          const maxVal = Math.max(...counts, 1)
+          return (
+            <>
+              <div className="flex items-end gap-1.5 h-20 mb-1">
+                {bars.map((mk, i) => {
+                  const count = counts[i]
+                  const isPartial = isIncompleteMonth && mk === curKey
+                  const pct = Math.max((count / maxVal) * 100, count > 0 ? 8 : 0)
+                  return (
+                    <button key={mk}
+                      onClick={() => count > 0 && openDrill(null, mk, `Все продажи ${mk}`)}
+                      className="flex-1 flex flex-col items-center justify-end gap-0.5 h-full">
+                      <span className="text-xs text-gray-500 font-medium">{count > 0 ? count : ''}</span>
+                      <div
+                        style={{ height: `${pct}%` }}
+                        className={`w-full rounded-t-md transition-all ${
+                          isPartial ? 'bg-amber-300' : 'bg-gray-700 hover:bg-gray-500'
+                        }`} />
+                    </button>
+                  )
+                })}
               </div>
-            )
-          })}
-        </div>
+              <div className="flex gap-1.5">
+                {bars.map(mk => {
+                  const [, m] = mk.split('-')
+                  const isPartial = isIncompleteMonth && mk === curKey
+                  return (
+                    <div key={mk} className={`flex-1 text-center text-xs ${isPartial ? 'text-amber-500' : 'text-gray-400'}`}>
+                      {MONTHS_RU[parseInt(m) - 1].slice(0, 3)}
+                      {isPartial && '*'}
+                    </div>
+                  )
+                })}
+              </div>
+              {isIncompleteMonth && (
+                <div className="text-xs text-amber-500 mt-1">* текущий месяц не завершён</div>
+              )}
+            </>
+          )
+        })()}
         {/* Revenue trend line */}
         <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between">
           <div className="text-xs text-gray-500">Тренд выручки (3 мес.)</div>
