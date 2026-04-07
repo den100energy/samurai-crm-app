@@ -92,6 +92,18 @@ export default function AnalyticsPage() {
         <h1 className="text-xl font-bold text-gray-800">Аналитика</h1>
       </div>
 
+      <Link href="/analytics/subscriptions"
+        className="flex items-center justify-between bg-white rounded-2xl px-4 py-3 border border-gray-100 shadow-sm mb-4 hover:border-gray-300">
+        <div className="flex items-center gap-3">
+          <span className="text-2xl">📦</span>
+          <div>
+            <div className="font-semibold text-gray-800 text-sm">Аналитика абонементов</div>
+            <div className="text-xs text-gray-400">Тренды, топ-3, рейтинг по видам</div>
+          </div>
+        </div>
+        <span className="text-gray-300 text-lg">›</span>
+      </Link>
+
       {/* Итоги */}
       {!loading && (
         <div className="grid grid-cols-3 gap-3 mb-4">
