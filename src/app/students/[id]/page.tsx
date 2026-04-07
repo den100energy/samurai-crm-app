@@ -56,6 +56,7 @@ type Subscription = {
   freeze_end: string | null
   freeze_days_used: number
   is_pending: boolean
+  payment_id: string | null
 }
 
 type Attendance = {
@@ -220,7 +221,9 @@ export default function StudentPage() {
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState<Partial<Student>>({})
   const [showSubForm, setShowSubForm] = useState(false)
-  const [subForm, setSubForm] = useState({ type: '', sessions_total: '', start_date: '', end_date: '', amount: '', paid: false, is_pending: false, bonuses: {} as Record<string, number>, installment: false, deposit_amount: '', installment_payments: [] as { amount: string; due_date: string }[] })
+  const [subForm, setSubForm] = useState({ type: '', sessions_total: '', start_date: '', end_date: '', amount: '', paid: false, is_pending: false, bonuses: {} as Record<string, number>, installment: false, deposit_amount: '', installment_payments: [] as { amount: string; due_date: string }[], payment_type: 'cash', record_in_finance: true })
+  const [addToFinanceSub, setAddToFinanceSub] = useState<Subscription | null>(null)
+  const [addToFinancePaymentType, setAddToFinancePaymentType] = useState<'cash' | 'card'>('cash')
   const [showBeltForm, setShowBeltForm] = useState<'aikido' | 'wushu' | null>(null)
   const [beltForm, setBeltForm] = useState({ belt_name: '', date: new Date().toISOString().split('T')[0], notes: '' })
   const [subTypes, setSubTypes] = useState<{ id: string; name: string; group_type: string | null; sessions_count: number | null; price: number | null; price_per_session: number | null; bonus_total_value: number | null; is_for_newcomers: boolean | null; is_hidden: boolean | null; bonuses: Record<string, number> | null; duration_months: number | null }[]>([])
@@ -336,6 +339,26 @@ export default function StudentPage() {
 
     const sessionsLeft = sessions !== null ? Math.max(0, sessions - attended) : null
 
+    // Создать запись в финансах если нужно
+    let paymentId: string | null = null
+    const amount = subForm.amount ? parseFloat(subForm.amount) : null
+    if (subForm.record_in_finance && !subForm.is_pending && amount) {
+      const paymentAmount = subForm.installment
+        ? (parseFloat(subForm.deposit_amount) || 0)
+        : amount
+      const { data: payData } = await supabase.from('payments').insert({
+        student_id: id,
+        direction: 'income',
+        category: 'Абонементы',
+        amount: paymentAmount,
+        payment_type: subForm.payment_type,
+        description: subForm.type.includes('|') ? subForm.type.split('|')[1] : subForm.type,
+        paid_at: subForm.start_date || new Date().toISOString().split('T')[0],
+        status: 'paid',
+      }).select('id').single()
+      if (payData) paymentId = payData.id
+    }
+
     const { data } = await supabase.from('subscriptions').insert({
       student_id: id,
       type: subForm.type,
@@ -348,6 +371,7 @@ export default function StudentPage() {
       is_pending: subForm.is_pending,
       bonuses: subForm.bonuses,
       bonuses_used: {},
+      payment_id: paymentId,
     }).select().single()
 
     if (data) {
@@ -374,7 +398,26 @@ export default function StudentPage() {
       }
     }
     setShowSubForm(false)
-    setSubForm({ type: '', sessions_total: '', start_date: '', end_date: '', amount: '', paid: false, is_pending: false, bonuses: {}, installment: false, deposit_amount: '', installment_payments: [] })
+    setSubForm({ type: '', sessions_total: '', start_date: '', end_date: '', amount: '', paid: false, is_pending: false, bonuses: {}, installment: false, deposit_amount: '', installment_payments: [], payment_type: 'cash', record_in_finance: true })
+  }
+
+  async function addExistingSubToFinance(sub: Subscription, paymentType: 'cash' | 'card') {
+    if (!sub.amount) return
+    const { data: payData } = await supabase.from('payments').insert({
+      student_id: id,
+      direction: 'income',
+      category: 'Абонементы',
+      amount: sub.amount,
+      payment_type: paymentType,
+      description: sub.type.includes('|') ? sub.type.split('|')[1] : sub.type,
+      paid_at: sub.start_date || new Date().toISOString().split('T')[0],
+      status: 'paid',
+    }).select('id').single()
+    if (payData) {
+      await supabase.from('subscriptions').update({ payment_id: payData.id }).eq('id', sub.id)
+      setSubs(prev => prev.map(s => s.id === sub.id ? { ...s, payment_id: payData.id } : s))
+    }
+    setAddToFinanceSub(null)
   }
 
   async function activatePendingSub(sub: Subscription) {
@@ -1063,6 +1106,29 @@ export default function StudentPage() {
               <input type="checkbox" checked={subForm.is_pending} onChange={e => setSubForm({...subForm, is_pending: e.target.checked})} />
               Отложенный (продан, но ещё не начался)
             </label>
+
+            <div className="border-t border-gray-200 pt-2 space-y-2">
+              <div className="text-xs font-medium text-gray-500">Финансы</div>
+              <div className="flex gap-2">
+                <button type="button"
+                  onClick={() => setSubForm({...subForm, payment_type: 'cash'})}
+                  className={`flex-1 py-1.5 rounded-lg text-sm border transition-colors ${subForm.payment_type === 'cash' ? 'bg-black text-white border-black' : 'border-gray-200 text-gray-600'}`}>
+                  💵 Наличные
+                </button>
+                <button type="button"
+                  onClick={() => setSubForm({...subForm, payment_type: 'card'})}
+                  className={`flex-1 py-1.5 rounded-lg text-sm border transition-colors ${subForm.payment_type === 'card' ? 'bg-black text-white border-black' : 'border-gray-200 text-gray-600'}`}>
+                  💳 Карта
+                </button>
+              </div>
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input type="checkbox" checked={subForm.record_in_finance}
+                  onChange={e => setSubForm({...subForm, record_in_finance: e.target.checked})} />
+                <span className={subForm.record_in_finance ? 'text-green-700 font-medium' : 'text-gray-400'}>
+                  {subForm.record_in_finance ? '✓ Записать в финансы' : 'Не записывать в финансы (уже внесено вручную)'}
+                </span>
+              </label>
+            </div>
             <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
               <input type="checkbox" checked={subForm.installment} onChange={e => setSubForm({...subForm, installment: e.target.checked, deposit_amount: e.target.checked && subForm.amount ? String(Math.round(parseFloat(subForm.amount) * 0.2)) : '', installment_payments: e.target.checked ? [{ amount: '', due_date: '' }] : []})} />
               Рассрочка
@@ -1182,6 +1248,15 @@ export default function StudentPage() {
                           className="text-xs bg-green-600 text-white px-2 py-1 rounded-lg hover:bg-green-700">
                           ▶ Активировать
                         </button>
+                      )}
+                      {!s.payment_id && !s.is_pending && s.amount && (
+                        <button onClick={() => { setAddToFinanceSub(s); setAddToFinancePaymentType('cash') }}
+                          className="text-xs bg-blue-50 text-blue-600 border border-blue-200 px-2 py-1 rounded-lg hover:bg-blue-100">
+                          💰 В финансы
+                        </button>
+                      )}
+                      {s.payment_id && (
+                        <span className="text-xs text-green-600 px-1" title="Есть в финансах">✓ Финансы</span>
                       )}
                       <button onClick={() => editSubId === s.id ? setEditSubId(null) : startEditSub(s)}
                         className="text-xs text-gray-400 border border-gray-200 px-2 py-1 rounded-lg">
@@ -1484,6 +1559,43 @@ export default function StudentPage() {
                 className="flex-1 bg-gray-200 text-gray-700 text-sm py-2 rounded-lg font-medium hover:bg-gray-300">
                 ❌ Не пришёл
               </button>
+            </div>
+          </div>
+        )}
+
+        {/* Модалка: добавить существующий абонемент в финансы */}
+        {addToFinanceSub && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-4">
+            <div className="bg-white rounded-2xl p-5 w-full max-w-sm shadow-xl space-y-4">
+              <div className="font-semibold text-gray-800">Добавить в финансы</div>
+              <div className="text-sm text-gray-600">
+                <span className="font-medium">{addToFinanceSub.type.includes('|') ? addToFinanceSub.type.split('|')[1] : addToFinanceSub.type}</span>
+                {' — '}{addToFinanceSub.amount?.toLocaleString()} ₽
+                {addToFinanceSub.start_date ? ` · ${addToFinanceSub.start_date}` : ''}
+              </div>
+              <div className="text-xs text-gray-400">Создаст запись в разделе Финансы (категория: Абонементы)</div>
+              <div className="flex gap-2">
+                <button type="button"
+                  onClick={() => setAddToFinancePaymentType('cash')}
+                  className={`flex-1 py-2 rounded-xl text-sm border transition-colors ${addToFinancePaymentType === 'cash' ? 'bg-black text-white border-black' : 'border-gray-200 text-gray-600'}`}>
+                  💵 Наличные
+                </button>
+                <button type="button"
+                  onClick={() => setAddToFinancePaymentType('card')}
+                  className={`flex-1 py-2 rounded-xl text-sm border transition-colors ${addToFinancePaymentType === 'card' ? 'bg-black text-white border-black' : 'border-gray-200 text-gray-600'}`}>
+                  💳 Карта
+                </button>
+              </div>
+              <div className="flex gap-2">
+                <button onClick={() => addExistingSubToFinance(addToFinanceSub, addToFinancePaymentType)}
+                  className="flex-1 bg-black text-white py-2 rounded-xl text-sm font-medium">
+                  Добавить в финансы
+                </button>
+                <button onClick={() => setAddToFinanceSub(null)}
+                  className="px-4 border border-gray-200 text-gray-500 py-2 rounded-xl text-sm">
+                  Отмена
+                </button>
+              </div>
             </div>
           </div>
         )}
