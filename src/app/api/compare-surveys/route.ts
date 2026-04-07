@@ -65,8 +65,9 @@ export async function POST(req: NextRequest) {
   const prev   = surveys.length >= 2 ? surveys[surveys.length - 2] : null
 
   // ── Section 1: Диагностика → Первый срез (parent + trainer) ─────────────
-  const diagToFirstParent  = qualityRows(survey1, first, 'q_')
-  const diagToFirstTrainer = qualityRows(survey1, first, 'trainer_')
+  const hasDiag = survey1 != null
+  const diagToFirstParent  = hasDiag ? qualityRows(survey1, first, 'q_') : ''
+  const diagToFirstTrainer = hasDiag ? qualityRows(survey1, first, 'trainer_') : ''
 
   // ── Section 2: Последние два среза (если их > 1) ─────────────────────────
   let recentBlock = ''
@@ -105,12 +106,7 @@ ${overallTrainer || '— нет данных —'}
   // ── Build prompt ──────────────────────────────────────────────────────────
   const hasManySlices = surveys.length >= 2
 
-  const prompt = `Ты опытный тренер по айкидо айкикай в клубе "Школа Самурая".
-
-Ученик: ${studentName}
-Количество срезов прогресса: ${surveys.length}
-
-## НАЧАЛЬНАЯ ДИАГНОСТИКА → ПЕРВЫЙ СРЕЗ
+  const diagBlock = hasDiag ? `## НАЧАЛЬНАЯ ДИАГНОСТИКА → ПЕРВЫЙ СРЕЗ
 
 Оценки родителя:
 ${diagToFirstParent || '— нет данных —'}
@@ -121,7 +117,23 @@ ${diagToFirstTrainer || '— нет данных —'}
 Ожидания семьи: ${survey1.how_can_help_text || '—'}
 Заметки тренера (начало): ${survey1.trainer_notes || '—'}
 Заметки тренера (первый срез): ${first.trainer_notes || '—'}
-${recentBlock}${overallBlock}
+` : `## СРЕЗ ПРОГРЕССА (начальная диагностика отсутствует)
+
+Оценки родителя (текущий срез):
+${singleSnapshot(latest, 'q_') || '— нет данных —'}
+
+Оценки тренера (текущий срез):
+${singleSnapshot(latest, 'trainer_') || '— нет данных —'}
+
+Заметки тренера: ${latest.trainer_notes || '—'}
+`
+
+  const prompt = `Ты опытный тренер по айкидо айкикай в клубе "Школа Самурая".
+
+Ученик: ${studentName}
+Количество срезов прогресса: ${surveys.length}
+
+${diagBlock}${recentBlock}${overallBlock}
 Составь анализ прогресса в формате:
 
 **Что изменилось${hasManySlices ? ' в последнее время' : ' за первый месяц'}**
