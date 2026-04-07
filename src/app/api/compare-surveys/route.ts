@@ -169,7 +169,7 @@ ${hasManySlices ? `**Общий путь за всё время**
         'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
         'Content-Type': 'application/json',
         'HTTP-Referer': 'https://samurai-crm-app.vercel.app',
-        'X-Title': 'Школа Самурая CRM',
+        'X-Title': 'Samurai School CRM',
       },
       body: JSON.stringify({
         model: 'anthropic/claude-3-haiku',
