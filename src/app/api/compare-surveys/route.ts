@@ -162,32 +162,32 @@ ${hasManySlices ? `**Общий путь за всё время**
 
 Пиши живо, по-русски, тепло и профессионально. Опирайся на конкретные цифры.`
 
-  let response: Response
   try {
-    response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-      'Content-Type': 'application/json',
-      'HTTP-Referer': 'https://samurai-crm.vercel.app',
-      'X-Title': 'Школа Самурая CRM',
-    },
-    body: JSON.stringify({
-      model: 'anthropic/claude-haiku-3-5',
-      messages: [{ role: 'user', content: prompt }],
-      max_tokens: 1200,
-    }),
-  })
+    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://samurai-crm-app.vercel.app',
+        'X-Title': 'Школа Самурая CRM',
+      },
+      body: JSON.stringify({
+        model: 'anthropic/claude-3-haiku',
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: 1200,
+      }),
+    })
+
+    const data = await response.json()
+    if (!response.ok) {
+      console.error('OpenRouter error:', response.status, JSON.stringify(data))
+      return NextResponse.json({ error: `Ошибка AI (${response.status}): ${data.error?.message || JSON.stringify(data)}` }, { status: 500 })
+    }
+
+    const text = data.choices?.[0]?.message?.content || ''
+    return NextResponse.json({ program: text })
   } catch (e) {
     console.error('OpenRouter fetch error:', e)
-    return NextResponse.json({ error: 'Не удалось подключиться к AI. Попробуйте ещё раз.' }, { status: 500 })
+    return NextResponse.json({ error: 'Не удалось подключиться к AI: ' + String(e) }, { status: 500 })
   }
-
-  const data = await response.json()
-  if (!response.ok) {
-    return NextResponse.json({ error: data.error?.message || 'Ошибка генерации' }, { status: 500 })
-  }
-
-  const text = data.choices?.[0]?.message?.content || ''
-  return NextResponse.json({ program: text })
 }
