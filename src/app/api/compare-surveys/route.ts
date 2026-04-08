@@ -11,11 +11,26 @@ const QUALITIES: [string, string][] = [
   ['activity','Активность'],['self_defense','Самозащита'],
 ]
 
-function qualityRows(
-  a: Record<string, any>,
-  b: Record<string, any>,
-  prefix: 'q_' | 'trainer_'
-): string {
+const AIKIDO_WORDS = [
+  { word: 'Рэйги', meaning: 'этикет и уважение — основа всех отношений в додзё' },
+  { word: 'Заншин', meaning: 'состояние бдительности после завершения техники' },
+  { word: 'Укэми', meaning: 'искусство безопасного падения — первый навык самозащиты' },
+  { word: 'Маай', meaning: 'правильная дистанция между партнёрами' },
+  { word: 'Ки', meaning: 'внутренняя энергия, которую мы учимся направлять' },
+  { word: 'Ханми', meaning: 'боевая стойка — основа всех движений' },
+  { word: 'Ирими', meaning: 'вход — движение навстречу, а не уклонение' },
+  { word: 'Тенкан', meaning: 'разворот — перенаправление силы партнёра' },
+  { word: 'Сикко', meaning: 'перемещение на коленях — развивает баланс и терпение' },
+  { word: 'Кокю', meaning: 'дыхание — связь тела и духа' },
+  { word: 'Досу', meaning: 'путь — не только в додзё, но и в жизни' },
+  { word: 'Мусуби', meaning: 'единение — слияние движений с партнёром' },
+]
+
+function getWordOfMonth(): { word: string; meaning: string } {
+  return AIKIDO_WORDS[new Date().getMonth() % AIKIDO_WORDS.length]
+}
+
+function qualityRows(a: Record<string, any>, b: Record<string, any>, prefix: 'q_' | 'trainer_'): string {
   return QUALITIES
     .map(([k, lbl]) => {
       const before = a[`${prefix}${k}`] ?? null
@@ -43,20 +58,23 @@ function surveyLabel(s: Record<string, any>, idx: number): string {
   return s.title || (idx === 0 ? 'Срез 1' : `Срез ${idx + 1}`)
 }
 
-export async function POST(req: NextRequest) {
-  // New signature: { survey1, surveys, studentName }
-  // survey1 = initial diagnostic (анкета 1)
-  // surveys  = array of filled progress surveys, sorted asc by filled_at/created_at
-  // Legacy: { survey1, survey2, studentName } also supported
-  const body = await req.json()
-  const { survey1, studentName } = body
+function groupContext(group: string | null): string {
+  if (!group) return ''
+  if (group.includes('Старт')) return 'Группа "Старт" — младший возраст, игровая форма, базовые укэми и дисциплина.'
+  if (group.includes('нач')) return 'Группа "Основная (нач.)" — базовый уровень, основные техники айкидо.'
+  if (group.includes('оп')) return 'Группа "Основная (оп.)" — продвинутый уровень, шлифовка техники, оружие.'
+  if (group.includes('Цигун')) return 'Группа "Цигун" — плавность, дыхание, внутренняя работа.'
+  return ''
+}
 
-  // Normalise: accept either `surveys` array or legacy `survey2`
+export async function POST(req: NextRequest) {
+  const body = await req.json()
+  const { survey1, studentName, studentContext } = body
+  const wordOfMonth = getWordOfMonth()
+
   const surveys: Record<string, any>[] = Array.isArray(body.surveys)
     ? body.surveys
-    : body.survey2
-      ? [body.survey2]
-      : []
+    : body.survey2 ? [body.survey2] : []
 
   if (!surveys.length) {
     return NextResponse.json({ error: 'Нет данных срезов' }, { status: 400 })
@@ -65,102 +83,122 @@ export async function POST(req: NextRequest) {
   const first  = surveys[0]
   const latest = surveys[surveys.length - 1]
   const prev   = surveys.length >= 2 ? surveys[surveys.length - 2] : null
-
-  // ── Section 1: Диагностика → Первый срез (parent + trainer) ─────────────
   const hasDiag = survey1 != null
-  const diagToFirstParent  = hasDiag ? qualityRows(survey1, first, 'q_') : ''
-  const diagToFirstTrainer = hasDiag ? qualityRows(survey1, first, 'trainer_') : ''
-
-  // ── Section 2: Последние два среза (если их > 1) ─────────────────────────
-  let recentBlock = ''
-  if (prev) {
-    const prevLabel   = surveyLabel(prev, surveys.length - 2)
-    const latestLabel = surveyLabel(latest, surveys.length - 1)
-    const recentParent  = qualityRows(prev, latest, 'q_')
-    const recentTrainer = qualityRows(prev, latest, 'trainer_')
-    recentBlock = `
-## НЕДАВНЯЯ ДИНАМИКА: ${prevLabel} → ${latestLabel}
-
-Оценки родителя:
-${recentParent || '— нет данных —'}
-
-Оценки тренера:
-${recentTrainer || '— нет данных —'}
-`
-  }
-
-  // ── Section 3: Общая динамика (первый срез → последний) ──────────────────
-  let overallBlock = ''
-  if (surveys.length >= 2) {
-    const overallParent  = qualityRows(first, latest, 'q_')
-    const overallTrainer = qualityRows(first, latest, 'trainer_')
-    overallBlock = `
-## ОБЩАЯ ДИНАМИКА: ${surveyLabel(first, 0)} → ${surveyLabel(latest, surveys.length - 1)} (всего ${surveys.length} среза)
-
-Оценки родителя:
-${overallParent || '— нет данных —'}
-
-Оценки тренера:
-${overallTrainer || '— нет данных —'}
-`
-  }
-
-  // ── Build prompt ──────────────────────────────────────────────────────────
   const hasManySlices = surveys.length >= 2
 
+  const ctx = studentContext || {}
+  const ageStr = ctx.age ? `${ctx.age} лет` : '—'
+  const tenureStr = ctx.tenureMonths != null
+    ? ctx.tenureMonths === 0 ? 'первый месяц' : `${ctx.tenureMonths} мес. в школе`
+    : '—'
+  const groupStr = ctx.group || '—'
+  const groupCtx = groupContext(ctx.group)
+  const attendanceStr = ctx.totalAttendance != null ? `${ctx.totalAttendance} занятий` : '—'
+
+  // Build data blocks
   const diagBlock = hasDiag ? `## НАЧАЛЬНАЯ ДИАГНОСТИКА → ПЕРВЫЙ СРЕЗ
 
 Оценки родителя:
-${diagToFirstParent || '— нет данных —'}
+${qualityRows(survey1, first, 'q_') || '— нет данных —'}
 
 Оценки тренера:
-${diagToFirstTrainer || '— нет данных —'}
+${qualityRows(survey1, first, 'trainer_') || '— нет данных —'}
 
 Ожидания семьи: ${survey1.how_can_help_text || '—'}
 Заметки тренера (начало): ${survey1.trainer_notes || '—'}
-Заметки тренера (первый срез): ${first.trainer_notes || '—'}
-` : `## СРЕЗ ПРОГРЕССА (начальная диагностика отсутствует)
+Заметки тренера (срез): ${first.trainer_notes || '—'}
+` : `## ТЕКУЩИЙ СРЕЗ (начальная диагностика отсутствует)
 
-Оценки родителя (текущий срез):
+Оценки родителя:
 ${singleSnapshot(latest, 'q_') || '— нет данных —'}
 
-Оценки тренера (текущий срез):
+Оценки тренера:
 ${singleSnapshot(latest, 'trainer_') || '— нет данных —'}
 
 Заметки тренера: ${latest.trainer_notes || '—'}
 `
 
-  const prompt = `Ты опытный тренер по айкидо айкикай в клубе "Школа Самурая".
+  const recentBlock = prev ? `
+## НЕДАВНЯЯ ДИНАМИКА: ${surveyLabel(prev, surveys.length - 2)} → ${surveyLabel(latest, surveys.length - 1)}
 
-Ученик: ${studentName}
-Количество срезов прогресса: ${surveys.length}
+Оценки родителя:
+${qualityRows(prev, latest, 'q_') || '— нет данных —'}
 
+Оценки тренера:
+${qualityRows(prev, latest, 'trainer_') || '— нет данных —'}
+` : ''
+
+  const overallBlock = hasManySlices ? `
+## ОБЩАЯ ДИНАМИКА: ${surveyLabel(first, 0)} → ${surveyLabel(latest, surveys.length - 1)} (всего ${surveys.length} среза)
+
+Оценки родителя:
+${qualityRows(first, latest, 'q_') || '— нет данных —'}
+
+Оценки тренера:
+${qualityRows(first, latest, 'trainer_') || '— нет данных —'}
+` : ''
+
+  const prompt = `Ты — Старший Наставник Школы Самурая, опытный тренер по айкидо айкикай. Твой стиль: тёплый, конкретный, уважительный. Ты говоришь на языке Пути (До) — не сухих цифр, а роста человека.
+
+КОНТЕКСТ УЧЕНИКА:
+- Имя: ${studentName || '—'}
+- Возраст: ${ageStr}
+- Группа: ${groupStr}
+- Стаж: ${tenureStr}
+- Всего посещений: ${attendanceStr}
+${groupCtx ? `- Специфика группы: ${groupCtx}` : ''}
+- Количество срезов: ${surveys.length}
+
+ДАННЫЕ ПРОГРЕССА:
 ${diagBlock}${recentBlock}${overallBlock}
-Составь анализ прогресса в формате:
+
+---
+
+Составь два отдельных документа:
+
+═══════════════════════════════
+📋 КАРТОЧКА ТРЕНЕРА
+═══════════════════════════════
 
 **Что изменилось${hasManySlices ? ' в последнее время' : ' за первый месяц'}**
-(3-4 конкретных наблюдения с опорой на цифры — что выросло, что осталось, что снизилось)
+(3–4 конкретных наблюдения с опорой на цифры — что выросло, что осталось, что снизилось)
 
 ${hasManySlices ? `**Общий путь за всё время**
-(2-3 наблюдения о долгосрочной динамике от начала до сейчас)
+(2–3 наблюдения о долгосрочной динамике от начала до сейчас)
 
-` : ''
-}**Главные достижения**
-(2-3 пункта — что реально получилось)
+` : ''}**Технический фокус на следующий месяц**
+(2–3 конкретных элемента айкидо для отработки — с учётом слабых качеств и уровня группы)
 
-**На что обратить внимание**
-(2-3 зоны, требующие работы в следующем периоде)
+**3 задания для домашней практики** *(тренер одобряет перед публикацией)*
+Задание 1: [название] — [описание, время выполнения]
+Задание 2: [название] — [описание, время выполнения]
+Задание 3: [название] — [описание, время выполнения]
+(Только безопасные: стойки, баланс, растяжка, дыхание. Никаких бросков дома.)
 
-**Программа на следующий месяц**
-Неделя 1: (фокус и задачи)
-Неделя 2: (фокус и задачи)
-Неделя 3: (фокус и задачи)
-Неделя 4: (фокус и задачи)
+═══════════════════════════════
+💌 ПИСЬМО РОДИТЕЛЯМ
+═══════════════════════════════
 
-**Слова для родителей**
-(2-3 предложения — тёплый, конкретный фидбэк о том, что они могут заметить дома)
+**Путь Самурая**
+(2–3 предложения об успехах ученика — без сухих цифр, через образ и наблюдение)
 
-Пиши живо, по-русски, тепло и профессионально. Опирайся на конкретные цифры.`
+**Главные достижения**
+(2–3 пункта — что реально получилось за этот период)
+
+**Слово месяца: ${wordOfMonth.word}**
+«${wordOfMonth.meaning}»
+(1–2 предложения — как это слово отражает то, что сейчас происходит с вашим ребёнком)
+
+**Домашняя миссия**
+(Одно конкретное безопасное упражнение — название, как выполнять, сколько времени)
+
+**Кухня Самурая**
+(1 простой совет по питанию или режиму, связанный с главной целью следующего месяца)
+
+**На что обратить внимание в следующем месяце**
+(2–3 зоны развития — написано для родителей, без жаргона)
+
+Пиши живо, по-русски. Карточку тренера — профессионально и конкретно. Письмо родителям — тепло и вдохновляюще.`
 
   try {
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -174,7 +212,7 @@ ${hasManySlices ? `**Общий путь за всё время**
       body: JSON.stringify({
         model: 'anthropic/claude-3-haiku',
         messages: [{ role: 'user', content: prompt }],
-        max_tokens: 1200,
+        max_tokens: 1800,
       }),
     })
 

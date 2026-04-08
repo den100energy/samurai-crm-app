@@ -2306,10 +2306,26 @@ export default function StudentPage() {
                   const filledSurveys = [...progressSurveys]
                     .filter(s => s.filled_at)
                     .sort((a, b) => new Date(a.filled_at).getTime() - new Date(b.filled_at).getTime())
+                  const age = student?.birth_date
+                    ? Math.floor((Date.now() - new Date(student.birth_date).getTime()) / (365.25 * 86400000))
+                    : null
+                  const tenureMonths = student?.enrollment_date
+                    ? Math.floor((Date.now() - new Date(student.enrollment_date).getTime()) / (30.5 * 86400000))
+                    : null
                   const res = await fetch('/api/compare-surveys', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ survey1: survey, surveys: filledSurveys, studentName: student?.name }),
+                    body: JSON.stringify({
+                      survey1: survey,
+                      surveys: filledSurveys,
+                      studentName: student?.name,
+                      studentContext: {
+                        group: student?.group_name,
+                        age,
+                        tenureMonths,
+                        totalAttendance: attendance.filter(a => a.present).length,
+                      },
+                    }),
                   })
                   const data = await res.json()
                   if (data.program) setCompareProgram(data.program)
