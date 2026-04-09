@@ -297,6 +297,9 @@ export default function StudentPage() {
         const PQ = ['strength','speed','endurance','agility','coordination','posture','flexibility','discipline','sociability','confidence','learnability','attentiveness','emotional_balance','goal_orientation','activity','self_defense']
         PQ.forEach(k => { init[`trainer_${k}`] = latest[`trainer_${k}`] ?? 5 })
         setProgressTrainerForm(init)
+        // Restore saved AI program from latest survey
+        const latestFilled = surveys.find((s: any) => s.filled_at)
+        if (latestFilled?.ai_program) setCompareProgram(latestFilled.ai_program)
       }
       if (sp) setStudentProfile(sp)
       setPayments(py || [])
@@ -2328,8 +2331,14 @@ export default function StudentPage() {
                     }),
                   })
                   const data = await res.json()
-                  if (data.program) setCompareProgram(data.program)
-                  else if (data.error) alert('Ошибка: ' + data.error)
+                  if (data.program) {
+                    setCompareProgram(data.program)
+                    // Auto-save to latest filled survey
+                    const latestFilled = [...progressSurveys].find(s => s.filled_at)
+                    if (latestFilled) {
+                      await supabase.from('progress_surveys').update({ ai_program: data.program }).eq('id', latestFilled.id)
+                    }
+                  } else if (data.error) alert('Ошибка: ' + data.error)
                 } catch (e) {
                   alert('Ошибка генерации. Попробуйте ещё раз.')
                 } finally {
@@ -2341,12 +2350,25 @@ export default function StudentPage() {
               {generatingCompare ? '⏳ Генерация...' : compareProgram ? '🔄 Обновить анализ' : '✨ Сравнить с начальной анкетой'}
             </button>
             {compareProgram && (
-              <textarea
-                value={compareProgram}
-                onChange={e => setCompareProgram(e.target.value)}
-                rows={16}
-                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-xs outline-none resize-none leading-relaxed"
-              />
+              <>
+                <textarea
+                  value={compareProgram}
+                  onChange={e => setCompareProgram(e.target.value)}
+                  rows={16}
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-xs outline-none resize-none leading-relaxed"
+                />
+                <button
+                  onClick={async () => {
+                    const latestFilled = [...progressSurveys].find(s => s.filled_at)
+                    if (latestFilled) {
+                      await supabase.from('progress_surveys').update({ ai_program: compareProgram }).eq('id', latestFilled.id)
+                      alert('✅ Программа сохранена')
+                    }
+                  }}
+                  className="w-full border border-gray-200 text-gray-600 py-2 rounded-xl text-sm hover:bg-gray-50">
+                  💾 Сохранить изменения
+                </button>
+              </>
             )}
           </div>
         </div>
