@@ -264,6 +264,14 @@ export default function StudentPage() {
   const [studentProfile, setStudentProfile] = useState<any>(null)
   const [compareProgram, setCompareProgram] = useState('')
   const [generatingCompare, setGeneratingCompare] = useState(false)
+  const [assignments, setAssignments] = useState<{
+    id: string; title: string; description: string; status: 'pending' | 'approved' | 'rejected';
+    due_date: string | null; completed: boolean; survey_id: string | null
+  }[]>([])
+  const [editingAssignment, setEditingAssignment] = useState<string | null>(null)
+  const [assignmentEditForm, setAssignmentEditForm] = useState({ title: '', description: '' })
+  const [approvingAssignment, setApprovingAssignment] = useState<string | null>(null)
+  const [assignmentDueDate, setAssignmentDueDate] = useState<Record<string, string>>({})
   const [uploadingPhoto, setUploadingPhoto] = useState(false)
   const [payments, setPayments] = useState<{ id: string; amount: number; category: string | null; paid_at: string; payment_type: string; description: string | null }[]>([])
 
@@ -308,6 +316,10 @@ export default function StudentPage() {
       if (sp) setStudentProfile(sp)
       setPayments(py || [])
       setStudentTickets(tk || [])
+      // Load assignments
+      const { data: asgn } = await supabase
+        .from('assignments').select('*').eq('student_id', id).order('created_at', { ascending: false })
+      setAssignments(asgn || [])
     }
     load()
   }, [id])
@@ -780,6 +792,30 @@ export default function StudentPage() {
     if (data) setProgressSurveys(prev => [data, ...prev.slice(1)])
     setEditingProgressTrainer(false)
     setSavingProgressTrainer(false)
+  }
+
+  async function approveAssignment(aId: string) {
+    const due = assignmentDueDate[aId] || null
+    setApprovingAssignment(aId)
+    const { data } = await supabase.from('assignments')
+      .update({ status: 'approved', due_date: due || null })
+      .eq('id', aId).select().single()
+    if (data) setAssignments(prev => prev.map(a => a.id === aId ? data : a))
+    setApprovingAssignment(null)
+  }
+
+  async function rejectAssignment(aId: string) {
+    const { data } = await supabase.from('assignments')
+      .update({ status: 'rejected' }).eq('id', aId).select().single()
+    if (data) setAssignments(prev => prev.map(a => a.id === aId ? data : a))
+  }
+
+  async function saveAssignmentEdit(aId: string) {
+    const { data } = await supabase.from('assignments')
+      .update({ title: assignmentEditForm.title, description: assignmentEditForm.description })
+      .eq('id', aId).select().single()
+    if (data) setAssignments(prev => prev.map(a => a.id === aId ? data : a))
+    setEditingAssignment(null)
   }
 
   async function copyProgressLink(forWho: 'parent' | 'student') {
@@ -2515,10 +2551,27 @@ export default function StudentPage() {
                   const data = await res.json()
                   if (data.program) {
                     setCompareProgram(data.program)
-                    // Auto-save to latest filled survey
                     const latestFilled = [...progressSurveys].find(s => s.filled_at)
                     if (latestFilled) {
                       await supabase.from('progress_surveys').update({ ai_program: data.program }).eq('id', latestFilled.id)
+                    }
+                    // Save AI tasks as pending assignments (replace existing pending for this survey)
+                    if (data.tasks?.length && student) {
+                      const surveyId = latestFilled?.id ?? null
+                      await supabase.from('assignments')
+                        .delete().eq('student_id', student.id).eq('status', 'pending')
+                        .eq('survey_id', surveyId)
+                      const rows = data.tasks.map((t: { title: string; description: string }) => ({
+                        student_id: student.id, survey_id: surveyId,
+                        title: t.title, description: t.description, status: 'pending',
+                      }))
+                      const { data: newAsgn } = await supabase.from('assignments').insert(rows).select()
+                      if (newAsgn) {
+                        setAssignments(prev => [
+                          ...newAsgn,
+                          ...prev.filter(a => a.status !== 'pending' || a.survey_id !== surveyId),
+                        ])
+                      }
                     }
                   } else if (data.error) alert('Ошибка: ' + data.error)
                 } catch (e) {
@@ -2552,6 +2605,83 @@ export default function StudentPage() {
                 </button>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Модерация заданий от AI */}
+      {assignments.length > 0 && (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm mb-2 overflow-hidden">
+          <div className="flex items-center px-4 py-3 bg-gray-50 border-b border-gray-100">
+            <span className="flex-1 text-sm font-medium text-gray-800">📋 Задания от AI</span>
+            {assignments.filter(a => a.status === 'pending').length > 0 && (
+              <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium">
+                {assignments.filter(a => a.status === 'pending').length} на проверке
+              </span>
+            )}
+          </div>
+          <div className="divide-y divide-gray-50">
+            {assignments.map(a => (
+              <div key={a.id} className={`px-4 py-3 space-y-2 ${a.status === 'rejected' ? 'opacity-40' : ''}`}>
+                {editingAssignment === a.id ? (
+                  <div className="space-y-2">
+                    <input value={assignmentEditForm.title}
+                      onChange={e => setAssignmentEditForm(p => ({ ...p, title: e.target.value }))}
+                      className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none" />
+                    <textarea value={assignmentEditForm.description}
+                      onChange={e => setAssignmentEditForm(p => ({ ...p, description: e.target.value }))}
+                      rows={3} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-xs outline-none resize-none" />
+                    <div className="flex gap-2">
+                      <button onClick={() => saveAssignmentEdit(a.id)}
+                        className="flex-1 bg-black text-white py-1.5 rounded-xl text-xs font-medium">Сохранить</button>
+                      <button onClick={() => setEditingAssignment(null)}
+                        className="px-3 border border-gray-200 text-gray-500 py-1.5 rounded-xl text-xs">Отмена</button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex items-start gap-2">
+                      <div className="flex-1">
+                        <div className="text-sm font-medium text-gray-800">{a.title}</div>
+                        <div className="text-xs text-gray-500 mt-0.5">{a.description}</div>
+                      </div>
+                      <span className={`shrink-0 text-xs px-2 py-0.5 rounded-full font-medium ${
+                        a.status === 'approved' ? 'bg-green-100 text-green-700'
+                        : a.status === 'rejected' ? 'bg-gray-100 text-gray-400'
+                        : 'bg-amber-100 text-amber-700'
+                      }`}>
+                        {a.status === 'approved' ? '✓ Одобрено' : a.status === 'rejected' ? '✗ Откл.' : '⏳ Ожидает'}
+                      </span>
+                    </div>
+                    {a.status === 'approved' && a.due_date && (
+                      <div className="text-xs text-gray-400">
+                        до {new Date(a.due_date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}
+                      </div>
+                    )}
+                    {a.status === 'pending' && (
+                      <div className="flex flex-wrap gap-2 items-center pt-1">
+                        <input type="date" value={assignmentDueDate[a.id] || ''}
+                          onChange={e => setAssignmentDueDate(p => ({ ...p, [a.id]: e.target.value }))}
+                          className="border border-gray-200 rounded-xl px-2 py-1.5 text-xs outline-none flex-1 min-w-[130px]"
+                          placeholder="Срок (необязательно)" />
+                        <button onClick={() => approveAssignment(a.id)} disabled={approvingAssignment === a.id}
+                          className="bg-green-500 text-white px-3 py-1.5 rounded-xl text-xs font-medium disabled:opacity-50">
+                          {approvingAssignment === a.id ? '...' : '✓ Одобрить'}
+                        </button>
+                        <button onClick={() => { setEditingAssignment(a.id); setAssignmentEditForm({ title: a.title, description: a.description }) }}
+                          className="border border-gray-200 text-gray-600 px-3 py-1.5 rounded-xl text-xs">
+                          ✎ Изменить
+                        </button>
+                        <button onClick={() => rejectAssignment(a.id)}
+                          className="border border-red-100 text-red-400 px-3 py-1.5 rounded-xl text-xs">
+                          ✗
+                        </button>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            ))}
           </div>
         </div>
       )}

@@ -176,7 +176,18 @@ ${survey.trainer_notes || '—'}
 **Что заметить дома**
 (2–3 конкретных изменения в поведении ребёнка, которые появятся по мере занятий)
 
-Пиши живо, по-русски. Карточку тренера — профессионально. Письмо родителям — тепло, как от живого человека, который знает этого ребёнка.`
+Пиши живо, по-русски. Карточку тренера — профессионально. Письмо родителям — тепло, как от живого человека, который знает этого ребёнка.
+
+---
+
+После обоих документов добавь блок с заданиями в JSON (ровно те же 3 задания из "Карточки тренера", дословно):
+
+## TASKS_JSON
+[
+  {"title": "Название задания 1", "description": "Полное описание: движение, время/повторения, один или с родителем"},
+  {"title": "Название задания 2", "description": "..."},
+  {"title": "Название задания 3", "description": "..."}
+]`
 
   try {
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -200,8 +211,19 @@ ${survey.trainer_notes || '—'}
       return NextResponse.json({ error: `Ошибка AI (${response.status}): ${data.error?.message || JSON.stringify(data)}` }, { status: 500 })
     }
 
-    const text = data.choices?.[0]?.message?.content || ''
-    return NextResponse.json({ program: text })
+    const raw = data.choices?.[0]?.message?.content || ''
+    const jsonMarker = '## TASKS_JSON'
+    const markerIdx = raw.indexOf(jsonMarker)
+    const program = markerIdx >= 0 ? raw.slice(0, markerIdx).trimEnd() : raw
+    let tasks: { title: string; description: string }[] = []
+    if (markerIdx >= 0) {
+      try {
+        const jsonStr = raw.slice(markerIdx + jsonMarker.length).trim()
+        const arr = JSON.parse(jsonStr)
+        if (Array.isArray(arr)) tasks = arr.slice(0, 3)
+      } catch { /* ignore parse errors */ }
+    }
+    return NextResponse.json({ program, tasks })
   } catch (e) {
     console.error('OpenRouter fetch error:', e)
     return NextResponse.json({ error: 'Не удалось подключиться к AI: ' + String(e) }, { status: 500 })

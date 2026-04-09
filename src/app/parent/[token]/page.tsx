@@ -112,7 +112,8 @@ export default function ParentPage() {
   const [installmentPlan, setInstallmentPlan] = useState<InstallmentPlan | null>(null)
   const [attendance, setAttendance] = useState<Attendance[]>([])
   const [surveys, setSurveys] = useState<Survey[]>([])
-  const [tab, setTab] = useState<'sub' | 'attendance' | 'progress' | 'tickets'>('sub')
+  const [tab, setTab] = useState<'sub' | 'attendance' | 'progress' | 'tasks' | 'tickets'>('sub')
+  const [assignments, setAssignments] = useState<{ id: string; title: string; description: string | null; due_date: string | null; completed: boolean }[]>([])
   const [tickets, setTickets] = useState<Ticket[]>([])
   const [ticketForm, setTicketForm] = useState({ type: '', description: '' })
   const [showTicketForm, setShowTicketForm] = useState(false)
@@ -141,7 +142,7 @@ export default function ParentPage() {
       const mondayStr = localDateStr(monday)
       const sundayStr = localDateStr(sunday)
 
-      const [{ data: subs }, { data: att }, { data: sv }, { data: tk }, { data: certsData }, { data: sched }, { data: ovs }, { data: evParts }] = await Promise.all([
+      const [{ data: subs }, { data: att }, { data: sv }, { data: tk }, { data: certsData }, { data: sched }, { data: ovs }, { data: evParts }, { data: asgnData }] = await Promise.all([
         supabase.from('subscriptions').select('*').eq('student_id', s.id).order('created_at', { ascending: false }).limit(1),
         supabase.from('attendance').select('*').eq('student_id', s.id).order('date', { ascending: false }).limit(90),
         supabase.from('progress_surveys').select('*').eq('student_id', s.id).not('filled_at', 'is', null).order('created_at'),
@@ -154,6 +155,8 @@ export default function ParentPage() {
           ? supabase.from('schedule_overrides').select('date, trainer_name, cancelled').eq('group_name', s.group_name).gte('date', mondayStr).lte('date', sundayStr)
           : Promise.resolve({ data: [] }),
         supabase.from('event_participants').select('events(date, title)').eq('student_id', s.id),
+        supabase.from('assignments').select('id, title, description, due_date, completed')
+          .eq('student_id', s.id).eq('status', 'approved').order('created_at', { ascending: false }),
       ])
       const evVisits = ((evParts || []) as any[])
         .map(ep => ep.events)
@@ -192,6 +195,7 @@ export default function ParentPage() {
       setAttendance(att || [])
       setSurveys(sv || [])
       setTickets(tk || [])
+      setAssignments(asgnData || [])
       setCerts(certsData || [])
       const slots = (sched as ScheduleSlot[]) || []
       setSchedule(slots)
@@ -323,6 +327,7 @@ export default function ParentPage() {
             { key: 'sub', label: 'Абонемент' },
             { key: 'attendance', label: 'Посещения' },
             { key: 'progress', label: '📈 Прогресс', badge: surveys.length > 0 ? surveys.length : null },
+            { key: 'tasks', label: '📋 Задания', badge: assignments.filter(a => !a.completed).length || null },
             { key: 'tickets', label: '📞 Тренер', badge: tickets.filter(t => t.status === 'pending').length || null },
           ] as { key: typeof tab; label: string; badge?: number | null }[]).map(t => (
             <button key={t.key} onClick={() => setTab(t.key)}
@@ -870,6 +875,58 @@ export default function ParentPage() {
                 </>
               )}
             </>
+          )}
+
+          {/* ── ЗАДАНИЯ ── */}
+          {tab === 'tasks' && (
+            <div className="space-y-3">
+              {assignments.length === 0 ? (
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8 text-center">
+                  <div className="text-4xl mb-3">🥋</div>
+                  <div className="font-medium text-gray-700">Заданий пока нет</div>
+                  <div className="text-sm text-gray-400 mt-1">
+                    После первого среза тренер назначит домашние задания
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="bg-amber-50 rounded-2xl px-4 py-3 text-xs text-amber-700 leading-relaxed">
+                    🥋 Задания составлены тренером на основе анализа прогресса. Помогите ребёнку выполнять их дома.
+                  </div>
+                  <div className="space-y-2">
+                    {assignments.map(a => (
+                      <div key={a.id}
+                        className={`bg-white rounded-2xl border shadow-sm p-4 ${
+                          a.completed ? 'border-green-100 opacity-70' : 'border-amber-100'
+                        }`}>
+                        <div className="flex items-start gap-3">
+                          <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5 ${
+                            a.completed ? 'bg-green-500 border-green-500 text-white' : 'border-amber-300'
+                          }`}>
+                            {a.completed && <span className="text-xs font-bold">✓</span>}
+                          </div>
+                          <div className="flex-1">
+                            <div className={`font-medium text-sm ${a.completed ? 'line-through text-gray-400' : 'text-gray-800'}`}>
+                              {a.title}
+                            </div>
+                            {a.description && (
+                              <div className="text-sm text-gray-500 mt-1 leading-relaxed">{a.description}</div>
+                            )}
+                            {a.due_date && !a.completed && (
+                              <div className={`text-xs mt-1.5 ${
+                                new Date(a.due_date) < new Date() ? 'text-red-500' : 'text-gray-400'
+                              }`}>
+                                до {new Date(a.due_date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
           )}
 
           {/* ── ТРЕНЕР ── */}

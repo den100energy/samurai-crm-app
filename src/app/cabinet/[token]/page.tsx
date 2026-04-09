@@ -308,6 +308,8 @@ export default function CabinetPage() {
   const [trainingStartDate, setTrainingStartDate] = useState<string | null>(null)
   const [surveys, setSurveys] = useState<Survey[]>([])
   const [tasks, setTasks] = useState<Task[]>([])
+  const [assignments, setAssignments] = useState<{ id: string; title: string; description: string | null; due_date: string | null; completed: boolean }[]>([])
+  const [togglingAssignment, setTogglingAssignment] = useState<string | null>(null)
   const [certs, setCerts] = useState<Cert[]>([])
   const [attendance, setAttendance] = useState<{ date: string; present: boolean }[]>([])
   const [eventVisits, setEventVisits] = useState<{ date: string; title: string }[]>([])
@@ -346,7 +348,7 @@ export default function CabinetPage() {
     const monday = weekDates[1]
     const sunday = weekDates[7]
 
-    const [subRes, surveysRes, tasksRes, certsRes, attRes, evParticipantsRes, tkRes, diagRes, schedRes, ovRes, firstSubRes, profileRes] = await Promise.all([
+    const [subRes, surveysRes, tasksRes, certsRes, attRes, evParticipantsRes, tkRes, diagRes, schedRes, ovRes, firstSubRes, profileRes, asgnRes] = await Promise.all([
       supabase.from('subscriptions').select('id, sessions_left, sessions_total, start_date, end_date, type, amount, bonuses, bonuses_used')
         .eq('student_id', sid).eq('is_pending', false).order('created_at', { ascending: false }).limit(1).maybeSingle(),
       supabase.from('progress_surveys').select('*').eq('student_id', sid).order('created_at'),
@@ -373,6 +375,8 @@ export default function CabinetPage() {
       supabase.from('subscriptions').select('start_date').eq('student_id', sid)
         .order('start_date', { ascending: true }).limit(1).maybeSingle(),
       supabase.from('student_profiles').select('training_start_date').eq('student_id', sid).maybeSingle(),
+      supabase.from('assignments').select('id, title, description, due_date, completed')
+        .eq('student_id', sid).eq('status', 'approved').order('created_at', { ascending: false }),
     ])
 
     setSubscription(subRes.data)
@@ -420,6 +424,7 @@ export default function CabinetPage() {
     setTrainingStartDate((profileRes as any).data?.training_start_date || null)
     setSurveys(surveysRes.data || [])
     setTasks(tasksRes.data || [])
+    setAssignments(asgnRes.data || [])
     setCerts(certsRes.data || [])
     setAttendance(attRes.data || [])
     const evVisits = ((evParticipantsRes.data || []) as any[])
@@ -484,6 +489,16 @@ export default function CabinetPage() {
     setTogglingTask(null)
   }
 
+  async function toggleAssignment(aId: string, current: boolean) {
+    setTogglingAssignment(aId)
+    await supabase.from('assignments').update({
+      completed: !current,
+      completed_at: !current ? new Date().toISOString() : null,
+    }).eq('id', aId)
+    setAssignments(prev => prev.map(a => a.id === aId ? { ...a, completed: !current } : a))
+    setTogglingAssignment(null)
+  }
+
   // Streak — дней подряд с посещением
   function calcStreak() {
     const presentDates = attendance.filter(a => a.present).map(a => a.date).sort().reverse()
@@ -529,7 +544,7 @@ export default function CabinetPage() {
     ? Math.max(0, Math.ceil((new Date(subscription.end_date).getTime() - Date.now()) / 86400000))
     : null
   const totalAttendance = attendance.filter(a => a.present).length
-  const pendingTasks = tasks.filter(t => !t.completed).length
+  const pendingTasks = tasks.filter(t => !t.completed).length + assignments.filter(a => !a.completed).length
 
   const colors = ['#3B82F6', '#10B981', '#F59E0B']
 
@@ -1284,7 +1299,7 @@ export default function CabinetPage() {
         {/* ── ЗАДАНИЯ ── */}
         {tab === 'tasks' && (
           <>
-            {tasks.length === 0 ? (
+            {tasks.length === 0 && assignments.length === 0 ? (
               <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8 text-center">
                 <div className="text-4xl mb-3">📋</div>
                 <div className="font-medium text-gray-700">Заданий нет</div>
@@ -1292,40 +1307,82 @@ export default function CabinetPage() {
               </div>
             ) : (
               <div className="space-y-2">
-                {tasks.map(task => (
-                  <div key={task.id}
-                    className={`bg-white rounded-2xl border shadow-sm p-4 transition-opacity ${
-                      task.completed ? 'border-green-100 opacity-70' : 'border-gray-100'
-                    }`}>
-                    <div className="flex items-start gap-3">
-                      <button
-                        onClick={() => toggleTask(task.id, task.completed)}
-                        disabled={togglingTask === task.id}
-                        className={`w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5 transition-colors ${
-                          task.completed
-                            ? 'bg-green-500 border-green-500 text-white'
-                            : 'border-gray-300 hover:border-black'
+                {/* AI-задания от тренера */}
+                {assignments.length > 0 && (
+                  <>
+                    <div className="text-xs text-gray-400 font-medium px-1">🥋 Задания от тренера</div>
+                    {assignments.map(a => (
+                      <div key={a.id}
+                        className={`bg-white rounded-2xl border shadow-sm p-4 transition-opacity ${
+                          a.completed ? 'border-green-100 opacity-70' : 'border-amber-100'
                         }`}>
-                        {task.completed && <span className="text-xs font-bold">✓</span>}
-                      </button>
-                      <div className="flex-1">
-                        <div className={`font-medium text-sm ${task.completed ? 'line-through text-gray-400' : 'text-gray-800'}`}>
-                          {task.title}
-                        </div>
-                        {task.description && (
-                          <div className="text-sm text-gray-500 mt-1">{task.description}</div>
-                        )}
-                        {task.due_date && !task.completed && (
-                          <div className={`text-xs mt-1.5 ${
-                            new Date(task.due_date) < new Date() ? 'text-red-500' : 'text-gray-400'
-                          }`}>
-                            до {new Date(task.due_date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}
+                        <div className="flex items-start gap-3">
+                          <button onClick={() => toggleAssignment(a.id, a.completed)}
+                            disabled={togglingAssignment === a.id}
+                            className={`w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5 transition-colors ${
+                              a.completed ? 'bg-green-500 border-green-500 text-white' : 'border-amber-300 hover:border-black'
+                            }`}>
+                            {a.completed && <span className="text-xs font-bold">✓</span>}
+                          </button>
+                          <div className="flex-1">
+                            <div className={`font-medium text-sm ${a.completed ? 'line-through text-gray-400' : 'text-gray-800'}`}>
+                              {a.title}
+                            </div>
+                            {a.description && (
+                              <div className="text-sm text-gray-500 mt-1">{a.description}</div>
+                            )}
+                            {a.due_date && !a.completed && (
+                              <div className={`text-xs mt-1.5 ${
+                                new Date(a.due_date) < new Date() ? 'text-red-500' : 'text-gray-400'
+                              }`}>
+                                до {new Date(a.due_date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}
+                              </div>
+                            )}
                           </div>
-                        )}
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                ))}
+                    ))}
+                  </>
+                )}
+                {/* Обычные задания тренера */}
+                {tasks.length > 0 && (
+                  <>
+                    {assignments.length > 0 && (
+                      <div className="text-xs text-gray-400 font-medium px-1 pt-1">📝 Дополнительные задания</div>
+                    )}
+                    {tasks.map(task => (
+                      <div key={task.id}
+                        className={`bg-white rounded-2xl border shadow-sm p-4 transition-opacity ${
+                          task.completed ? 'border-green-100 opacity-70' : 'border-gray-100'
+                        }`}>
+                        <div className="flex items-start gap-3">
+                          <button onClick={() => toggleTask(task.id, task.completed)}
+                            disabled={togglingTask === task.id}
+                            className={`w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5 transition-colors ${
+                              task.completed ? 'bg-green-500 border-green-500 text-white' : 'border-gray-300 hover:border-black'
+                            }`}>
+                            {task.completed && <span className="text-xs font-bold">✓</span>}
+                          </button>
+                          <div className="flex-1">
+                            <div className={`font-medium text-sm ${task.completed ? 'line-through text-gray-400' : 'text-gray-800'}`}>
+                              {task.title}
+                            </div>
+                            {task.description && (
+                              <div className="text-sm text-gray-500 mt-1">{task.description}</div>
+                            )}
+                            {task.due_date && !task.completed && (
+                              <div className={`text-xs mt-1.5 ${
+                                new Date(task.due_date) < new Date() ? 'text-red-500' : 'text-gray-400'
+                              }`}>
+                                до {new Date(task.due_date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </>
+                )}
               </div>
             )}
           </>
