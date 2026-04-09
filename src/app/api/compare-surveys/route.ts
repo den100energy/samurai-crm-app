@@ -95,6 +95,18 @@ export async function POST(req: NextRequest) {
   const groupCtx = groupContext(ctx.group)
   const attendanceStr = ctx.totalAttendance != null ? `${ctx.totalAttendance} занятий` : '—'
 
+  // Physical metrics from latest survey with height/weight
+  const latestPhys = [...surveys].reverse().find((s: Record<string, any>) => s.height_cm != null || s.weight_kg != null)
+  const heightStr = latestPhys?.height_cm != null ? `${latestPhys.height_cm} см` : '—'
+  const weightStr = latestPhys?.weight_kg != null ? `${latestPhys.weight_kg} кг` : '—'
+  const bmiStr = latestPhys?.height_cm != null && latestPhys?.weight_kg != null
+    ? (() => {
+        const bmi = latestPhys.weight_kg / (latestPhys.height_cm / 100) ** 2
+        const cat = bmi < 18.5 ? 'дефицит веса' : bmi < 25 ? 'норма' : bmi < 30 ? 'избыточный вес' : 'ожирение'
+        return `${bmi.toFixed(1)} (${cat})`
+      })()
+    : '—'
+
   // Build data blocks
   const diagBlock = hasDiag ? `## НАЧАЛЬНАЯ ДИАГНОСТИКА → ПЕРВЫЙ СРЕЗ
 
@@ -150,6 +162,9 @@ ${qualityRows(first, latest, 'trainer_') || '— нет данных —'}
 - Группа: ${groupStr}
 - Стаж: ${tenureStr}
 - Всего посещений: ${attendanceStr}
+- Рост: ${heightStr}
+- Вес: ${weightStr}
+- ИМТ: ${bmiStr}
 ${groupCtx ? `- Специфика группы: ${groupCtx}` : ''}
 - Количество срезов: ${surveys.length}
 

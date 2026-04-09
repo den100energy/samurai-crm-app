@@ -71,6 +71,16 @@ export async function POST(req: NextRequest) {
   const groupStr = ctx.group || survey.group_name || '—'
   const groupCtx = groupContext(ctx.group || survey.group_name)
 
+  const heightStr = survey.height_cm != null ? `${survey.height_cm} см` : '—'
+  const weightStr = survey.weight_kg != null ? `${survey.weight_kg} кг` : '—'
+  const bmiStr = survey.height_cm != null && survey.weight_kg != null
+    ? (() => {
+        const bmi = survey.weight_kg / (survey.height_cm / 100) ** 2
+        const cat = bmi < 18.5 ? 'дефицит веса' : bmi < 25 ? 'норма' : bmi < 30 ? 'избыточный вес' : 'ожирение'
+        return `${bmi.toFixed(1)} (${cat})`
+      })()
+    : '—'
+
   const prompt = `Ты — Старший Наставник Школы Самурая, опытный тренер по айкидо айкикай и ушу. Твой стиль: тёплый, конкретный, уважительный.
 
 СТИЛИ ШКОЛЫ (важно для терминологии и техник):
@@ -82,6 +92,9 @@ export async function POST(req: NextRequest) {
 - Возраст: ${ageStr}
 - Группа: ${groupStr}
 - Стаж: ${tenureStr}
+- Рост: ${heightStr}
+- Вес: ${weightStr}
+- ИМТ: ${bmiStr}
 ${groupCtx ? `- Специфика группы: ${groupCtx}` : ''}
 - Травмы/операции: ${survey.injuries_text || 'нет'}
 - Противопоказания: ${survey.contraindications_text || 'нет'}

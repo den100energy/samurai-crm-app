@@ -1094,6 +1094,137 @@ export default function CabinetPage() {
                   <RadarChart surveys={surveys} />
                 </div>
 
+                {/* Физические показатели */}
+                {(() => {
+                  const physSurveys = [...surveys]
+                    .filter(s => (s.height_cm as any) != null || (s.weight_kg as any) != null)
+                    .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+                  if (physSurveys.length === 0) return null
+                  const weights = physSurveys.map(s => s.weight_kg as number | null)
+                  const heights = physSurveys.map(s => s.height_cm as number | null)
+                  const validW = weights.filter(v => v != null) as number[]
+                  const validH = heights.filter(v => v != null) as number[]
+                  const latestW = validW[validW.length - 1]
+                  const latestH = validH[validH.length - 1]
+                  const bmi = latestW != null && latestH != null ? latestW / (latestH / 100) ** 2 : null
+                  const bmiCat = bmi == null ? null
+                    : bmi < 18.5 ? { label: 'Дефицит веса', color: 'text-blue-600', bg: 'bg-blue-50' }
+                    : bmi < 25   ? { label: 'Норма', color: 'text-green-600', bg: 'bg-green-50' }
+                    : bmi < 30   ? { label: 'Избыточный вес', color: 'text-orange-500', bg: 'bg-orange-50' }
+                    : { label: 'Ожирение', color: 'text-red-500', bg: 'bg-red-50' }
+
+                  function trendOf(vals: number[]): { arrow: string; color: string; delta: string } {
+                    if (vals.length < 2) return { arrow: '→', color: 'text-gray-400', delta: '' }
+                    const n = vals.length; let sx = 0, sy = 0, sxy = 0, sx2 = 0
+                    vals.forEach((y, x) => { sx += x; sy += y; sxy += x * y; sx2 += x * x })
+                    const slope = (n * sxy - sx * sy) / (n * sx2 - sx * sx)
+                    if (Math.abs(slope) < 0.15) return { arrow: '→', color: 'text-gray-400', delta: '±0' }
+                    const d = (slope * (n - 1)).toFixed(1)
+                    return slope > 0
+                      ? { arrow: '↑', color: 'text-green-500', delta: `+${d}` }
+                      : { arrow: '↓', color: 'text-red-400', delta: d }
+                  }
+                  const wTrend = trendOf(validW)
+                  const hTrend = trendOf(validH)
+
+                  const W = 280, H = 110, pad = { t: 10, b: 22, l: 0, r: 0 }
+                  const cw = W - pad.l - pad.r
+                  const ch = H - pad.t - pad.b
+                  const np = physSurveys.length
+                  function xPos(i: number) { return pad.l + (np <= 1 ? cw / 2 : i / (np - 1) * cw) }
+
+                  function buildLine(vals: (number | null)[], minV: number, maxV: number) {
+                    const range = maxV - minV || 1
+                    const pts = vals.map((v, i) => v == null ? null : {
+                      x: xPos(i), y: pad.t + ch - (v - minV) / range * ch
+                    })
+                    const d = pts.reduce((acc, p, i) => {
+                      if (!p) return acc
+                      const cmd = acc === '' || pts.slice(0, i).every(pp => pp == null) ? `M${p.x.toFixed(1)},${p.y.toFixed(1)}` : `L${p.x.toFixed(1)},${p.y.toFixed(1)}`
+                      return acc + cmd
+                    }, '')
+                    return { d, pts }
+                  }
+
+                  const wLine = validW.length >= 1 ? buildLine(weights, Math.min(...validW) - 2, Math.max(...validW) + 2) : null
+                  const hLine = validH.length >= 1 ? buildLine(heights, Math.min(...validH) - 2, Math.max(...validH) + 2) : null
+                  const dates = physSurveys.map(s => {
+                    const d = new Date(s.filled_at || s.created_at)
+                    return `${d.getDate()}.${String(d.getMonth() + 1).padStart(2, '0')}`
+                  })
+
+                  return (
+                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+                      <h2 className="font-semibold text-gray-800 mb-3">📏 Физические показатели</h2>
+                      <div className="flex gap-2 mb-3">
+                        {latestH != null && (
+                          <div className="flex-1 bg-green-50 rounded-xl p-2.5 text-center">
+                            <div className="text-lg font-bold text-green-700">{latestH}</div>
+                            <div className="text-xs text-green-600">см рост</div>
+                            {validH.length >= 2 && <div className={`text-xs font-medium ${hTrend.color}`}>{hTrend.arrow} {hTrend.delta}</div>}
+                          </div>
+                        )}
+                        {latestW != null && (
+                          <div className="flex-1 bg-blue-50 rounded-xl p-2.5 text-center">
+                            <div className="text-lg font-bold text-blue-700">{latestW}</div>
+                            <div className="text-xs text-blue-600">кг вес</div>
+                            {validW.length >= 2 && <div className={`text-xs font-medium ${wTrend.color}`}>{wTrend.arrow} {wTrend.delta}</div>}
+                          </div>
+                        )}
+                        {bmi != null && bmiCat != null && (
+                          <div className={`flex-1 ${bmiCat.bg} rounded-xl p-2.5 text-center`}>
+                            <div className={`text-lg font-bold ${bmiCat.color}`}>{bmi.toFixed(1)}</div>
+                            <div className={`text-xs ${bmiCat.color}`}>ИМТ</div>
+                            <div className={`text-[10px] font-medium ${bmiCat.color} leading-tight`}>{bmiCat.label}</div>
+                          </div>
+                        )}
+                      </div>
+                      {physSurveys.length >= 2 && (
+                        <>
+                          <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: H }}>
+                            {[0, 0.25, 0.5, 0.75, 1].map(f => (
+                              <line key={f} x1={0} x2={W} y1={pad.t + ch * (1 - f)} y2={pad.t + ch * (1 - f)}
+                                stroke="#F3F4F6" strokeWidth="1" />
+                            ))}
+                            {hLine && hLine.d && (
+                              <>
+                                <path d={hLine.d} fill="none" stroke="#10B981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                                {hLine.pts.map((p, i) => p && (
+                                  <g key={i}>
+                                    <circle cx={p.x} cy={p.y} r="3" fill="#10B981" />
+                                    <text x={p.x} y={p.y - 5} textAnchor="middle" fontSize="8" fill="#059669">{heights[i]}</text>
+                                  </g>
+                                ))}
+                              </>
+                            )}
+                            {wLine && wLine.d && (
+                              <>
+                                <path d={wLine.d} fill="none" stroke="#3B82F6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                                {wLine.pts.map((p, i) => p && (
+                                  <g key={i}>
+                                    <circle cx={p.x} cy={p.y} r="3" fill="#3B82F6" />
+                                    <text x={p.x} y={p.y + 13} textAnchor="middle" fontSize="8" fill="#2563EB">{weights[i]}</text>
+                                  </g>
+                                ))}
+                              </>
+                            )}
+                            {dates.map((d, i) => (
+                              <text key={i} x={xPos(i)} y={H - 4} textAnchor="middle" fontSize="8" fill="#9CA3AF">{d}</text>
+                            ))}
+                          </svg>
+                          <div className="flex gap-4 text-xs text-gray-400 mt-1">
+                            {validH.length > 0 && <span className="flex items-center gap-1"><span className="inline-block w-3 h-0.5 bg-green-500 rounded" />Рост (см)</span>}
+                            {validW.length > 0 && <span className="flex items-center gap-1"><span className="inline-block w-3 h-0.5 bg-blue-500 rounded" />Вес (кг)</span>}
+                          </div>
+                        </>
+                      )}
+                      {physSurveys.length === 1 && (
+                        <p className="text-xs text-gray-400">График появится после второго среза</p>
+                      )}
+                    </div>
+                  )
+                })()}
+
                 {/* Динамика по качествам — линейный график */}
                 <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
                   <h2 className="font-semibold text-gray-800 mb-1">Динамика по качествам</h2>

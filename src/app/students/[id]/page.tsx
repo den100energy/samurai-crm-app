@@ -293,7 +293,11 @@ export default function StudentPage() {
       setProgressSurveys(surveys)
       if (surveys[0]) {
         const latest = surveys[0]
-        const init: Record<string, any> = { trainer_notes: latest.trainer_notes || '' }
+        const init: Record<string, any> = {
+          trainer_notes: latest.trainer_notes || '',
+          height_cm: latest.height_cm != null ? String(latest.height_cm) : '',
+          weight_kg: latest.weight_kg != null ? String(latest.weight_kg) : '',
+        }
         const PQ = ['strength','speed','endurance','agility','coordination','posture','flexibility','discipline','sociability','confidence','learnability','attentiveness','emotional_balance','goal_orientation','activity','self_defense']
         PQ.forEach(k => { init[`trainer_${k}`] = latest[`trainer_${k}`] ?? 5 })
         setProgressTrainerForm(init)
@@ -753,7 +757,7 @@ export default function StudentPage() {
       // Перезагружаем список срезов
       const { data: fresh } = await supabase.from('progress_surveys').select('*').eq('student_id', id).order('created_at', { ascending: false })
       setProgressSurveys(fresh || [])
-      const init: Record<string, any> = { trainer_notes: '' }
+      const init: Record<string, any> = { trainer_notes: '', height_cm: '', weight_kg: '' }
       PROGRESS_QUALITIES.forEach(k => { init[`trainer_${k}`] = 5 })
       setProgressTrainerForm(init)
       setEditingProgressTrainer(true)
@@ -764,7 +768,14 @@ export default function StudentPage() {
     const activeSurvey = progressSurveys[0]
     if (!activeSurvey) return
     setSavingProgressTrainer(true)
-    const payload = { ...progressTrainerForm, trainer_filled_at: new Date().toISOString() }
+    const { height_cm: hStr, weight_kg: wStr, ...rest } = progressTrainerForm
+    const payload: Record<string, any> = { ...rest, trainer_filled_at: new Date().toISOString() }
+    const h = parseFloat(hStr)
+    const w = parseFloat(wStr)
+    if (!isNaN(h) && h > 50 && h < 250) payload.height_cm = h
+    else if (hStr === '') payload.height_cm = null
+    if (!isNaN(w) && w > 3 && w < 300) payload.weight_kg = w
+    else if (wStr === '') payload.weight_kg = null
     const { data } = await supabase.from('progress_surveys').update(payload).eq('id', activeSurvey.id).select().single()
     if (data) setProgressSurveys(prev => [data, ...prev.slice(1)])
     setEditingProgressTrainer(false)
@@ -2181,6 +2192,22 @@ export default function StudentPage() {
                               onChange={e => setProgressTrainerForm(p => ({ ...p, trainer_notes: e.target.value }))}
                               placeholder="Заметки о прогрессе..." rows={3}
                               className="w-full border border-gray-200 rounded-xl px-3 py-2 text-xs outline-none resize-none" />
+                            <div className="flex gap-2">
+                              <div className="flex-1">
+                                <label className="text-xs text-gray-400 block mb-1">📏 Рост, см</label>
+                                <input type="number" inputMode="decimal" placeholder="напр. 132"
+                                  value={progressTrainerForm.height_cm ?? ''}
+                                  onChange={e => setProgressTrainerForm(p => ({ ...p, height_cm: e.target.value }))}
+                                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-xs outline-none" />
+                              </div>
+                              <div className="flex-1">
+                                <label className="text-xs text-gray-400 block mb-1">⚖️ Вес, кг</label>
+                                <input type="number" inputMode="decimal" placeholder="напр. 34.5"
+                                  value={progressTrainerForm.weight_kg ?? ''}
+                                  onChange={e => setProgressTrainerForm(p => ({ ...p, weight_kg: e.target.value }))}
+                                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-xs outline-none" />
+                              </div>
+                            </div>
                             <div className="space-y-2.5">
                               {PROGRESS_QUALITIES.map(k => (
                                 <div key={k} className="flex items-center gap-2">
@@ -2247,6 +2274,24 @@ export default function StudentPage() {
                         <div className="text-gray-500">
                           Заполнил: <span className="font-medium text-gray-700">{activeSurvey.filled_by === 'parent' ? 'Родитель' : 'Ученик'}</span>
                         </div>
+                        {(activeSurvey.height_cm != null || activeSurvey.weight_kg != null) && (
+                          <div className="flex gap-3 bg-gray-50 rounded-xl px-3 py-2">
+                            {activeSurvey.height_cm != null && (
+                              <span>📏 <span className="font-medium text-gray-800">{activeSurvey.height_cm} см</span></span>
+                            )}
+                            {activeSurvey.weight_kg != null && (
+                              <span>⚖️ <span className="font-medium text-gray-800">{activeSurvey.weight_kg} кг</span></span>
+                            )}
+                            {activeSurvey.height_cm != null && activeSurvey.weight_kg != null && (() => {
+                              const bmi = (activeSurvey.weight_kg as number) / ((activeSurvey.height_cm as number) / 100) ** 2
+                              const cat = bmi < 18.5 ? { label: 'Дефицит', color: 'text-blue-600' }
+                                : bmi < 25 ? { label: 'Норма', color: 'text-green-600' }
+                                : bmi < 30 ? { label: 'Избыток', color: 'text-orange-500' }
+                                : { label: 'Ожирение', color: 'text-red-500' }
+                              return <span>ИМТ <span className={`font-medium ${cat.color}`}>{bmi.toFixed(1)} — {cat.label}</span></span>
+                            })()}
+                          </div>
+                        )}
                         {activeSurvey.trainer_notes && (
                           <div className="italic text-gray-600">"{activeSurvey.trainer_notes}"</div>
                         )}
@@ -2290,6 +2335,143 @@ export default function StudentPage() {
                   }
                 </div>
               )}
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* Физические показатели — график по срезам */}
+      {(() => {
+        const physSurveys = [...progressSurveys]
+          .filter(s => s.height_cm != null || s.weight_kg != null)
+          .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+        if (physSurveys.length === 0) return null
+        const weights = physSurveys.map(s => s.weight_kg as number | null)
+        const heights = physSurveys.map(s => s.height_cm as number | null)
+        const validW = weights.filter(v => v != null) as number[]
+        const validH = heights.filter(v => v != null) as number[]
+        const latestW = validW[validW.length - 1]
+        const latestH = validH[validH.length - 1]
+        const bmi = latestW != null && latestH != null ? latestW / (latestH / 100) ** 2 : null
+        const bmiCat = bmi == null ? null
+          : bmi < 18.5 ? { label: 'Дефицит веса', color: 'text-blue-600', bg: 'bg-blue-50' }
+          : bmi < 25   ? { label: 'Норма', color: 'text-green-600', bg: 'bg-green-50' }
+          : bmi < 30   ? { label: 'Избыточный вес', color: 'text-orange-500', bg: 'bg-orange-50' }
+          : { label: 'Ожирение', color: 'text-red-500', bg: 'bg-red-50' }
+
+        function trendOf(vals: number[]): { arrow: string; color: string; delta: string } {
+          if (vals.length < 2) return { arrow: '→', color: 'text-gray-400', delta: '' }
+          const n = vals.length; let sx = 0, sy = 0, sxy = 0, sx2 = 0
+          vals.forEach((y, x) => { sx += x; sy += y; sxy += x * y; sx2 += x * x })
+          const slope = (n * sxy - sx * sy) / (n * sx2 - sx * sx)
+          if (Math.abs(slope) < 0.15) return { arrow: '→', color: 'text-gray-400', delta: '±0' }
+          const d = (slope * (n - 1)).toFixed(1)
+          return slope > 0
+            ? { arrow: '↑', color: 'text-green-500', delta: `+${d}` }
+            : { arrow: '↓', color: 'text-red-400', delta: d }
+        }
+        const wTrend = trendOf(validW)
+        const hTrend = trendOf(validH)
+
+        // SVG chart
+        const W = 280, H = 110, pad = { t: 10, b: 22, l: 28, r: 8 }
+        const cw = W - pad.l - pad.r
+        const ch = H - pad.t - pad.b
+        const n = physSurveys.length
+        function xPos(i: number) { return pad.l + (n <= 1 ? cw / 2 : i / (n - 1) * cw) }
+
+        function line(vals: (number | null)[], minV: number, maxV: number, color: string) {
+          const range = maxV - minV || 1
+          const pts = vals.map((v, i) => v == null ? null : {
+            x: xPos(i), y: pad.t + ch - (v - minV) / range * ch
+          })
+          const d = pts.reduce((acc, p, i) => {
+            if (!p) return acc
+            const cmd = acc === '' || pts.slice(0, i).every(pp => pp == null) ? `M${p.x},${p.y}` : `L${p.x},${p.y}`
+            return acc + cmd
+          }, '')
+          return { d, pts, color }
+        }
+
+        const wMin = Math.min(...validW) - 2, wMax = Math.max(...validW) + 2
+        const hMin = Math.min(...validH) - 2, hMax = Math.max(...validH) + 2
+        const wLine = validW.length >= 1 ? line(weights, wMin, wMax, '#3B82F6') : null
+        const hLine = validH.length >= 1 ? line(heights, hMin, hMax, '#10B981') : null
+
+        const dates = physSurveys.map(s => {
+          const d = new Date(s.filled_at || s.created_at)
+          return `${d.getDate()}.${String(d.getMonth() + 1).padStart(2, '0')}`
+        })
+
+        return (
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm mb-2 overflow-hidden">
+            <div className="px-4 py-3 bg-gray-50 border-b border-gray-100">
+              <span className="text-sm font-medium text-gray-800">📏 Физические показатели</span>
+            </div>
+            <div className="p-4 space-y-3">
+              {/* Текущие значения + ИМТ */}
+              <div className="flex gap-3 flex-wrap">
+                {latestH != null && (
+                  <div className="flex-1 min-w-[70px] bg-green-50 rounded-xl p-2.5 text-center">
+                    <div className="text-lg font-bold text-green-700">{latestH}</div>
+                    <div className="text-xs text-green-600">см рост</div>
+                    {validH.length >= 2 && <div className={`text-xs font-medium ${hTrend.color}`}>{hTrend.arrow} {hTrend.delta}</div>}
+                  </div>
+                )}
+                {latestW != null && (
+                  <div className="flex-1 min-w-[70px] bg-blue-50 rounded-xl p-2.5 text-center">
+                    <div className="text-lg font-bold text-blue-700">{latestW}</div>
+                    <div className="text-xs text-blue-600">кг вес</div>
+                    {validW.length >= 2 && <div className={`text-xs font-medium ${wTrend.color}`}>{wTrend.arrow} {wTrend.delta}</div>}
+                  </div>
+                )}
+                {bmi != null && bmiCat != null && (
+                  <div className={`flex-1 min-w-[70px] ${bmiCat.bg} rounded-xl p-2.5 text-center`}>
+                    <div className={`text-lg font-bold ${bmiCat.color}`}>{bmi.toFixed(1)}</div>
+                    <div className={`text-xs ${bmiCat.color}`}>ИМТ</div>
+                    <div className={`text-xs font-medium ${bmiCat.color}`}>{bmiCat.label}</div>
+                  </div>
+                )}
+              </div>
+              {/* График */}
+              {physSurveys.length >= 2 && (
+                <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: H }}>
+                  {[0, 0.25, 0.5, 0.75, 1].map(f => (
+                    <line key={f} x1={pad.l} x2={W - pad.r} y1={pad.t + ch * (1 - f)} y2={pad.t + ch * (1 - f)}
+                      stroke="#F3F4F6" strokeWidth="1" />
+                  ))}
+                  {hLine && hLine.d && (
+                    <>
+                      <path d={hLine.d} fill="none" stroke="#10B981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                      {hLine.pts.map((p, i) => p && (
+                        <g key={i}>
+                          <circle cx={p.x} cy={p.y} r="3" fill="#10B981" />
+                          <text x={p.x} y={p.y - 5} textAnchor="middle" fontSize="8" fill="#059669">{heights[i]}</text>
+                        </g>
+                      ))}
+                    </>
+                  )}
+                  {wLine && wLine.d && (
+                    <>
+                      <path d={wLine.d} fill="none" stroke="#3B82F6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                      {wLine.pts.map((p, i) => p && (
+                        <g key={i}>
+                          <circle cx={p.x} cy={p.y} r="3" fill="#3B82F6" />
+                          <text x={p.x} y={p.y + 13} textAnchor="middle" fontSize="8" fill="#2563EB">{weights[i]}</text>
+                        </g>
+                      ))}
+                    </>
+                  )}
+                  {dates.map((d, i) => (
+                    <text key={i} x={xPos(i)} y={H - 4} textAnchor="middle" fontSize="8" fill="#9CA3AF">{d}</text>
+                  ))}
+                </svg>
+              )}
+              {/* Легенда */}
+              <div className="flex gap-4 text-xs text-gray-500">
+                {validH.length > 0 && <span className="flex items-center gap-1"><span className="inline-block w-3 h-0.5 bg-green-500 rounded" />Рост (см)</span>}
+                {validW.length > 0 && <span className="flex items-center gap-1"><span className="inline-block w-3 h-0.5 bg-blue-500 rounded" />Вес (кг)</span>}
+              </div>
             </div>
           </div>
         )
