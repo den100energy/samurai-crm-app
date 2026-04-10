@@ -325,6 +325,14 @@ export default function CabinetPage() {
   const [bonusTotalValue, setBonusTotalValue] = useState<number | null>(null)
   const [subTypes, setSubTypes] = useState<any[]>([])
   const [tab, setTab] = useState<'home' | 'progress' | 'tasks' | 'achievements' | 'tickets'>('home')
+  const [attestationApps, setAttestationApps] = useState<{
+    id: string; discipline: string; current_grade: string; target_grade: string
+    preatt1_status: string | null; preatt1_notes: string | null
+    preatt2_status: string | null; preatt2_notes: string | null
+    paid: boolean; price: number | null; result: string | null
+    result_grade: string | null; sensei_notes: string | null; status: string
+    attestation_events: { title: string; event_date: string } | null
+  }[]>([])
   const [togglingTask, setTogglingTask] = useState<string | null>(null)
 
   useEffect(() => {
@@ -348,7 +356,7 @@ export default function CabinetPage() {
     const monday = weekDates[1]
     const sunday = weekDates[7]
 
-    const [subRes, surveysRes, tasksRes, certsRes, attRes, evParticipantsRes, tkRes, diagRes, schedRes, ovRes, firstSubRes, profileRes, asgnRes] = await Promise.all([
+    const [subRes, surveysRes, tasksRes, certsRes, attRes, evParticipantsRes, tkRes, diagRes, schedRes, ovRes, firstSubRes, profileRes, asgnRes, attAppsRes] = await Promise.all([
       supabase.from('subscriptions').select('id, sessions_left, sessions_total, start_date, end_date, type, amount, bonuses, bonuses_used')
         .eq('student_id', sid).eq('is_pending', false).order('created_at', { ascending: false }).limit(1).maybeSingle(),
       supabase.from('progress_surveys').select('*').eq('student_id', sid).order('created_at'),
@@ -377,6 +385,9 @@ export default function CabinetPage() {
       supabase.from('student_profiles').select('training_start_date').eq('student_id', sid).maybeSingle(),
       supabase.from('assignments').select('id, title, description, due_date, completed')
         .eq('student_id', sid).eq('status', 'approved').order('created_at', { ascending: false }),
+      supabase.from('attestation_applications')
+        .select('id, discipline, current_grade, target_grade, preatt1_status, preatt1_notes, preatt2_status, preatt2_notes, paid, price, result, result_grade, sensei_notes, status, attestation_events(title, event_date)')
+        .eq('student_id', sid).order('created_at', { ascending: false }),
     ])
 
     setSubscription(subRes.data)
@@ -425,6 +436,7 @@ export default function CabinetPage() {
     setSurveys(surveysRes.data || [])
     setTasks(tasksRes.data || [])
     setAssignments(asgnRes.data || [])
+    setAttestationApps((attAppsRes.data as any[]) || [])
     setCerts(certsRes.data || [])
     setAttendance(attRes.data || [])
     const evVisits = ((evParticipantsRes.data || []) as any[])
@@ -628,27 +640,23 @@ export default function CabinetPage() {
       <div className="bg-white border-b border-gray-100 sticky top-0 z-10">
         <div className="max-w-lg mx-auto flex">
           {([
-            { key: 'home',         label: 'Главная',    icon: '🏠',  badge: null },
-            { key: 'progress',     label: 'Прогресс',   icon: '📊',  badge: null },
-            { key: 'tasks',        label: 'Задания',     icon: '📋',  badge: null },
-            { key: 'achievements', label: 'Достижения',  icon: '🏆',  badge: null },
-            { key: 'tickets',      label: 'Связь',       icon: '💬',  badge: tickets.filter(t => t.status === 'pending').length || null },
-          ] as { key: typeof tab; label: string; icon: string; badge: number | null }[]).map(t => (
+            { key: 'home',         icon: '🏠', label: 'Главная'   },
+            { key: 'progress',     icon: '📊', label: 'Прогресс'  },
+            { key: 'tasks',        icon: '📋', label: 'Задания'   },
+            { key: 'achievements', icon: '🏆', label: 'Достиж.'   },
+            { key: 'tickets',      icon: '💬', label: 'Связь',     badge: tickets.filter(t => t.status === 'pending').length || null },
+          ] as { key: typeof tab; icon: string; label: string; badge?: number | null }[]).map(t => (
             <button key={t.key} onClick={() => setTab(t.key)}
-              className={`flex-1 py-3 text-xs font-medium transition-colors border-b-2 relative ${
-                tab === t.key
-                  ? 'border-black text-black'
-                  : 'border-transparent text-gray-400'
+              className={`flex-1 flex flex-col items-center pt-2 pb-1.5 border-b-2 transition-colors relative ${
+                tab === t.key ? 'border-black text-black' : 'border-transparent text-gray-400'
               }`}>
-              <div className="relative inline-block">
-                {t.icon}
+              <div className="relative">
+                <span className="text-base leading-none">{t.icon}</span>
                 {t.badge && tab !== t.key && (
-                  <span className="absolute -top-1 -right-2 bg-red-500 text-white text-[8px] rounded-full w-3.5 h-3.5 flex items-center justify-center font-bold">
-                    {t.badge}
-                  </span>
+                  <span className="absolute -top-1 -right-2 bg-red-500 text-white text-[8px] rounded-full w-3.5 h-3.5 flex items-center justify-center font-bold">{t.badge}</span>
                 )}
               </div>
-              <div>{t.label}</div>
+              <span className="text-[10px] mt-0.5 font-medium">{t.label}</span>
             </button>
           ))}
         </div>
@@ -1455,6 +1463,52 @@ export default function CabinetPage() {
                 </div>
               )}
             </div>
+
+            {/* История аттестаций */}
+            {attestationApps.length > 0 && (
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+                <h2 className="font-semibold text-gray-800 mb-3">🥋 Аттестации</h2>
+                <div className="space-y-3">
+                  {attestationApps.map(app => {
+                    const discLabel = app.discipline === 'aikido' ? 'Айкидо' : 'Ушу'
+                    const evDate = (app.attestation_events as any)?.event_date || ''
+                    const RESULT_STYLE: Record<string, { text: string; bg: string; color: string; emoji: string }> = {
+                      passed:         { text: 'Сдал!',             bg: 'bg-green-50', color: 'text-green-700', emoji: '🎉' },
+                      passed_remarks: { text: 'Сдал с замеч.',     bg: 'bg-amber-50', color: 'text-amber-700', emoji: '✅' },
+                      failed:         { text: 'Не сдал',           bg: 'bg-red-50',   color: 'text-red-600',   emoji: '😔' },
+                    }
+                    const PREATT_COLOR: Record<string, string> = {
+                      approved: 'text-green-600', conditional: 'text-amber-600', rejected: 'text-red-500'
+                    }
+                    const PREATT_TEXT: Record<string, string> = {
+                      approved: 'Допущен', conditional: 'Условно', rejected: 'Не допущен'
+                    }
+                    return (
+                      <div key={app.id} className={`rounded-xl p-3 border ${app.result ? (app.result === 'passed' || app.result === 'passed_remarks' ? 'border-green-100 bg-green-50' : 'border-red-100 bg-red-50') : 'border-gray-100 bg-gray-50'}`}>
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <div className="font-medium text-sm text-gray-900">{discLabel} · {app.current_grade} → {app.target_grade}</div>
+                            {evDate && <div className="text-xs text-gray-400 mt-0.5">{evDate}</div>}
+                          </div>
+                          {app.result
+                            ? <span className={`text-sm font-semibold ${RESULT_STYLE[app.result]?.color}`}>{RESULT_STYLE[app.result]?.emoji} {RESULT_STYLE[app.result]?.text}</span>
+                            : <span className="text-xs text-blue-600 font-medium">В процессе</span>
+                          }
+                        </div>
+                        {app.result_grade && <div className="text-xs text-gray-600 mt-1">Присвоено: <strong>{app.result_grade}</strong></div>}
+                        {app.sensei_notes && <div className="text-xs text-gray-500 mt-1 italic">«{app.sensei_notes}»</div>}
+                        {!app.result && (app.preatt1_status || app.preatt2_status) && (
+                          <div className="flex gap-3 mt-2 text-xs">
+                            {app.preatt1_status && <span>П1: <span className={`font-medium ${PREATT_COLOR[app.preatt1_status]}`}>{PREATT_TEXT[app.preatt1_status]}</span></span>}
+                            {app.preatt2_status && <span>П2: <span className={`font-medium ${PREATT_COLOR[app.preatt2_status]}`}>{PREATT_TEXT[app.preatt2_status]}</span></span>}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* Статистика */}
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">

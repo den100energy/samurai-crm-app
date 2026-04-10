@@ -105,6 +105,13 @@ export const SECTIONS = [
     ],
   },
   {
+    key: 'attestations', label: 'Аттестации', route: '/attestations', emoji: '🥋',
+    items: [
+      { key: 'attestations.view', label: 'Просмотр аттестаций' },
+      { key: 'attestations.edit', label: 'Управление заявками' },
+    ],
+  },
+  {
     key: 'settings', label: 'Настройки', route: '/settings', emoji: '⚙️',
     items: [
       { key: 'settings.edit', label: 'Управление настройками' },

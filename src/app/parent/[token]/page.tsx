@@ -21,6 +21,23 @@ type Attendance = { id: string; date: string; present: boolean }
 type Survey = { id: string; survey_number: number; title: string | null; filled_at: string | null; created_at: string } & Record<string, number | null>
 type Ticket = { id: string; type: string; description: string | null; status: string; resolution_note: string | null; created_at: string }
 type Cert = { id: string; type: string; title: string; date: string | null }
+type AttestationApp = {
+  id: string
+  discipline: string
+  current_grade: string
+  target_grade: string
+  preatt1_status: string | null
+  preatt1_notes: string | null
+  preatt2_status: string | null
+  preatt2_notes: string | null
+  paid: boolean
+  price: number | null
+  result: string | null
+  result_grade: string | null
+  sensei_notes: string | null
+  status: string
+  attestation_events: { title: string; event_date: string } | null
+}
 
 const TICKET_TYPE_LABELS: Record<string, string> = {
   'болезнь': '🤒 Болезнь',
@@ -37,6 +54,46 @@ const TICKET_STATUS_COLORS: Record<string, string> = {
   pending:   'bg-yellow-100 text-yellow-700',
   in_review: 'bg-blue-100 text-blue-700',
   resolved:  'bg-green-100 text-green-700',
+}
+
+const AIKIDO_GRADES = ['11 кю','10 кю','9 кю','8 кю','7 кю','6 кю','5 кю','4 кю','3 кю','2 кю','1 кю','1 дан','2 дан','3 дан','4 дан']
+const WUSHU_GRADES  = ['10 туди','9 туди','8 туди','7 туди','6 туди','5 туди','4 туди','3 туди','2 туди','1 степень','2 степень','3 степень','4 степень']
+type GradeReq = { grade: string; minVisits: number; minMonthsSinceLast: number; minAge?: number }
+const AIKIDO_REQ: GradeReq[] = [
+  { grade: '11 кю', minVisits: 24,  minMonthsSinceLast: 2,  minAge: 6  },
+  { grade: '10 кю', minVisits: 40,  minMonthsSinceLast: 4,  minAge: 7  },
+  { grade: '9 кю',  minVisits: 45,  minMonthsSinceLast: 5,  minAge: 8  },
+  { grade: '8 кю',  minVisits: 50,  minMonthsSinceLast: 6,  minAge: 9  },
+  { grade: '7 кю',  minVisits: 50,  minMonthsSinceLast: 6,  minAge: 10 },
+  { grade: '6 кю',  minVisits: 50,  minMonthsSinceLast: 6,  minAge: 11 },
+  { grade: '5 кю',  minVisits: 60,  minMonthsSinceLast: 6,  minAge: 12 },
+  { grade: '4 кю',  minVisits: 60,  minMonthsSinceLast: 6              },
+  { grade: '3 кю',  minVisits: 60,  minMonthsSinceLast: 6              },
+  { grade: '2 кю',  minVisits: 120, minMonthsSinceLast: 12             },
+  { grade: '1 кю',  minVisits: 120, minMonthsSinceLast: 12             },
+  { grade: '1 дан', minVisits: 120, minMonthsSinceLast: 12, minAge: 16 },
+  { grade: '2 дан', minVisits: 240, minMonthsSinceLast: 24, minAge: 18 },
+  { grade: '3 дан', minVisits: 360, minMonthsSinceLast: 36, minAge: 20 },
+  { grade: '4 дан', minVisits: 480, minMonthsSinceLast: 48, minAge: 22 },
+]
+const WUSHU_REQ: GradeReq[] = [
+  { grade: '10 туди',   minVisits: 24,  minMonthsSinceLast: 2,  minAge: 6  },
+  { grade: '9 туди',    minVisits: 40,  minMonthsSinceLast: 3,  minAge: 7  },
+  { grade: '8 туди',    minVisits: 45,  minMonthsSinceLast: 4,  minAge: 8  },
+  { grade: '7 туди',    minVisits: 50,  minMonthsSinceLast: 5,  minAge: 9  },
+  { grade: '6 туди',    minVisits: 50,  minMonthsSinceLast: 6,  minAge: 10 },
+  { grade: '5 туди',    minVisits: 50,  minMonthsSinceLast: 6,  minAge: 11 },
+  { grade: '4 туди',    minVisits: 50,  minMonthsSinceLast: 6,  minAge: 12 },
+  { grade: '3 туди',    minVisits: 50,  minMonthsSinceLast: 6,  minAge: 12 },
+  { grade: '2 туди',    minVisits: 50,  minMonthsSinceLast: 6,  minAge: 13 },
+  { grade: '1 степень', minVisits: 120, minMonthsSinceLast: 12, minAge: 14 },
+  { grade: '2 степень', minVisits: 240, minMonthsSinceLast: 24, minAge: 16 },
+  { grade: '3 степень', minVisits: 360, minMonthsSinceLast: 36, minAge: 18 },
+  { grade: '4 степень', minVisits: 480, minMonthsSinceLast: 48, minAge: 20 },
+]
+function monthsBetween(from: string, to: string): number {
+  const a = new Date(from), b = new Date(to)
+  return (b.getFullYear() - a.getFullYear()) * 12 + (b.getMonth() - a.getMonth())
 }
 
 const QUALITIES = ['strength','speed','endurance','agility','coordination','posture','flexibility','discipline','sociability','confidence','learnability','attentiveness','emotional_balance','goal_orientation','activity','self_defense']
@@ -112,7 +169,8 @@ export default function ParentPage() {
   const [installmentPlan, setInstallmentPlan] = useState<InstallmentPlan | null>(null)
   const [attendance, setAttendance] = useState<Attendance[]>([])
   const [surveys, setSurveys] = useState<Survey[]>([])
-  const [tab, setTab] = useState<'sub' | 'attendance' | 'progress' | 'tasks' | 'tickets'>('sub')
+  const [tab, setTab] = useState<'sub' | 'attendance' | 'progress' | 'tasks' | 'attestation' | 'tickets'>('sub')
+  const [attestationApps, setAttestationApps] = useState<AttestationApp[]>([])
   const [assignments, setAssignments] = useState<{ id: string; title: string; description: string | null; due_date: string | null; completed: boolean }[]>([])
   const [tickets, setTickets] = useState<Ticket[]>([])
   const [ticketForm, setTicketForm] = useState({ type: '', description: '' })
@@ -126,6 +184,12 @@ export default function ParentPage() {
   const [bonusTotalValue, setBonusTotalValue] = useState<number | null>(null)
   const [subTypes, setSubTypes] = useState<any[]>([])
   const [eventVisits, setEventVisits] = useState<{ date: string; title: string }[]>([])
+  const [openEvents, setOpenEvents] = useState<{ id: string; title: string; discipline: string; event_date: string }[]>([])
+  const [openSeminars, setOpenSeminars] = useState<{ id: string; title: string; starts_at: string; ends_at: string; seminar_tariffs: { id: string; name: string; base_price: number | null; increase_pct: number; increase_every_days: number; increase_starts_at: string | null; min_deposit_pct: number }[] }[]>([])
+  const [myRegistrations, setMyRegistrations] = useState<{ id: string; seminar_id: string; participant_name: string; status: string; locked_price: number | null; deposit_amount: number | null; seminar_tariffs: { name: string } | null }[]>([])
+  const [showAppForm, setShowAppForm] = useState(false)
+  const [appSubmitting, setAppSubmitting] = useState(false)
+  const [appForm, setAppForm] = useState({ event_id: '', discipline: 'aikido' as 'aikido' | 'wushu', current_grade: '', target_grade: '', last_attestation_date: '' })
 
   useEffect(() => {
     async function load() {
@@ -142,7 +206,7 @@ export default function ParentPage() {
       const mondayStr = localDateStr(monday)
       const sundayStr = localDateStr(sunday)
 
-      const [{ data: subs }, { data: att }, { data: sv }, { data: tk }, { data: certsData }, { data: sched }, { data: ovs }, { data: evParts }, { data: asgnData }] = await Promise.all([
+      const [{ data: subs }, { data: att }, { data: sv }, { data: tk }, { data: certsData }, { data: sched }, { data: ovs }, { data: evParts }, { data: asgnData }, { data: attApps }, { data: openEventsData }, { data: beltsData }, { data: openSeminarsData }, { data: myRegsData }] = await Promise.all([
         supabase.from('subscriptions').select('*').eq('student_id', s.id).order('created_at', { ascending: false }).limit(1),
         supabase.from('attendance').select('*').eq('student_id', s.id).order('date', { ascending: false }).limit(90),
         supabase.from('progress_surveys').select('*').eq('student_id', s.id).not('filled_at', 'is', null).order('created_at'),
@@ -157,6 +221,13 @@ export default function ParentPage() {
         supabase.from('event_participants').select('events(date, title)').eq('student_id', s.id),
         supabase.from('assignments').select('id, title, description, due_date, completed')
           .eq('student_id', s.id).eq('status', 'approved').order('created_at', { ascending: false }),
+        supabase.from('attestation_applications')
+          .select('id, discipline, current_grade, target_grade, preatt1_status, preatt1_notes, preatt2_status, preatt2_notes, paid, price, result, result_grade, sensei_notes, status, attestation_events(title, event_date)')
+          .eq('student_id', s.id).order('created_at', { ascending: false }),
+        supabase.from('attestation_events').select('id, title, discipline, event_date').eq('status', 'open').order('event_date'),
+        supabase.from('belts').select('discipline, belt_name, date').eq('student_id', s.id).order('date', { ascending: false }),
+        supabase.from('seminar_events').select('id, title, starts_at, ends_at, seminar_tariffs(id, name, base_price, increase_pct, increase_every_days, increase_starts_at, min_deposit_pct)').eq('status', 'open').order('starts_at'),
+        supabase.from('seminar_registrations').select('id, seminar_id, participant_name, status, locked_price, deposit_amount, seminar_tariffs(name)').eq('student_id', s.id).order('submitted_at', { ascending: false }),
       ])
       const evVisits = ((evParts || []) as any[])
         .map(ep => ep.events)
@@ -196,6 +267,26 @@ export default function ParentPage() {
       setSurveys(sv || [])
       setTickets(tk || [])
       setAssignments(asgnData || [])
+      setAttestationApps((attApps as unknown as AttestationApp[]) || [])
+      const openEvs = (openEventsData || []) as { id: string; title: string; discipline: string; event_date: string }[]
+      setOpenEvents(openEvs)
+      setOpenSeminars((openSeminarsData as any[]) || [])
+      setMyRegistrations((myRegsData as any[]) || [])
+      if (openEvs.length > 0) {
+        const ev = openEvs[0]
+        const disc: 'aikido' | 'wushu' = ev.discipline === 'wushu' ? 'wushu' : 'aikido'
+        const grades = disc === 'aikido' ? AIKIDO_GRADES : WUSHU_GRADES
+        const lastBelt = (beltsData || []).find((b: { discipline: string | null; belt_name: string; date: string }) => !b.discipline || b.discipline === disc)
+        const currentIdx = lastBelt ? grades.indexOf(lastBelt.belt_name) : -1
+        const nextGrade = currentIdx >= 0 && currentIdx + 1 < grades.length ? grades[currentIdx + 1] : (grades[0] || '')
+        setAppForm({
+          event_id: ev.id,
+          discipline: disc,
+          current_grade: lastBelt?.belt_name || '',
+          target_grade: nextGrade,
+          last_attestation_date: lastBelt?.date || '',
+        })
+      }
       setCerts(certsData || [])
       const slots = (sched as ScheduleSlot[]) || []
       setSchedule(slots)
@@ -289,6 +380,30 @@ export default function ParentPage() {
     setTicketSending(false)
   }
 
+  async function submitApplication() {
+    if (!student || !appForm.event_id || !appForm.discipline || !appForm.current_grade || !appForm.target_grade) return
+    setAppSubmitting(true)
+    const { data: newApp } = await supabase.from('attestation_applications').insert({
+      event_id: appForm.event_id,
+      student_id: student.id,
+      discipline: appForm.discipline,
+      current_grade: appForm.current_grade,
+      target_grade: appForm.target_grade,
+      last_attestation_date: appForm.last_attestation_date || null,
+      status: 'pending',
+    }).select('id, discipline, current_grade, target_grade, preatt1_status, preatt1_notes, preatt2_status, preatt2_notes, paid, price, result, result_grade, sensei_notes, status, attestation_events(title, event_date)').single()
+    if (newApp) setAttestationApps(prev => [newApp as unknown as AttestationApp, ...prev])
+    await fetch('/api/notify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: `🥋 Новая заявка на аттестацию\nУченик: ${student.name}\nДисциплина: ${appForm.discipline === 'aikido' ? 'Айкидо' : 'Ушу'}\nЦель: ${appForm.target_grade}\nТекущий уровень: ${appForm.current_grade || '—'}`,
+      }),
+    }).catch(() => {})
+    setShowAppForm(false)
+    setAppSubmitting(false)
+  }
+
   function sessionsColor(left: number | null) {
     if (left === null) return 'text-gray-600'
     if (left === 0) return 'text-red-600'
@@ -322,24 +437,30 @@ export default function ParentPage() {
         </div>
 
         {/* Вкладки */}
-        <div className="flex border-b border-gray-200 bg-white sticky top-0 z-10">
+        <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
+          <div className="flex">
           {([
-            { key: 'sub', label: 'Абонемент' },
-            { key: 'attendance', label: 'Посещения' },
-            { key: 'progress', label: '📈 Прогресс', badge: surveys.length > 0 ? surveys.length : null },
-            { key: 'tasks', label: '📋 Задания', badge: assignments.filter(a => !a.completed).length || null },
-            { key: 'tickets', label: '📞 Тренер', badge: tickets.filter(t => t.status === 'pending').length || null },
-          ] as { key: typeof tab; label: string; badge?: number | null }[]).map(t => (
+            { key: 'sub',         icon: '💳', label: 'Або-т' },
+            { key: 'attendance',  icon: '📅', label: 'Посещ.' },
+            { key: 'progress',    icon: '📈', label: 'Прогр.', badge: surveys.length > 0 ? surveys.length : null },
+            { key: 'tasks',       icon: '📋', label: 'Задан.', badge: assignments.filter(a => !a.completed).length || null },
+            { key: 'attestation', icon: '🥋', label: 'Атт-я',  badge: attestationApps.filter(a => a.status === 'pending' || (!a.paid && a.preatt1_status === 'approved')).length || null },
+            { key: 'tickets',     icon: '📞', label: 'Тренер', badge: tickets.filter(t => t.status === 'pending').length || null },
+          ] as { key: typeof tab; icon: string; label: string; badge?: number | null }[]).map(t => (
             <button key={t.key} onClick={() => setTab(t.key)}
-              className={`flex-1 py-3 text-xs font-medium border-b-2 transition-colors relative ${
+              className={`flex-1 flex flex-col items-center pt-2 pb-1.5 border-b-2 transition-colors relative ${
                 tab === t.key ? 'border-black text-black' : 'border-transparent text-gray-400'
               }`}>
-              {t.label}
-              {t.badge && tab !== t.key && (
-                <span className="ml-1 bg-blue-500 text-white text-[9px] rounded-full px-1.5 py-0.5">{t.badge}</span>
-              )}
+              <div className="relative">
+                <span className="text-base leading-none">{t.icon}</span>
+                {t.badge && tab !== t.key && (
+                  <span className="absolute -top-1 -right-2 bg-red-500 text-white text-[8px] rounded-full w-3.5 h-3.5 flex items-center justify-center font-bold">{t.badge}</span>
+                )}
+              </div>
+              <span className="text-[10px] mt-0.5 font-medium">{t.label}</span>
             </button>
           ))}
+          </div>
         </div>
 
         <div className="p-4 space-y-3">
@@ -926,6 +1047,291 @@ export default function ParentPage() {
                   </div>
                 </>
               )}
+            </div>
+          )}
+
+          {/* ── АТТЕСТАЦИЯ ── */}
+          {tab === 'attestation' && (
+            <div className="space-y-3">
+              {/* Кнопка подачи заявки */}
+              {openEvents.length > 0 && !attestationApps.some(a => a.status !== 'rejected') && (
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+                  {!showAppForm ? (
+                    <div className="text-center">
+                      <div className="text-2xl mb-2">🥋</div>
+                      <div className="text-sm font-medium text-gray-800 mb-1">Открыт приём заявок</div>
+                      <div className="text-xs text-gray-500 mb-3">{openEvents[0].title}</div>
+                      <button onClick={() => setShowAppForm(true)}
+                        className="bg-black text-white text-sm font-medium px-6 py-2.5 rounded-xl w-full">
+                        Подать заявку
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="font-semibold text-gray-800 text-sm">Заявка на аттестацию</div>
+                      {openEvents.length > 1 && (
+                        <div>
+                          <label className="text-xs text-gray-500 mb-1 block">Мероприятие</label>
+                          <select value={appForm.event_id} onChange={e => setAppForm(p => ({ ...p, event_id: e.target.value }))}
+                            className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm">
+                            {openEvents.map(ev => <option key={ev.id} value={ev.id}>{ev.title}</option>)}
+                          </select>
+                        </div>
+                      )}
+                      {openEvents.find(ev => ev.id === appForm.event_id)?.discipline === 'both' && (
+                        <div>
+                          <label className="text-xs text-gray-500 mb-1 block">Дисциплина</label>
+                          <select value={appForm.discipline} onChange={e => {
+                            const d = e.target.value as 'aikido' | 'wushu'
+                            const grades = d === 'aikido' ? AIKIDO_GRADES : WUSHU_GRADES
+                            setAppForm(p => ({ ...p, discipline: d, current_grade: '', target_grade: grades[0] || '' }))
+                          }} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm">
+                            <option value="aikido">Айкидо</option>
+                            <option value="wushu">Ушу</option>
+                          </select>
+                        </div>
+                      )}
+                      <div>
+                        <label className="text-xs text-gray-500 mb-1 block">Текущий уровень</label>
+                        <select value={appForm.current_grade} onChange={e => setAppForm(p => ({ ...p, current_grade: e.target.value }))}
+                          className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm">
+                          <option value="">— нет / начинающий —</option>
+                          {(appForm.discipline === 'aikido' ? AIKIDO_GRADES : WUSHU_GRADES).map(g => <option key={g} value={g}>{g}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-500 mb-1 block">Сдаю на</label>
+                        <select value={appForm.target_grade} onChange={e => setAppForm(p => ({ ...p, target_grade: e.target.value }))}
+                          className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm">
+                          <option value="">— выберите —</option>
+                          {(appForm.discipline === 'aikido' ? AIKIDO_GRADES : WUSHU_GRADES).map(g => <option key={g} value={g}>{g}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-500 mb-1 block">Дата последней аттестации</label>
+                        <input type="date" value={appForm.last_attestation_date}
+                          onChange={e => setAppForm(p => ({ ...p, last_attestation_date: e.target.value }))}
+                          className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm" />
+                      </div>
+                      {/* Предупреждение нормативов */}
+                      {appForm.target_grade && appForm.last_attestation_date && (() => {
+                        const req = (appForm.discipline === 'aikido' ? AIKIDO_REQ : WUSHU_REQ).find(r => r.grade === appForm.target_grade)
+                        if (!req) return null
+                        const months = monthsBetween(appForm.last_attestation_date, new Date().toISOString().split('T')[0])
+                        if (months >= req.minMonthsSinceLast) return null
+                        return (
+                          <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 text-xs text-amber-800">
+                            ⚠️ Требуется минимум {req.minMonthsSinceLast} мес. с последней аттестации — у вас {months}. Заявка будет на рассмотрении тренера.
+                          </div>
+                        )
+                      })()}
+                      <div className="flex gap-2 pt-1">
+                        <button onClick={() => setShowAppForm(false)}
+                          className="flex-1 border border-gray-200 text-gray-600 text-sm py-2.5 rounded-xl">
+                          Отмена
+                        </button>
+                        <button onClick={submitApplication}
+                          disabled={appSubmitting || !appForm.target_grade}
+                          className="flex-1 bg-black text-white text-sm font-medium py-2.5 rounded-xl disabled:opacity-60">
+                          {appSubmitting ? 'Отправка...' : 'Подать заявку'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ── Семинары ── */}
+              {openSeminars.length > 0 && (
+                <div className="mb-2">
+                  <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Открытые семинары</div>
+                  {openSeminars.map(sem => {
+                    const myReg = myRegistrations.find(r => r.seminar_id === sem.id)
+                    const semTariffs = (sem.seminar_tariffs || []) as any[]
+                    function semCurrentPrice(t: any) {
+                      if (!t.base_price) return 0
+                      if (!t.increase_starts_at || t.increase_pct === 0) return t.base_price
+                      const start = new Date(t.increase_starts_at)
+                      const days = Math.max(0, Math.floor((Date.now() - start.getTime()) / 86400000))
+                      const periods = Math.floor(days / (t.increase_every_days || 7))
+                      return Math.round(t.base_price * Math.pow(1 + t.increase_pct / 100, periods))
+                    }
+                    return (
+                      <div key={sem.id} className="bg-white rounded-2xl border border-indigo-100 shadow-sm overflow-hidden mb-3">
+                        <div className="px-4 pt-4 pb-3 border-b border-gray-100">
+                          <div className="font-semibold text-gray-900">🥋 {sem.title}</div>
+                          <div className="text-xs text-gray-400 mt-0.5">
+                            📅 {sem.starts_at}{sem.ends_at !== sem.starts_at ? ` — ${sem.ends_at}` : ''}
+                          </div>
+                        </div>
+                        {myReg ? (
+                          <div className="px-4 py-3">
+                            <div className="text-xs text-gray-400 mb-1">Ваша заявка</div>
+                            <div className="flex items-center justify-between">
+                              <div className="text-sm text-gray-700">
+                                {(myReg.seminar_tariffs as any)?.name || '—'}
+                                {myReg.locked_price ? ` · ${myReg.locked_price.toLocaleString('ru')} ₽` : ''}
+                              </div>
+                              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${myReg.status === 'fully_paid' ? 'bg-green-100 text-green-700' : myReg.status === 'deposit_paid' ? 'bg-blue-100 text-blue-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                                {myReg.status === 'fully_paid' ? 'Оплачен' : myReg.status === 'deposit_paid' ? 'Предоплата' : 'Заявка'}
+                              </span>
+                            </div>
+                            {myReg.deposit_amount && myReg.status !== 'fully_paid' && (
+                              <div className="mt-2 text-xs text-gray-500">
+                                Внесено: {myReg.deposit_amount.toLocaleString('ru')} ₽
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="px-4 py-3 space-y-2">
+                            <div className="text-xs text-gray-500 mb-2">Выберите тариф и запишитесь:</div>
+                            {semTariffs.map((t: any) => {
+                              const price = semCurrentPrice(t)
+                              const deposit = Math.ceil(price * (t.min_deposit_pct || 20) / 100)
+                              return (
+                                <div key={t.id} className="flex items-center justify-between bg-gray-50 rounded-xl px-3 py-2">
+                                  <div>
+                                    <div className="text-sm font-medium text-gray-800">{t.name}</div>
+                                    <div className="text-xs text-gray-400">предоплата от {deposit.toLocaleString('ru')} ₽</div>
+                                  </div>
+                                  <div className="text-right">
+                                    <div className="font-bold text-gray-900 text-sm">{price.toLocaleString('ru')} ₽</div>
+                                  </div>
+                                </div>
+                              )
+                            })}
+                            <a href={`/seminars/${sem.id}/register`} target="_blank" rel="noreferrer"
+                              className="block w-full text-center bg-indigo-600 text-white py-2.5 rounded-xl text-sm font-medium mt-2">
+                              Записаться на семинар
+                            </a>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+
+              {myRegistrations.filter(r => !openSeminars.find(s => s.id === r.seminar_id)).length > 0 && (
+                <div className="mb-2">
+                  <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Мои заявки на семинары</div>
+                  {myRegistrations.filter(r => !openSeminars.find(s => s.id === r.seminar_id)).map(r => (
+                    <div key={r.id} className="bg-white rounded-xl border border-gray-100 shadow-sm p-3 mb-2">
+                      <div className="flex items-center justify-between">
+                        <div className="text-sm font-medium text-gray-800">{(r.seminar_tariffs as any)?.name || '—'}</div>
+                        <span className={`text-xs px-2 py-0.5 rounded-full ${r.status === 'fully_paid' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                          {r.status === 'fully_paid' ? 'Оплачен' : r.status === 'deposit_paid' ? 'Предоплата' : 'Архив'}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {attestationApps.length === 0 && openEvents.length === 0 && openSeminars.length === 0 ? (
+                <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm text-center">
+                  <div className="text-4xl mb-2">🥋</div>
+                  <div className="text-gray-500 text-sm">Заявок на аттестацию нет</div>
+                  <div className="text-gray-400 text-xs mt-1">Когда откроется приём заявок, вы сможете подать заявку здесь</div>
+                </div>
+              ) : attestationApps.map(app => {
+                const discLabel = app.discipline === 'aikido' ? 'Айкидо' : 'Ушу'
+                const evTitle = (app.attestation_events as any)?.title || ''
+                const evDate = (app.attestation_events as any)?.event_date || ''
+
+                // Определяем текущий этап
+                const step = app.result ? 'done'
+                  : app.preatt2_status ? 'preatt2'
+                  : app.preatt1_status ? 'preatt1'
+                  : 'pending'
+
+                const PREATT_LABEL: Record<string, { text: string; color: string }> = {
+                  approved:    { text: 'Допущен',          color: 'text-green-600' },
+                  conditional: { text: 'Условно допущен',  color: 'text-amber-600' },
+                  rejected:    { text: 'Не допущен',       color: 'text-red-500' },
+                }
+                const RESULT_LABEL: Record<string, { text: string; color: string; emoji: string }> = {
+                  passed:         { text: 'Аттестация пройдена!',          color: 'text-green-700', emoji: '🎉' },
+                  passed_remarks: { text: 'Пройдена с замечаниями',        color: 'text-amber-700', emoji: '✅' },
+                  failed:         { text: 'Аттестация не пройдена',        color: 'text-red-600',   emoji: '😔' },
+                }
+
+                return (
+                  <div key={app.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                    {/* Шапка */}
+                    <div className="px-4 pt-4 pb-3 border-b border-gray-100">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <div className="font-semibold text-gray-900">{discLabel} · {app.current_grade} → {app.target_grade}</div>
+                          {evTitle && <div className="text-xs text-gray-400 mt-0.5">{evTitle}{evDate ? ` · ${evDate}` : ''}</div>}
+                        </div>
+                        {app.result ? (
+                          <span className={`text-xs font-medium ${RESULT_LABEL[app.result]?.color}`}>
+                            {RESULT_LABEL[app.result]?.emoji}
+                          </span>
+                        ) : (
+                          <span className="text-xs px-2 py-1 rounded-full bg-blue-50 text-blue-600 font-medium">
+                            {step === 'pending' ? 'Заявка подана' : step === 'preatt1' ? 'Предатт. 1' : 'Предатт. 2'}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="px-4 py-3 space-y-3">
+                      {/* Предаттестация 1 */}
+                      {app.preatt1_status && (
+                        <div>
+                          <div className="text-xs text-gray-400 font-medium uppercase tracking-wide mb-1">Предаттестация 1</div>
+                          <div className={`text-sm font-medium ${PREATT_LABEL[app.preatt1_status]?.color}`}>
+                            {PREATT_LABEL[app.preatt1_status]?.text}
+                          </div>
+                          {app.preatt1_notes && (
+                            <div className="text-sm text-gray-600 mt-1 bg-gray-50 rounded-xl px-3 py-2">{app.preatt1_notes}</div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Предаттестация 2 */}
+                      {app.preatt2_status && (
+                        <div>
+                          <div className="text-xs text-gray-400 font-medium uppercase tracking-wide mb-1">Предаттестация 2</div>
+                          <div className={`text-sm font-medium ${PREATT_LABEL[app.preatt2_status]?.color}`}>
+                            {PREATT_LABEL[app.preatt2_status]?.text}
+                          </div>
+                          {app.preatt2_notes && (
+                            <div className="text-sm text-gray-600 mt-1 bg-gray-50 rounded-xl px-3 py-2">{app.preatt2_notes}</div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Оплата */}
+                      {!app.result && (
+                        <div className={`flex items-center justify-between rounded-xl px-3 py-2 ${app.paid ? 'bg-green-50' : 'bg-amber-50'}`}>
+                          <span className="text-sm text-gray-700">Оплата {app.price ? `${app.price} ₽` : ''}</span>
+                          <span className={`text-sm font-medium ${app.paid ? 'text-green-600' : 'text-amber-600'}`}>
+                            {app.paid ? '✓ Оплачено' : '⏳ Ожидает'}
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Результат */}
+                      {app.result && (
+                        <div className={`rounded-xl px-3 py-3 ${app.result === 'passed' ? 'bg-green-50' : app.result === 'failed' ? 'bg-red-50' : 'bg-amber-50'}`}>
+                          <div className={`font-semibold text-sm ${RESULT_LABEL[app.result]?.color}`}>
+                            {RESULT_LABEL[app.result]?.emoji} {RESULT_LABEL[app.result]?.text}
+                          </div>
+                          {app.result_grade && (
+                            <div className="text-sm text-gray-700 mt-1">Присвоено: <strong>{app.result_grade}</strong></div>
+                          )}
+                          {app.sensei_notes && (
+                            <div className="text-sm text-gray-600 mt-2 italic">«{app.sensei_notes}»</div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           )}
 

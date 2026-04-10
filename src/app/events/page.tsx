@@ -21,8 +21,21 @@ type Event = {
   paid_count?: number
 }
 
+type Seminar = {
+  id: string
+  title: string
+  discipline: string | null
+  location: string | null
+  starts_at: string
+  ends_at: string
+  status: string
+  reg_count?: number
+}
+
 const BONUS_TYPES = ['тренировка с оружием', 'мастер-класс', 'инд.тренировка']
 const GROUPS = ['Старт', 'Основная (нач.)', 'Основная (оп.)', 'Цигун', 'Индивидуальные']
+const DISCIPLINES = ['aikido', 'wushu', 'both', 'qigong']
+const DISCIPLINE_LABELS: Record<string, string> = { aikido: 'Айкидо', wushu: 'Ушу', both: 'Айкидо + Ушу', qigong: 'Цигун' }
 
 const BONUS_COLORS: Record<string, string> = {
   'тренировка с оружием': 'bg-orange-100 text-orange-700',
@@ -30,29 +43,53 @@ const BONUS_COLORS: Record<string, string> = {
   'инд.тренировка':       'bg-blue-100 text-blue-700',
 }
 
+const STATUS_COLORS: Record<string, string> = {
+  draft:     'bg-gray-100 text-gray-500',
+  open:      'bg-green-100 text-green-700',
+  completed: 'bg-blue-100 text-blue-700',
+  cancelled: 'bg-red-100 text-red-500',
+}
+const STATUS_LABELS: Record<string, string> = {
+  draft: 'Черновик', open: 'Приём заявок', completed: 'Завершён', cancelled: 'Отменён',
+}
+
 export default function EventsPage() {
   const { role, permissions } = useAuth()
   const canEdit = role !== 'trainer' || permissions.includes('events.edit')
+
   const [events, setEvents] = useState<Event[]>([])
+  const [seminars, setSeminars] = useState<Seminar[]>([])
   const [trainers, setTrainers] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
-  const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState<{ name: string; date: string; time_start: string; time_end: string; price: string; description: string; bonus_type: string; group_restriction: string[]; trainer_name: string; trainer_name_extra: string }>({ name: '', date: '', time_start: '', time_end: '', price: '', description: '', bonus_type: '', group_restriction: [], trainer_name: '', trainer_name_extra: '' })
+
+  // event form
+  const [showEventForm, setShowEventForm] = useState(false)
+  const [eventForm, setEventForm] = useState({ name: '', date: '', time_start: '', time_end: '', price: '', description: '', bonus_type: '', group_restriction: [] as string[], trainer_name: '', trainer_name_extra: '' })
+
+  // seminar form
+  const [showSeminarForm, setShowSeminarForm] = useState(false)
+  const [seminarForm, setSeminarForm] = useState({ title: '', discipline: '', location: '', starts_at: '', ends_at: '', registration_deadline: '', description: '', schedule_text: '' })
+
   const [saving, setSaving] = useState(false)
 
   async function load() {
-    const [{ data }, { data: tr }] = await Promise.all([
+    const [{ data: evData }, { data: tr }, { data: semData }] = await Promise.all([
       supabase.from('events').select('*, event_participants(id, paid)').order('date', { ascending: false }),
       supabase.from('trainers').select('name').order('name'),
+      supabase.from('seminar_events').select('id, title, discipline, location, starts_at, ends_at, status, seminar_registrations(id)').order('starts_at', { ascending: false }),
     ])
     setTrainers((tr || []).map(t => t.name))
-
-    const enriched = ((data as any[]) || []).map((e: any) => ({
+    const enrichedEvents = ((evData as any[]) || []).map((e: any) => ({
       ...e,
       participant_count: e.event_participants?.length || 0,
       paid_count: e.event_participants?.filter((p: any) => p.paid).length || 0,
     }))
-    setEvents(enriched)
+    setEvents(enrichedEvents)
+    const enrichedSeminars = ((semData as any[]) || []).map((s: any) => ({
+      ...s,
+      reg_count: s.seminar_registrations?.length || 0,
+    }))
+    setSeminars(enrichedSeminars)
     setLoading(false)
   }
 
@@ -62,19 +99,39 @@ export default function EventsPage() {
     e.preventDefault()
     setSaving(true)
     await supabase.from('events').insert({
-      name: form.name,
-      date: form.date,
-      time_start: form.time_start || null,
-      time_end: form.time_end || null,
-      price: form.price ? parseFloat(form.price) : null,
-      description: form.description || null,
-      bonus_type: form.bonus_type || null,
-      group_restriction: form.group_restriction.length > 0 ? form.group_restriction : null,
-      trainer_name: form.trainer_name || null,
-      trainer_name_extra: form.trainer_name_extra || null,
+      name: eventForm.name,
+      date: eventForm.date,
+      time_start: eventForm.time_start || null,
+      time_end: eventForm.time_end || null,
+      price: eventForm.price ? parseFloat(eventForm.price) : null,
+      description: eventForm.description || null,
+      bonus_type: eventForm.bonus_type || null,
+      group_restriction: eventForm.group_restriction.length > 0 ? eventForm.group_restriction : null,
+      trainer_name: eventForm.trainer_name || null,
+      trainer_name_extra: eventForm.trainer_name_extra || null,
     })
-    setForm({ name: '', date: '', time_start: '', time_end: '', price: '', description: '', bonus_type: '', group_restriction: [], trainer_name: '', trainer_name_extra: '' })
-    setShowForm(false)
+    setEventForm({ name: '', date: '', time_start: '', time_end: '', price: '', description: '', bonus_type: '', group_restriction: [], trainer_name: '', trainer_name_extra: '' })
+    setShowEventForm(false)
+    setSaving(false)
+    load()
+  }
+
+  async function addSeminar(e: React.FormEvent) {
+    e.preventDefault()
+    setSaving(true)
+    await supabase.from('seminar_events').insert({
+      title: seminarForm.title,
+      discipline: seminarForm.discipline || null,
+      location: seminarForm.location || null,
+      starts_at: seminarForm.starts_at,
+      ends_at: seminarForm.ends_at,
+      registration_deadline: seminarForm.registration_deadline || null,
+      description: seminarForm.description || null,
+      schedule_text: seminarForm.schedule_text || null,
+      status: 'draft',
+    })
+    setSeminarForm({ title: '', discipline: '', location: '', starts_at: '', ends_at: '', registration_deadline: '', description: '', schedule_text: '' })
+    setShowSeminarForm(false)
     setSaving(false)
     load()
   }
@@ -85,9 +142,17 @@ export default function EventsPage() {
     setEvents(prev => prev.filter(e => e.id !== id))
   }
 
+  async function deleteSeminar(id: string) {
+    if (!confirm('Удалить семинар? Все заявки будут удалены.')) return
+    await supabase.from('seminar_events').delete().eq('id', id)
+    setSeminars(prev => prev.filter(s => s.id !== id))
+  }
+
   const today = new Date().toISOString().split('T')[0]
-  const upcoming = events.filter(e => e.date >= today)
-  const past = events.filter(e => e.date < today)
+  const upcomingEvents = events.filter(e => e.date >= today)
+  const pastEvents = events.filter(e => e.date < today)
+  const upcomingSeminars = seminars.filter(s => s.ends_at >= today)
+  const pastSeminars = seminars.filter(s => s.ends_at < today)
 
   return (
     <main className="max-w-lg mx-auto p-4">
@@ -95,38 +160,87 @@ export default function EventsPage() {
         <Link href="/" className="text-gray-500 hover:text-black text-xl font-bold leading-none">←</Link>
         <h1 className="text-xl font-bold text-gray-800">Мероприятия</h1>
         {canEdit && (
-          <button onClick={() => setShowForm(!showForm)}
-            className="ml-auto bg-black text-white px-4 py-2 rounded-xl text-sm font-medium">
-            + Создать
-          </button>
+          <div className="ml-auto flex gap-2">
+            <button onClick={() => { setShowSeminarForm(!showSeminarForm); setShowEventForm(false) }}
+              className="bg-indigo-600 text-white px-3 py-2 rounded-xl text-sm font-medium">
+              + Семинар
+            </button>
+            <button onClick={() => { setShowEventForm(!showEventForm); setShowSeminarForm(false) }}
+              className="bg-black text-white px-3 py-2 rounded-xl text-sm font-medium">
+              + Событие
+            </button>
+          </div>
         )}
       </div>
 
-      {showForm && canEdit && (
-        <form onSubmit={addEvent} className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm mb-4 space-y-3">
-          <input required value={form.name} onChange={e => setForm({...form, name: e.target.value})}
+      {/* Seminar creation form */}
+      {showSeminarForm && canEdit && (
+        <form onSubmit={addSeminar} className="bg-white rounded-2xl p-4 border border-indigo-100 shadow-sm mb-4 space-y-3">
+          <div className="text-sm font-semibold text-indigo-700 mb-1">🥋 Новый семинар</div>
+          <input required value={seminarForm.title} onChange={e => setSeminarForm({ ...seminarForm, title: e.target.value })}
             placeholder="Название *" className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none" />
-          <input required value={form.date} onChange={e => setForm({...form, date: e.target.value})}
+          <select value={seminarForm.discipline} onChange={e => setSeminarForm({ ...seminarForm, discipline: e.target.value })}
+            className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none bg-white">
+            <option value="">Дисциплина (необязательно)</option>
+            {DISCIPLINES.map(d => <option key={d} value={d}>{DISCIPLINE_LABELS[d]}</option>)}
+          </select>
+          <input value={seminarForm.location} onChange={e => setSeminarForm({ ...seminarForm, location: e.target.value })}
+            placeholder="Место проведения" className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none" />
+          <div className="flex gap-2">
+            <div className="flex-1">
+              <label className="text-xs text-gray-400 mb-1 block">Начало *</label>
+              <input required type="date" value={seminarForm.starts_at} onChange={e => setSeminarForm({ ...seminarForm, starts_at: e.target.value })}
+                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none" />
+            </div>
+            <div className="flex-1">
+              <label className="text-xs text-gray-400 mb-1 block">Конец *</label>
+              <input required type="date" value={seminarForm.ends_at} onChange={e => setSeminarForm({ ...seminarForm, ends_at: e.target.value })}
+                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none" />
+            </div>
+          </div>
+          <div>
+            <label className="text-xs text-gray-400 mb-1 block">Приём заявок до</label>
+            <input type="date" value={seminarForm.registration_deadline} onChange={e => setSeminarForm({ ...seminarForm, registration_deadline: e.target.value })}
+              className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none" />
+          </div>
+          <textarea value={seminarForm.description} onChange={e => setSeminarForm({ ...seminarForm, description: e.target.value })}
+            placeholder="Описание (покажется участникам)" rows={2}
+            className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none resize-none" />
+          <p className="text-xs text-gray-400">💡 Тарифы и цены добавляются после создания семинара</p>
+          <button type="submit" disabled={saving}
+            className="w-full bg-indigo-600 text-white py-2.5 rounded-xl text-sm font-medium disabled:opacity-50">
+            {saving ? 'Сохранение...' : 'Создать семинар'}
+          </button>
+        </form>
+      )}
+
+      {/* Event creation form */}
+      {showEventForm && canEdit && (
+        <form onSubmit={addEvent} className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm mb-4 space-y-3">
+          <div className="text-sm font-semibold text-gray-700 mb-1">📅 Новое мероприятие</div>
+          <input required value={eventForm.name} onChange={e => setEventForm({ ...eventForm, name: e.target.value })}
+            placeholder="Название *" className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none" />
+          <input required value={eventForm.date} onChange={e => setEventForm({ ...eventForm, date: e.target.value })}
             type="date" className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none" />
           <div className="flex gap-2">
             <div className="flex-1">
               <label className="text-xs text-gray-400 mb-1 block">Начало</label>
-              <input value={form.time_start} onChange={e => setForm({...form, time_start: e.target.value})}
+              <input value={eventForm.time_start} onChange={e => setEventForm({ ...eventForm, time_start: e.target.value })}
                 type="time" className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none" />
             </div>
             <div className="flex-1">
               <label className="text-xs text-gray-400 mb-1 block">Конец</label>
-              <input value={form.time_end} onChange={e => setForm({...form, time_end: e.target.value})}
+              <input value={eventForm.time_end} onChange={e => setEventForm({ ...eventForm, time_end: e.target.value })}
                 type="time" className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none" />
             </div>
           </div>
-          <select value={form.bonus_type} onChange={e => setForm({...form, bonus_type: e.target.value, price: e.target.value === 'тренировка с оружием' ? '' : form.price})}
+          <select value={eventForm.bonus_type} onChange={e => setEventForm({ ...eventForm, bonus_type: e.target.value })}
             className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none bg-white">
             <option value="">Тип бонуса (если применяется)</option>
             {BONUS_TYPES.map(b => <option key={b} value={b}>{b}</option>)}
           </select>
-          {form.bonus_type !== 'тренировка с оружием' && (
-            <input value={form.price} onChange={e => setForm({...form, price: e.target.value})}
+          {eventForm.bonus_type !== 'тренировка с оружием' && (
+            <input value={eventForm.price} onChange={e => setEventForm({ ...eventForm, price: e.target.value })}
               placeholder="Стоимость (₽)" type="number"
               className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none" />
           )}
@@ -135,25 +249,25 @@ export default function EventsPage() {
             <div className="flex flex-wrap gap-2">
               {GROUPS.map(g => (
                 <label key={g} className="flex items-center gap-1.5 cursor-pointer">
-                  <input type="checkbox" checked={form.group_restriction.includes(g)}
-                    onChange={e => setForm({...form, group_restriction: e.target.checked ? [...form.group_restriction, g] : form.group_restriction.filter(x => x !== g)})}
+                  <input type="checkbox" checked={eventForm.group_restriction.includes(g)}
+                    onChange={e => setEventForm({ ...eventForm, group_restriction: e.target.checked ? [...eventForm.group_restriction, g] : eventForm.group_restriction.filter(x => x !== g) })}
                     className="rounded" />
                   <span className="text-sm text-gray-700">{g}</span>
                 </label>
               ))}
             </div>
           </div>
-          <select value={form.trainer_name} onChange={e => setForm({...form, trainer_name: e.target.value})}
+          <select value={eventForm.trainer_name} onChange={e => setEventForm({ ...eventForm, trainer_name: e.target.value })}
             className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none bg-white">
             <option value="">Ответственный тренер</option>
             {trainers.map(t => <option key={t} value={t}>{t}</option>)}
           </select>
-          <select value={form.trainer_name_extra} onChange={e => setForm({...form, trainer_name_extra: e.target.value})}
+          <select value={eventForm.trainer_name_extra} onChange={e => setEventForm({ ...eventForm, trainer_name_extra: e.target.value })}
             className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none bg-white">
             <option value="">Доп. тренер (необязательно)</option>
-            {trainers.filter(t => t !== form.trainer_name).map(t => <option key={t} value={t}>{t}</option>)}
+            {trainers.filter(t => t !== eventForm.trainer_name).map(t => <option key={t} value={t}>{t}</option>)}
           </select>
-          <textarea value={form.description} onChange={e => setForm({...form, description: e.target.value})}
+          <textarea value={eventForm.description} onChange={e => setEventForm({ ...eventForm, description: e.target.value })}
             placeholder="Описание" rows={2}
             className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none resize-none" />
           <button type="submit" disabled={saving}
@@ -165,29 +279,104 @@ export default function EventsPage() {
 
       {loading ? (
         <div className="text-center text-gray-400 py-12">Загрузка...</div>
-      ) : events.length === 0 ? (
-        <div className="text-center text-gray-400 py-12">Мероприятий пока нет</div>
       ) : (
         <>
-          {upcoming.length > 0 && (
-            <div className="mb-4">
-              <div className="text-sm font-medium text-gray-500 mb-2">Предстоящие</div>
-              <div className="space-y-2">
-                {upcoming.map(e => <EventCard key={e.id} event={e} bonusColors={BONUS_COLORS} onDelete={deleteEvent} canEdit={canEdit} />)}
-              </div>
+          {/* Seminars section */}
+          {(upcomingSeminars.length > 0 || pastSeminars.length > 0) && (
+            <div className="mb-6">
+              <div className="text-base font-bold text-gray-700 mb-3">🥋 Семинары</div>
+              {upcomingSeminars.length > 0 && (
+                <div className="mb-3">
+                  <div className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2">Предстоящие</div>
+                  <div className="space-y-2">
+                    {upcomingSeminars.map(s => (
+                      <SeminarCard key={s.id} seminar={s} onDelete={deleteSeminar} canEdit={canEdit} />
+                    ))}
+                  </div>
+                </div>
+              )}
+              {pastSeminars.length > 0 && (
+                <div>
+                  <div className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2">Прошедшие</div>
+                  <div className="space-y-2">
+                    {pastSeminars.map(s => (
+                      <SeminarCard key={s.id} seminar={s} onDelete={deleteSeminar} canEdit={canEdit} />
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
-          {past.length > 0 && (
+
+          {/* Events section */}
+          {(upcomingEvents.length > 0 || pastEvents.length > 0) && (
             <div>
-              <div className="text-sm font-medium text-gray-500 mb-2">Прошедшие</div>
-              <div className="space-y-2">
-                {past.map(e => <EventCard key={e.id} event={e} bonusColors={BONUS_COLORS} onDelete={deleteEvent} canEdit={canEdit} />)}
-              </div>
+              <div className="text-base font-bold text-gray-700 mb-3">📅 Мероприятия</div>
+              {upcomingEvents.length > 0 && (
+                <div className="mb-3">
+                  <div className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2">Предстоящие</div>
+                  <div className="space-y-2">
+                    {upcomingEvents.map(e => <EventCard key={e.id} event={e} bonusColors={BONUS_COLORS} onDelete={deleteEvent} canEdit={canEdit} />)}
+                  </div>
+                </div>
+              )}
+              {pastEvents.length > 0 && (
+                <div>
+                  <div className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2">Прошедшие</div>
+                  <div className="space-y-2">
+                    {pastEvents.map(e => <EventCard key={e.id} event={e} bonusColors={BONUS_COLORS} onDelete={deleteEvent} canEdit={canEdit} />)}
+                  </div>
+                </div>
+              )}
             </div>
+          )}
+
+          {seminars.length === 0 && events.length === 0 && (
+            <div className="text-center text-gray-400 py-12">Мероприятий пока нет</div>
           )}
         </>
       )}
     </main>
+  )
+}
+
+function SeminarCard({ seminar, onDelete, canEdit }: { seminar: Seminar; onDelete: (id: string) => void; canEdit: boolean }) {
+  const DISCIPLINE_LABELS: Record<string, string> = { aikido: 'Айкидо', wushu: 'Ушу', both: 'Айкидо + Ушу', qigong: 'Цигун' }
+  const STATUS_COLORS: Record<string, string> = {
+    draft: 'bg-gray-100 text-gray-500', open: 'bg-green-100 text-green-700',
+    completed: 'bg-blue-100 text-blue-700', cancelled: 'bg-red-100 text-red-500',
+  }
+  const STATUS_LABELS: Record<string, string> = { draft: 'Черновик', open: 'Приём заявок', completed: 'Завершён', cancelled: 'Отменён' }
+  return (
+    <Link href={`/seminars/${seminar.id}`}
+      className="block bg-white rounded-xl p-4 border border-indigo-100 shadow-sm hover:shadow-md transition-shadow">
+      <div className="flex items-start justify-between">
+        <div className="flex-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="font-medium text-gray-800">{seminar.title}</div>
+            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[seminar.status] || 'bg-gray-100 text-gray-500'}`}>
+              {STATUS_LABELS[seminar.status] || seminar.status}
+            </span>
+            {seminar.discipline && (
+              <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-600">
+                {DISCIPLINE_LABELS[seminar.discipline] || seminar.discipline}
+              </span>
+            )}
+          </div>
+          <div className="text-sm text-gray-400 mt-0.5">
+            📅 {seminar.starts_at}{seminar.ends_at !== seminar.starts_at ? ` — ${seminar.ends_at}` : ''}
+          </div>
+          {seminar.location && <div className="text-xs text-gray-400 mt-0.5">📍 {seminar.location}</div>}
+        </div>
+        <div className="text-right ml-3 flex flex-col items-end gap-1">
+          <div className="text-xs text-gray-400">👥 {seminar.reg_count} заявок</div>
+          {canEdit && (
+            <button onClick={e => { e.preventDefault(); onDelete(seminar.id) }}
+              className="text-gray-300 hover:text-red-400 text-lg leading-none mt-1">×</button>
+          )}
+        </div>
+      </div>
+    </Link>
   )
 }
 

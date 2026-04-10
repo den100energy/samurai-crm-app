@@ -274,10 +274,17 @@ export default function StudentPage() {
   const [assignmentDueDate, setAssignmentDueDate] = useState<Record<string, string>>({})
   const [uploadingPhoto, setUploadingPhoto] = useState(false)
   const [payments, setPayments] = useState<{ id: string; amount: number; category: string | null; paid_at: string; payment_type: string; description: string | null }[]>([])
+  const [attestationHistory, setAttestationHistory] = useState<{
+    id: string; discipline: string; current_grade: string; target_grade: string
+    preatt1_status: string | null; preatt2_status: string | null
+    paid: boolean; result: string | null; result_grade: string | null
+    sensei_notes: string | null; result_date: string | null; status: string
+    attestation_events: { title: string; event_date: string } | null
+  }[]>([])
 
   useEffect(() => {
     async function load() {
-      const [{ data: s }, { data: sb }, { data: at }, { data: bl }, { data: st }, { data: ct }, { data: sv }, { data: ps }, { data: sp }, { data: py }, { data: tk }] = await Promise.all([
+      const [{ data: s }, { data: sb }, { data: at }, { data: bl }, { data: st }, { data: ct }, { data: sv }, { data: ps }, { data: sp }, { data: py }, { data: tk }, { data: attHistory }] = await Promise.all([
         supabase.from('students').select('*').eq('id', id).single(),
         supabase.from('subscriptions').select('*').eq('student_id', id).order('created_at', { ascending: false }),
         supabase.from('attendance').select('*').eq('student_id', id).order('date', { ascending: false }),
@@ -289,6 +296,9 @@ export default function StudentPage() {
         supabase.from('student_profiles').select('*').eq('student_id', id).maybeSingle(),
         supabase.from('payments').select('id, amount, category, paid_at, payment_type, description').eq('student_id', id).order('paid_at', { ascending: false }).limit(20),
         supabase.from('tickets').select('*').eq('student_id', id).order('created_at', { ascending: false }),
+        supabase.from('attestation_applications')
+          .select('id, discipline, current_grade, target_grade, preatt1_status, preatt2_status, paid, result, result_grade, sensei_notes, result_date, status, attestation_events(title, event_date)')
+          .eq('student_id', id).order('created_at', { ascending: false }),
       ])
       if (s) { setStudent(s); setForm(s) }
       setSubs(sb || [])
@@ -316,6 +326,7 @@ export default function StudentPage() {
       if (sp) setStudentProfile(sp)
       setPayments(py || [])
       setStudentTickets(tk || [])
+      setAttestationHistory((attHistory as any[]) || [])
       // Load assignments
       const { data: asgn } = await supabase
         .from('assignments').select('*').eq('student_id', id).order('created_at', { ascending: false })
@@ -1579,6 +1590,58 @@ export default function StudentPage() {
           )
         })()}
       </div>
+
+      {/* Attestation history */}
+      {attestationHistory.length > 0 && (
+        <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm mb-4">
+          <div className="font-semibold text-gray-800 mb-3">📋 История аттестаций</div>
+          <div className="space-y-2">
+            {attestationHistory.map(app => {
+              const discLabel = app.discipline === 'aikido' ? 'Айкидо' : 'Ушу'
+              const evTitle = (app.attestation_events as any)?.title || ''
+              const evDate = (app.attestation_events as any)?.event_date || app.result_date || ''
+              const RESULT_INFO: Record<string, { label: string; color: string }> = {
+                passed:         { label: 'Сдал',          color: 'text-green-600' },
+                passed_remarks: { label: 'С замечаниями', color: 'text-amber-600' },
+                failed:         { label: 'Не сдал',      color: 'text-red-500' },
+              }
+              const PREATT_COLOR: Record<string, string> = {
+                approved: 'text-green-600', conditional: 'text-amber-600', rejected: 'text-red-500'
+              }
+              const PREATT_SYM: Record<string, string> = {
+                approved: '✓', conditional: '~', rejected: '✗'
+              }
+              return (
+                <div key={app.id} className="flex items-start gap-3 py-2.5 border-b border-gray-50 last:border-0">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-medium text-gray-900">{discLabel} · {app.current_grade} → {app.target_grade}</span>
+                      {app.result && (
+                        <span className={`text-xs font-medium ${RESULT_INFO[app.result]?.color}`}>
+                          {RESULT_INFO[app.result]?.label}
+                        </span>
+                      )}
+                      {!app.result && <span className="text-xs text-blue-500">в процессе</span>}
+                    </div>
+                    {evTitle && <div className="text-xs text-gray-400 mt-0.5">{evTitle}{evDate ? ` · ${evDate}` : ''}</div>}
+                    {app.result_grade && app.result !== 'failed' && (
+                      <div className="text-xs text-gray-600 mt-0.5">Присвоено: <strong>{app.result_grade}</strong></div>
+                    )}
+                    {app.sensei_notes && (
+                      <div className="text-xs text-gray-400 mt-0.5 italic">«{app.sensei_notes}»</div>
+                    )}
+                    <div className="flex gap-3 mt-1 text-xs text-gray-400">
+                      {app.preatt1_status && <span>П1: <span className={PREATT_COLOR[app.preatt1_status]}>{PREATT_SYM[app.preatt1_status]}</span></span>}
+                      {app.preatt2_status && <span>П2: <span className={PREATT_COLOR[app.preatt2_status]}>{PREATT_SYM[app.preatt2_status]}</span></span>}
+                      <span className={app.paid ? 'text-green-500' : 'text-gray-300'}>₽ {app.paid ? '✓' : '—'}</span>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Attendance */}
       <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm mb-4">
