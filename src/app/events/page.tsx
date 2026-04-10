@@ -103,7 +103,7 @@ export default function EventsPage() {
       date: eventForm.date,
       time_start: eventForm.time_start || null,
       time_end: eventForm.time_end || null,
-      price: eventForm.price ? parseFloat(eventForm.price) : null,
+      price: eventForm.price !== '' ? parseFloat(eventForm.price) : null,
       description: eventForm.description || null,
       bonus_type: eventForm.bonus_type || null,
       group_restriction: eventForm.group_restriction.length > 0 ? eventForm.group_restriction : null,
@@ -241,7 +241,7 @@ export default function EventsPage() {
           </select>
           {eventForm.bonus_type !== 'тренировка с оружием' && (
             <input value={eventForm.price} onChange={e => setEventForm({ ...eventForm, price: e.target.value })}
-              placeholder="Стоимость (₽)" type="number"
+              placeholder="Стоимость (₽, 0 = бесплатно)" type="number" min="0"
               className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none" />
           )}
           <div className="border border-gray-200 rounded-xl px-3 py-2.5">

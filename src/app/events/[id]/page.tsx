@@ -118,7 +118,7 @@ export default function EventDetailPage() {
       date: editForm.date,
       time_start: editForm.time_start || null,
       time_end: editForm.time_end || null,
-      price: editForm.price ? parseFloat(editForm.price) : null,
+      price: editForm.price !== '' ? parseFloat(editForm.price) : null,
       description: editForm.description || null,
       bonus_type: editForm.bonus_type || null,
       group_restriction: editForm.group_restriction.length > 0 ? editForm.group_restriction : null,
@@ -282,8 +282,8 @@ export default function EventDetailPage() {
             <option value="">Тип бонуса</option>
             {BONUS_TYPES.map(b => <option key={b} value={b}>{b}</option>)}
           </select>
-          <input value={editForm.price || ''} onChange={e => setEditForm({...editForm, price: e.target.value})}
-            placeholder="Стоимость (₽)" type="number"
+          <input value={editForm.price ?? ''} onChange={e => setEditForm({...editForm, price: e.target.value})}
+            placeholder="Стоимость (₽)" type="number" min="0"
             className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none" />
           <div className="border border-gray-200 rounded-xl px-3 py-2">
             <div className="text-xs text-gray-400 mb-2">Группы (пусто = все)</div>
