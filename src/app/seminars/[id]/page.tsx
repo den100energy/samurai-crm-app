@@ -203,7 +203,7 @@ export default function SeminarPage() {
         .eq('seminar_id', id)
         .order('submitted_at', { ascending: false }),
       supabase.from('seminar_sessions').select('*').eq('seminar_id', id).order('sort_order'),
-      supabase.from('students').select('id, name, phone, group_name').eq('active', true).order('name'),
+      supabase.from('students').select('id, name, phone, group_name').eq('status', 'active').order('name'),
     ])
     setSeminar(sem)
     setTariffs(tar || [])
