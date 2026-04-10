@@ -126,8 +126,12 @@ export default function RegDetailPage() {
   const [notes, setNotes] = useState('')
   const [editingNotes, setEditingNotes] = useState(false)
 
+  const [allTariffs, setAllTariffs] = useState<Tariff[]>([])
+  const [showTariffEdit, setShowTariffEdit] = useState(false)
+  const [newTariffId, setNewTariffId] = useState('')
+
   async function load() {
-    const [{ data: regData }, { data: sessData }, { data: attData }] = await Promise.all([
+    const [{ data: regData }, { data: sessData }, { data: attData }, { data: tarData }] = await Promise.all([
       supabase.from('seminar_registrations')
         .select('*, seminar_events(title, starts_at), seminar_tariffs(*)')
         .eq('id', regId).single(),
@@ -135,6 +139,8 @@ export default function RegDetailPage() {
         .select('*').eq('seminar_id', id).order('sort_order'),
       supabase.from('seminar_session_attendance')
         .select('session_id, attended').eq('registration_id', regId),
+      supabase.from('seminar_tariffs')
+        .select('*').eq('seminar_id', id).order('sort_order'),
     ])
 
     if (regData) {
@@ -148,6 +154,7 @@ export default function RegDetailPage() {
     }
 
     setSessions(sessData || [])
+    setAllTariffs(tarData || [])
 
     const attMap: Record<string, boolean> = {}
     for (const row of (attData || [])) attMap[row.session_id] = row.attended
@@ -295,6 +302,21 @@ export default function RegDetailPage() {
     setSaving(null)
   }
 
+  async function saveTariff() {
+    if (!newTariffId) return
+    setSaving('tariff')
+    const t = allTariffs.find(x => x.id === newTariffId)
+    await supabase.from('seminar_registrations').update({
+      tariff_id: newTariffId,
+      locked_price: null,
+      price_locked_at: null,
+    }).eq('id', regId)
+    setShowTariffEdit(false)
+    setNewTariffId('')
+    setSaving(null)
+    load()
+  }
+
   if (loading) return <div className="text-center py-12 text-gray-400">Загрузка...</div>
   if (!reg) return <div className="text-center py-12 text-gray-400">Запись не найдена</div>
 
@@ -388,10 +410,34 @@ export default function RegDetailPage() {
         <div className="text-sm font-semibold text-gray-700 mb-3">💰 Оплата</div>
 
         <div className="space-y-2 text-sm">
-          {tariff && (
-            <div className="flex justify-between">
-              <span className="text-gray-400">Тариф</span>
-              <span className="text-gray-800">{tariff.name}</span>
+          <div className="flex justify-between items-center">
+            <span className="text-gray-400">Тариф</span>
+            <div className="flex items-center gap-2">
+              <span className="text-gray-800">{tariff?.name || '—'}</span>
+              {canEdit && (
+                <button onClick={() => { setNewTariffId(reg.tariff_id || ''); setShowTariffEdit(v => !v) }}
+                  className="text-xs text-gray-400 hover:text-indigo-600">✏️</button>
+              )}
+            </div>
+          </div>
+          {showTariffEdit && canEdit && (
+            <div className="bg-gray-50 rounded-xl p-3 space-y-2">
+              <select value={newTariffId} onChange={e => setNewTariffId(e.target.value)}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none bg-white">
+                <option value="">Без тарифа</option>
+                {allTariffs.map(t => (
+                  <option key={t.id} value={t.id}>{t.name} — {currentPrice(t).toLocaleString('ru')} ₽</option>
+                ))}
+              </select>
+              <div className="text-xs text-amber-600">Смена тарифа сбросит зафиксированную цену</div>
+              <div className="flex gap-2">
+                <button onClick={saveTariff} disabled={saving === 'tariff'}
+                  className="flex-1 bg-black text-white py-1.5 rounded-lg text-xs font-medium disabled:opacity-50">
+                  {saving === 'tariff' ? '...' : 'Сохранить'}
+                </button>
+                <button onClick={() => setShowTariffEdit(false)}
+                  className="flex-1 bg-gray-100 text-gray-600 py-1.5 rounded-lg text-xs">Отмена</button>
+              </div>
             </div>
           )}
           <div className="flex justify-between">
