@@ -62,6 +62,13 @@ type Session = {
   sort_order: number
 }
 
+type Student = {
+  id: string
+  name: string
+  phone: string | null
+  group_name: string | null
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function currentPrice(tariff: Tariff, today = new Date()): number {
@@ -115,6 +122,7 @@ export default function SeminarPage() {
   const [tariffs, setTariffs] = useState<Tariff[]>([])
   const [regs, setRegs] = useState<Registration[]>([])
   const [sessions, setSessions] = useState<Session[]>([])
+  const [students, setStudents] = useState<Student[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState<string | null>(null)
 
@@ -183,9 +191,11 @@ export default function SeminarPage() {
     school_status: '', tariff_id: '', questions: '', source: '',
     attending_attestation: false, is_external: false,
   })
+  const [selectedGroup, setSelectedGroup] = useState('')
+  const [selectedStudentId, setSelectedStudentId] = useState('')
 
   async function load() {
-    const [{ data: sem }, { data: tar }, { data: reg }, { data: sess }] = await Promise.all([
+    const [{ data: sem }, { data: tar }, { data: reg }, { data: sess }, { data: stu }] = await Promise.all([
       supabase.from('seminar_events').select('*').eq('id', id).single(),
       supabase.from('seminar_tariffs').select('*').eq('seminar_id', id).order('sort_order'),
       supabase.from('seminar_registrations')
@@ -193,11 +203,13 @@ export default function SeminarPage() {
         .eq('seminar_id', id)
         .order('submitted_at', { ascending: false }),
       supabase.from('seminar_sessions').select('*').eq('seminar_id', id).order('sort_order'),
+      supabase.from('students').select('id, name, phone, group_name').eq('active', true).order('name'),
     ])
     setSeminar(sem)
     setTariffs(tar || [])
     setRegs(((reg || []) as unknown) as Registration[])
     setSessions(sess || [])
+    setStudents(stu || [])
     setLoading(false)
   }
 
@@ -295,14 +307,36 @@ export default function SeminarPage() {
     setSaving('reg')
     const tariff = tariffs.find(t => t.id === regForm.tariff_id)
     const price = tariff ? currentPrice(tariff) : null
+
+    let name = regForm.participant_name
+    let phone = regForm.participant_phone || null
+    let telegram = regForm.participant_telegram || null
+    let schoolStatus = regForm.school_status || null
+    let studentId: string | null = null
+
+    if (!regForm.is_external && selectedStudentId) {
+      const stu = students.find(s => s.id === selectedStudentId)
+      if (stu) {
+        name = stu.name
+        phone = stu.phone || null
+        studentId = stu.id
+        // Map group_name to school_status
+        const g = stu.group_name?.toLowerCase() || ''
+        if (g.includes('старт') || g.includes('start')) schoolStatus = 'start'
+        else if (g.includes('комбат') || g.includes('combat')) schoolStatus = 'combat'
+        else if (g.includes('нейгун') || g.includes('neygyn')) schoolStatus = 'neygyn'
+      }
+    }
+
     await supabase.from('seminar_registrations').insert({
       seminar_id: id,
       tariff_id: regForm.tariff_id || null,
+      student_id: studentId,
       is_external: regForm.is_external,
-      participant_name: regForm.participant_name,
-      participant_phone: regForm.participant_phone || null,
-      participant_telegram: regForm.participant_telegram || null,
-      school_status: regForm.school_status || null,
+      participant_name: name,
+      participant_phone: phone,
+      participant_telegram: telegram,
+      school_status: schoolStatus,
       questions: regForm.questions || null,
       source: regForm.source || null,
       attending_attestation: regForm.attending_attestation,
@@ -310,6 +344,8 @@ export default function SeminarPage() {
       status: 'pending',
     })
     setRegForm({ participant_name: '', participant_phone: '', participant_telegram: '', school_status: '', tariff_id: '', questions: '', source: '', attending_attestation: false, is_external: false })
+    setSelectedGroup('')
+    setSelectedStudentId('')
     setShowRegForm(false)
     setSaving(null)
     load()
@@ -720,38 +756,94 @@ export default function SeminarPage() {
           )}
         </div>
 
-        {showRegForm && canEdit && (
-          <form onSubmit={addRegistration} className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm mb-3 space-y-3">
-            <input required value={regForm.participant_name} onChange={e => setRegForm({ ...regForm, participant_name: e.target.value })}
-              placeholder="Фамилия Имя *" className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none" />
-            <input value={regForm.participant_phone} onChange={e => setRegForm({ ...regForm, participant_phone: e.target.value })}
-              placeholder="Телефон" className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none" />
-            <input value={regForm.participant_telegram} onChange={e => setRegForm({ ...regForm, participant_telegram: e.target.value })}
-              placeholder="Ник в Telegram (@...)" className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none" />
-            <select value={regForm.tariff_id} onChange={e => setRegForm({ ...regForm, tariff_id: e.target.value })}
-              className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none bg-white">
-              <option value="">Выберите тариф</option>
-              {tariffs.map(t => <option key={t.id} value={t.id}>{t.name} — {currentPrice(t).toLocaleString('ru')} ₽</option>)}
-            </select>
-            <select value={regForm.school_status} onChange={e => setRegForm({ ...regForm, school_status: e.target.value })}
-              className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none bg-white">
-              <option value="">Статус в школе</option>
-              <option value="start">Ученик, группа Старт</option>
-              <option value="combat">Ученик, группа Комбат</option>
-              <option value="neygyn">Ученик, группа Нейгун</option>
-              <option value="parent">Родитель/родственник ученика</option>
-              <option value="external">Не занимается у нас</option>
-            </select>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" checked={regForm.is_external} onChange={e => setRegForm({ ...regForm, is_external: e.target.checked })} />
-              <span className="text-sm text-gray-700">Внешний участник</span>
-            </label>
-            <button type="submit" disabled={saving === 'reg'}
-              className="w-full bg-black text-white py-2.5 rounded-xl text-sm font-medium disabled:opacity-50">
-              {saving === 'reg' ? 'Сохранение...' : 'Добавить участника'}
-            </button>
-          </form>
-        )}
+        {showRegForm && canEdit && (() => {
+          const groups = Array.from(new Set(students.map(s => s.group_name || 'Без группы'))).sort()
+          const studentsInGroup = selectedGroup
+            ? students.filter(s => (s.group_name || 'Без группы') === selectedGroup)
+            : []
+          const selectedStu = students.find(s => s.id === selectedStudentId)
+          return (
+            <form onSubmit={addRegistration} className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm mb-3 space-y-3">
+              {/* Тип участника */}
+              <div className="flex gap-2">
+                <button type="button"
+                  onClick={() => { setRegForm({ ...regForm, is_external: false }); setSelectedStudentId(''); setSelectedGroup('') }}
+                  className={`flex-1 py-2 rounded-xl text-sm font-medium border transition-all
+                    ${!regForm.is_external ? 'bg-black text-white border-black' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}>
+                  Наш ученик
+                </button>
+                <button type="button"
+                  onClick={() => { setRegForm({ ...regForm, is_external: true }); setSelectedStudentId(''); setSelectedGroup('') }}
+                  className={`flex-1 py-2 rounded-xl text-sm font-medium border transition-all
+                    ${regForm.is_external ? 'bg-orange-500 text-white border-orange-500' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}>
+                  Внешний
+                </button>
+              </div>
+
+              {!regForm.is_external ? (
+                /* Выбор из списка учеников */
+                <div className="space-y-2">
+                  <select value={selectedGroup} onChange={e => { setSelectedGroup(e.target.value); setSelectedStudentId('') }}
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none bg-white">
+                    <option value="">Выберите группу</option>
+                    {groups.map(g => <option key={g} value={g}>{g}</option>)}
+                  </select>
+                  {selectedGroup && (
+                    <select value={selectedStudentId} onChange={e => setSelectedStudentId(e.target.value)}
+                      className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none bg-white">
+                      <option value="">Выберите ученика</option>
+                      {studentsInGroup.map(s => (
+                        <option key={s.id} value={s.id}>{s.name}{s.phone ? ` · ${s.phone}` : ''}</option>
+                      ))}
+                    </select>
+                  )}
+                  {selectedStu && (
+                    <div className="bg-gray-50 rounded-xl px-3 py-2 text-sm text-gray-700">
+                      ✓ {selectedStu.name} · {selectedStu.group_name || '—'}
+                    </div>
+                  )}
+                  <input value={regForm.participant_telegram} onChange={e => setRegForm({ ...regForm, participant_telegram: e.target.value })}
+                    placeholder="Telegram (@..., необязательно)" className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none" />
+                </div>
+              ) : (
+                /* Ввод вручную для внешних */
+                <div className="space-y-2">
+                  <input required value={regForm.participant_name} onChange={e => setRegForm({ ...regForm, participant_name: e.target.value })}
+                    placeholder="Фамилия Имя *" className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none" />
+                  <input value={regForm.participant_phone} onChange={e => setRegForm({ ...regForm, participant_phone: e.target.value })}
+                    placeholder="Телефон" className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none" />
+                  <input value={regForm.participant_telegram} onChange={e => setRegForm({ ...regForm, participant_telegram: e.target.value })}
+                    placeholder="Ник в Telegram (@...)" className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none" />
+                  <select value={regForm.school_status} onChange={e => setRegForm({ ...regForm, school_status: e.target.value })}
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none bg-white">
+                    <option value="">Статус (необязательно)</option>
+                    <option value="parent">Родитель/родственник ученика</option>
+                    <option value="external">Не занимается у нас</option>
+                  </select>
+                </div>
+              )}
+
+              {/* Тариф — общее */}
+              <select value={regForm.tariff_id} onChange={e => setRegForm({ ...regForm, tariff_id: e.target.value })}
+                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none bg-white">
+                <option value="">Выберите тариф</option>
+                {tariffs.map(t => <option key={t.id} value={t.id}>{t.name} — {currentPrice(t).toLocaleString('ru')} ₽</option>)}
+              </select>
+
+              <div className="flex gap-2">
+                <button type="submit"
+                  disabled={saving === 'reg' || (!regForm.is_external && !selectedStudentId) || (!regForm.is_external ? false : !regForm.participant_name)}
+                  className="flex-1 bg-black text-white py-2.5 rounded-xl text-sm font-medium disabled:opacity-40">
+                  {saving === 'reg' ? 'Сохранение...' : 'Добавить участника'}
+                </button>
+                <button type="button" onClick={() => { setShowRegForm(false); setSelectedGroup(''); setSelectedStudentId('') }}
+                  className="flex-1 bg-gray-100 text-gray-600 py-2.5 rounded-xl text-sm">
+                  Отмена
+                </button>
+              </div>
+            </form>
+          )
+        })()}
 
         {regs.length === 0 ? (
           <div className="text-sm text-gray-400 text-center py-8 bg-gray-50 rounded-xl">Заявок пока нет</div>
