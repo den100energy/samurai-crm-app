@@ -41,14 +41,14 @@ function currentPrice(tariff: Tariff, today = new Date()): number {
 function nextPriceChange(tariff: Tariff, today = new Date()): { date: string; newPrice: number } | null {
   if (!tariff.increase_starts_at || tariff.increase_pct === 0) return null
   const start = new Date(tariff.increase_starts_at)
-  const daysElapsed = Math.max(0, Math.floor((today.getTime() - start.getTime()) / 86400000))
+  const price = currentPrice(tariff)
+  const newPrice = Math.round(price * (1 + tariff.increase_pct / 100))
+  if (today < start) return { date: tariff.increase_starts_at, newPrice }
+  const daysElapsed = Math.floor((today.getTime() - start.getTime()) / 86400000)
   const periods = Math.floor(daysElapsed / (tariff.increase_every_days || 7))
   const next = new Date(start)
   next.setDate(next.getDate() + (periods + 1) * (tariff.increase_every_days || 7))
-  const nextDateStr = next.toISOString().split('T')[0]
-  const price = currentPrice(tariff)
-  const newPrice = Math.round(price * (1 + tariff.increase_pct / 100))
-  return { date: nextDateStr, newPrice }
+  return { date: next.toISOString().split('T')[0], newPrice }
 }
 
 const DISCIPLINE_LABELS: Record<string, string> = {
