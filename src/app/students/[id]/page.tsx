@@ -281,6 +281,15 @@ export default function StudentPage() {
     sensei_notes: string | null; result_date: string | null; status: string
     attestation_events: { title: string; event_date: string } | null
   }[]>([])
+  const [seminarHistory, setSeminarHistory] = useState<{
+    id: string
+    attended: boolean
+    certificate_issued: boolean
+    seminar_events: { title: string; starts_at: string } | null
+    seminar_tariffs: { name: string } | null
+    sessionsTotal: number
+    sessionsAttended: number
+  }[]>([])
 
   useEffect(() => {
     async function load() {
@@ -327,6 +336,28 @@ export default function StudentPage() {
       setPayments(py || [])
       setStudentTickets(tk || [])
       setAttestationHistory((attHistory as any[]) || [])
+
+      // Load seminar history
+      const { data: semRegs } = await supabase
+        .from('seminar_registrations')
+        .select('id, attended, certificate_issued, seminar_id, seminar_events(title, starts_at), seminar_tariffs(name)')
+        .eq('student_id', id)
+        .eq('attended', true)
+        .order('submitted_at', { ascending: false })
+      if (semRegs && semRegs.length > 0) {
+        const seminarIds = semRegs.map((r: any) => r.seminar_id)
+        const regIds = semRegs.map((r: any) => r.id)
+        const [{ data: allSessions }, { data: attSessions }] = await Promise.all([
+          supabase.from('seminar_sessions').select('id, seminar_id').in('seminar_id', seminarIds),
+          supabase.from('seminar_session_attendance').select('session_id, registration_id, attended').in('registration_id', regIds).eq('attended', true),
+        ])
+        setSeminarHistory(semRegs.map((r: any) => {
+          const sessions = (allSessions || []).filter((s: any) => s.seminar_id === r.seminar_id)
+          const attended = (attSessions || []).filter((a: any) => a.registration_id === r.id)
+          return { ...r, sessionsTotal: sessions.length, sessionsAttended: attended.length }
+        }))
+      }
+
       // Load assignments
       const { data: asgn } = await supabase
         .from('assignments').select('*').eq('student_id', id).order('created_at', { ascending: false })
@@ -1635,6 +1666,39 @@ export default function StudentPage() {
                       {app.preatt2_status && <span>П2: <span className={PREATT_COLOR[app.preatt2_status]}>{PREATT_SYM[app.preatt2_status]}</span></span>}
                       <span className={app.paid ? 'text-green-500' : 'text-gray-300'}>₽ {app.paid ? '✓' : '—'}</span>
                     </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Seminars */}
+      {seminarHistory.length > 0 && (
+        <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm mb-4">
+          <div className="font-semibold text-gray-800 mb-3">🥋 Семинары</div>
+          <div className="space-y-2">
+            {seminarHistory.map(reg => {
+              const title = (reg.seminar_events as any)?.title || 'Семинар'
+              const date = (reg.seminar_events as any)?.starts_at || ''
+              const tariffName = (reg.seminar_tariffs as any)?.name || null
+              return (
+                <div key={reg.id} className="flex items-start justify-between py-2 border-b border-gray-50 last:border-0">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium text-gray-900">{title}</div>
+                    <div className="text-xs text-gray-400 mt-0.5">
+                      {date && new Date(date).toLocaleDateString('ru', { day: 'numeric', month: 'long', year: 'numeric' })}
+                      {tariffName && <span className="ml-2">· {tariffName}</span>}
+                    </div>
+                    {reg.sessionsTotal > 0 && (
+                      <div className="text-xs text-gray-500 mt-0.5">
+                        Тренировок: {reg.sessionsAttended}/{reg.sessionsTotal}
+                      </div>
+                    )}
+                    {reg.certificate_issued && (
+                      <div className="text-xs text-blue-600 mt-0.5">🎖 Сертификат выдан</div>
+                    )}
                   </div>
                 </div>
               )
