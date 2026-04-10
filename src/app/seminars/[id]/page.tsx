@@ -54,6 +54,14 @@ type Registration = {
   seminar_tariffs: { name: string } | null
 }
 
+type Session = {
+  id: string
+  seminar_id: string
+  title: string
+  session_date: string | null
+  sort_order: number
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function currentPrice(tariff: Tariff, today = new Date()): number {
@@ -68,7 +76,6 @@ function currentPrice(tariff: Tariff, today = new Date()): number {
 function nextPriceDate(tariff: Tariff, today = new Date()): string | null {
   if (!tariff.increase_starts_at || tariff.increase_pct === 0) return null
   const start = new Date(tariff.increase_starts_at)
-  // Если ещё не наступила дата начала роста — следующее изменение именно в start
   if (today < start) return tariff.increase_starts_at
   const daysElapsed = Math.floor((today.getTime() - start.getTime()) / 86400000)
   const periods = Math.floor(daysElapsed / (tariff.increase_every_days || 7))
@@ -82,11 +89,11 @@ function minDeposit(tariff: Tariff): number {
 }
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
-  pending:      { label: 'Заявка',    color: 'bg-yellow-100 text-yellow-700' },
-  deposit_paid: { label: 'Предоплата',color: 'bg-blue-100 text-blue-700' },
-  fully_paid:   { label: 'Оплачен',   color: 'bg-green-100 text-green-700' },
-  no_show:      { label: 'Не пришёл', color: 'bg-red-100 text-red-500' },
-  cancelled:    { label: 'Отменён',   color: 'bg-gray-100 text-gray-500' },
+  pending:      { label: 'Заявка',     color: 'bg-yellow-100 text-yellow-700' },
+  deposit_paid: { label: 'Предоплата', color: 'bg-blue-100 text-blue-700' },
+  fully_paid:   { label: 'Оплачен',    color: 'bg-green-100 text-green-700' },
+  no_show:      { label: 'Не пришёл',  color: 'bg-red-100 text-red-500' },
+  cancelled:    { label: 'Отменён',    color: 'bg-gray-100 text-gray-500' },
 }
 
 const SEMINAR_STATUS_LABELS: Record<string, string> = {
@@ -107,6 +114,7 @@ export default function SeminarPage() {
   const [seminar, setSeminar] = useState<Seminar | null>(null)
   const [tariffs, setTariffs] = useState<Tariff[]>([])
   const [regs, setRegs] = useState<Registration[]>([])
+  const [sessions, setSessions] = useState<Session[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState<string | null>(null)
 
@@ -164,6 +172,10 @@ export default function SeminarPage() {
     increase_every_days: '7', increase_starts_at: '', min_deposit_pct: '20', max_participants: '',
   })
 
+  // Session form
+  const [showSessionForm, setShowSessionForm] = useState(false)
+  const [sessionForm, setSessionForm] = useState({ title: '', session_date: '' })
+
   // Manual registration form
   const [showRegForm, setShowRegForm] = useState(false)
   const [regForm, setRegForm] = useState({
@@ -173,17 +185,19 @@ export default function SeminarPage() {
   })
 
   async function load() {
-    const [{ data: sem }, { data: tar }, { data: reg }] = await Promise.all([
+    const [{ data: sem }, { data: tar }, { data: reg }, { data: sess }] = await Promise.all([
       supabase.from('seminar_events').select('*').eq('id', id).single(),
       supabase.from('seminar_tariffs').select('*').eq('seminar_id', id).order('sort_order'),
       supabase.from('seminar_registrations')
         .select('id, tariff_id, student_id, is_external, participant_name, participant_phone, participant_telegram, school_status, locked_price, deposit_amount, deposit_paid_at, total_paid, status, attended, seminar_tariffs(name)')
         .eq('seminar_id', id)
         .order('submitted_at', { ascending: false }),
+      supabase.from('seminar_sessions').select('*').eq('seminar_id', id).order('sort_order'),
     ])
     setSeminar(sem)
     setTariffs(tar || [])
     setRegs(((reg || []) as unknown) as Registration[])
+    setSessions(sess || [])
     setLoading(false)
   }
 
@@ -255,6 +269,27 @@ export default function SeminarPage() {
     load()
   }
 
+  async function addSession(e: React.FormEvent) {
+    e.preventDefault()
+    setSaving('session')
+    await supabase.from('seminar_sessions').insert({
+      seminar_id: id,
+      title: sessionForm.title,
+      session_date: sessionForm.session_date || null,
+      sort_order: sessions.length,
+    })
+    setSessionForm({ title: '', session_date: '' })
+    setShowSessionForm(false)
+    setSaving(null)
+    load()
+  }
+
+  async function deleteSession(sessionId: string) {
+    if (!confirm('Удалить тренировку?')) return
+    await supabase.from('seminar_sessions').delete().eq('id', sessionId)
+    setSessions(prev => prev.filter(s => s.id !== sessionId))
+  }
+
   async function addRegistration(e: React.FormEvent) {
     e.preventDefault()
     setSaving('reg')
@@ -280,13 +315,14 @@ export default function SeminarPage() {
     load()
   }
 
-  // ─── Financial summary ───────────────────────────────────────────────────
+  // ─── Dashboard stats ─────────────────────────────────────────────────────
 
   const totalDeposit = regs.reduce((s, r) => s + (r.deposit_amount || 0), 0)
-  const totalPaid = regs.reduce((s, r) => s + (r.total_paid || 0), 0)
-  const totalCollected = totalDeposit + totalPaid
-  const expectedTotal = regs.reduce((s, r) => s + (r.locked_price || 0), 0)
-  const remaining = expectedTotal - totalCollected
+  const totalFinal = regs.reduce((s, r) => s + (r.total_paid || 0), 0)
+  const totalCollected = totalDeposit + totalFinal
+  const countDeposit = regs.filter(r => r.status === 'deposit_paid').length
+  const countPaid = regs.filter(r => r.status === 'fully_paid').length
+  const countAttended = regs.filter(r => r.attended).length
 
   const today = new Date().toISOString().split('T')[0]
   const regLink = typeof window !== 'undefined'
@@ -402,33 +438,42 @@ export default function SeminarPage() {
         </div>
       )}
 
-      {/* Financial summary */}
+      {/* ── Dashboard ── */}
       {regs.length > 0 && (
         <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm mb-4">
-          <div className="text-sm font-semibold text-gray-700 mb-3">💰 Финансы</div>
-          <div className="grid grid-cols-3 gap-3 text-center">
-            <div>
-              <div className="text-lg font-bold text-green-700">{totalCollected.toLocaleString('ru')} ₽</div>
-              <div className="text-xs text-gray-400">Получено</div>
+          <div className="text-sm font-semibold text-gray-700 mb-3">📊 Итоги</div>
+          <div className="grid grid-cols-2 gap-3 mb-3">
+            <div className="bg-gray-50 rounded-xl p-3 text-center">
+              <div className="text-2xl font-bold text-gray-800">{regs.length}</div>
+              <div className="text-xs text-gray-400 mt-0.5">Заявок</div>
             </div>
-            <div>
-              <div className="text-lg font-bold text-orange-600">{remaining > 0 ? remaining.toLocaleString('ru') : 0} ₽</div>
-              <div className="text-xs text-gray-400">Ожидается</div>
+            <div className="bg-green-50 rounded-xl p-3 text-center">
+              <div className="text-2xl font-bold text-green-700">{totalCollected.toLocaleString('ru')} ₽</div>
+              <div className="text-xs text-gray-400 mt-0.5">Собрано</div>
             </div>
-            <div>
-              <div className="text-lg font-bold text-gray-700">{regs.filter(r => r.attended).length}/{regs.length}</div>
-              <div className="text-xs text-gray-400">Пришли</div>
+            <div className="bg-blue-50 rounded-xl p-3 text-center">
+              <div className="text-2xl font-bold text-blue-700">{countDeposit}</div>
+              <div className="text-xs text-gray-400 mt-0.5">Предоплат</div>
+            </div>
+            <div className="bg-emerald-50 rounded-xl p-3 text-center">
+              <div className="text-2xl font-bold text-emerald-700">{countPaid}</div>
+              <div className="text-xs text-gray-400 mt-0.5">Полностью оплатили</div>
             </div>
           </div>
-          {/* By tariff breakdown */}
-          {tariffs.length > 0 && (
+          <div className="flex items-center justify-between bg-indigo-50 rounded-xl px-4 py-3">
+            <div className="text-sm text-indigo-700 font-medium">Пришли на семинар</div>
+            <div className="text-xl font-bold text-indigo-800">{countAttended} / {regs.length}</div>
+          </div>
+          {/* By tariff */}
+          {tariffs.length > 1 && (
             <div className="mt-3 pt-3 border-t border-gray-100 space-y-1">
               {tariffs.map(t => {
                 const tRegs = regs.filter(r => r.tariff_id === t.id)
+                const tCollected = tRegs.reduce((s, r) => s + (r.deposit_amount || 0) + (r.total_paid || 0), 0)
                 return tRegs.length > 0 ? (
                   <div key={t.id} className="flex justify-between text-xs text-gray-500">
                     <span>{t.name}</span>
-                    <span>{tRegs.length} чел.</span>
+                    <span>{tRegs.length} чел. · {tCollected.toLocaleString('ru')} ₽</span>
                   </div>
                 ) : null
               })}
@@ -437,7 +482,66 @@ export default function SeminarPage() {
         </div>
       )}
 
-      {/* Tariffs */}
+      {/* ── Тренировки / сессии семинара ── */}
+      <div className="mb-4">
+        <div className="flex items-center justify-between mb-2">
+          <div className="text-sm font-semibold text-gray-700">🗓 Тренировки ({sessions.length})</div>
+          {canEdit && (
+            <button onClick={() => setShowSessionForm(!showSessionForm)}
+              className="text-xs bg-gray-100 text-gray-600 px-3 py-1.5 rounded-lg hover:bg-gray-200">
+              + Добавить
+            </button>
+          )}
+        </div>
+
+        {showSessionForm && canEdit && (
+          <form onSubmit={addSession} className="bg-white rounded-xl p-3 border border-gray-200 shadow-sm mb-3 space-y-2">
+            <input required value={sessionForm.title} onChange={e => setSessionForm({ ...sessionForm, title: e.target.value })}
+              placeholder="Название тренировки *" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none" />
+            <div>
+              <label className="text-xs text-gray-400 mb-1 block">Дата (необязательно)</label>
+              <input type="date" value={sessionForm.session_date} onChange={e => setSessionForm({ ...sessionForm, session_date: e.target.value })}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none" />
+            </div>
+            <div className="flex gap-2">
+              <button type="submit" disabled={saving === 'session'}
+                className="flex-1 bg-black text-white py-2 rounded-lg text-sm font-medium disabled:opacity-50">
+                {saving === 'session' ? '...' : 'Добавить'}
+              </button>
+              <button type="button" onClick={() => setShowSessionForm(false)}
+                className="flex-1 bg-gray-100 text-gray-600 py-2 rounded-lg text-sm">
+                Отмена
+              </button>
+            </div>
+          </form>
+        )}
+
+        {sessions.length === 0 ? (
+          <div className="text-xs text-gray-400 text-center py-3 bg-gray-50 rounded-xl">
+            Добавьте тренировки, чтобы отмечать посещаемость по каждой
+          </div>
+        ) : (
+          <div className="space-y-1.5">
+            {sessions.map((s, i) => (
+              <div key={s.id} className="flex items-center justify-between bg-white rounded-xl px-3 py-2.5 border border-gray-100 shadow-sm">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-400 w-5">{i + 1}.</span>
+                  <div>
+                    <div className="text-sm text-gray-800">{s.title}</div>
+                    {s.session_date && <div className="text-xs text-gray-400">{s.session_date}</div>}
+                  </div>
+                </div>
+                {canEdit && (
+                  <button onClick={() => deleteSession(s.id)}
+                    className="text-gray-300 hover:text-red-400 text-lg leading-none ml-2">×</button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── Тарифы ── */}
       <div className="mb-4">
         <div className="flex items-center justify-between mb-2">
           <div className="text-sm font-semibold text-gray-700">Тарифы</div>
@@ -590,10 +694,8 @@ export default function SeminarPage() {
                         </div>
                         {canEdit && (
                           <div className="flex items-center gap-2 ml-2">
-                            <button onClick={() => startEditTariff(t)}
-                              className="text-gray-400 hover:text-indigo-600 text-sm px-1">✏️</button>
-                            <button onClick={() => deleteTariff(t.id)}
-                              className="text-gray-300 hover:text-red-400 text-lg leading-none">×</button>
+                            <button onClick={() => startEditTariff(t)} className="text-gray-400 hover:text-indigo-600 text-sm px-1">✏️</button>
+                            <button onClick={() => deleteTariff(t.id)} className="text-gray-300 hover:text-red-400 text-lg leading-none">×</button>
                           </div>
                         )}
                       </div>
@@ -606,7 +708,7 @@ export default function SeminarPage() {
         )}
       </div>
 
-      {/* Registrations */}
+      {/* ── Участники ── */}
       <div>
         <div className="flex items-center justify-between mb-2">
           <div className="text-sm font-semibold text-gray-700">Участники ({regs.length})</div>
@@ -644,9 +746,6 @@ export default function SeminarPage() {
               <input type="checkbox" checked={regForm.is_external} onChange={e => setRegForm({ ...regForm, is_external: e.target.checked })} />
               <span className="text-sm text-gray-700">Внешний участник</span>
             </label>
-            <textarea value={regForm.questions} onChange={e => setRegForm({ ...regForm, questions: e.target.value })}
-              placeholder="Вопросы / примечания" rows={2}
-              className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none resize-none" />
             <button type="submit" disabled={saving === 'reg'}
               className="w-full bg-black text-white py-2.5 rounded-xl text-sm font-medium disabled:opacity-50">
               {saving === 'reg' ? 'Сохранение...' : 'Добавить участника'}
@@ -660,6 +759,7 @@ export default function SeminarPage() {
           <div className="space-y-2">
             {regs.map(r => {
               const st = STATUS_LABELS[r.status] || { label: r.status, color: 'bg-gray-100 text-gray-500' }
+              const totalR = (r.deposit_amount || 0) + (r.total_paid || 0)
               return (
                 <Link key={r.id} href={`/seminars/${id}/${r.id}`}
                   className="block bg-white rounded-xl p-3 border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
@@ -673,6 +773,7 @@ export default function SeminarPage() {
                       <div className="text-xs text-gray-400 mt-0.5">
                         {(r.seminar_tariffs as any)?.name || '—'}
                         {r.locked_price ? ` · ${r.locked_price.toLocaleString('ru')} ₽` : ''}
+                        {totalR > 0 ? ` · внесено ${totalR.toLocaleString('ru')} ₽` : ''}
                       </div>
                     </div>
                     <div className="flex items-center gap-2 ml-2">
@@ -680,12 +781,6 @@ export default function SeminarPage() {
                       <span className="text-gray-300">›</span>
                     </div>
                   </div>
-                  {r.deposit_amount && r.deposit_amount > 0 && (
-                    <div className="text-xs text-gray-400 mt-1">
-                      Предоплата: {r.deposit_amount.toLocaleString('ru')} ₽
-                      {r.total_paid > 0 && ` · Итого: ${(r.deposit_amount + r.total_paid).toLocaleString('ru')} ₽`}
-                    </div>
-                  )}
                 </Link>
               )
             })}

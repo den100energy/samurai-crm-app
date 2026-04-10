@@ -51,18 +51,38 @@ type Registration = {
   seminar_tariffs: Tariff | null
 }
 
+type Session = {
+  id: string
+  seminar_id: string
+  title: string
+  session_date: string | null
+  sort_order: number
+}
+
+type SessionAttendance = {
+  session_id: string
+  attended: boolean
+}
+
 type Student = { id: string; name: string; referral_credits: number | null }
 
 function currentPrice(tariff: Tariff, today = new Date()): number {
   if (!tariff.base_price) return 0
   if (!tariff.increase_starts_at || tariff.increase_pct === 0) return tariff.base_price
   const start = new Date(tariff.increase_starts_at)
-  const daysElapsed = Math.max(0, Math.floor((today.getTime() - start.getTime()) / 86400000))
+  if (today < start) return tariff.base_price
+  const daysElapsed = Math.floor((today.getTime() - start.getTime()) / 86400000)
   const periods = Math.floor(daysElapsed / (tariff.increase_every_days || 7))
   return Math.round(tariff.base_price * Math.pow(1 + tariff.increase_pct / 100, periods))
 }
 
-const STATUS_FLOW = ['pending', 'deposit_paid', 'fully_paid', 'no_show', 'cancelled']
+const STAGES = ['pending', 'deposit_paid', 'fully_paid'] as const
+const STAGE_LABELS: Record<string, string> = {
+  pending: 'Заявка',
+  deposit_paid: 'Предоплата',
+  fully_paid: 'Оплачен',
+}
+
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   pending:      { label: 'Заявка',      color: 'bg-yellow-100 text-yellow-700' },
   deposit_paid: { label: 'Предоплата',  color: 'bg-blue-100 text-blue-700' },
@@ -89,40 +109,50 @@ export default function RegDetailPage() {
 
   const [reg, setReg] = useState<Registration | null>(null)
   const [referrer, setReferrer] = useState<Student | null>(null)
+  const [sessions, setSessions] = useState<Session[]>([])
+  const [sessionAttendance, setSessionAttendance] = useState<Record<string, boolean>>({})
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState<string | null>(null)
 
-  // Deposit form
   const [depositForm, setDepositForm] = useState({ amount: '', method: 'cash', date: new Date().toISOString().split('T')[0] })
   const [showDepositForm, setShowDepositForm] = useState(false)
 
-  // Final payment form
   const [payForm, setPayForm] = useState({ amount: '', method: 'cash', date: new Date().toISOString().split('T')[0] })
   const [showPayForm, setShowPayForm] = useState(false)
 
-  // Discount form
   const [discountForm, setDiscountForm] = useState({ discount_pct: '', discount_reason: '' })
   const [showDiscountForm, setShowDiscountForm] = useState(false)
 
-  // Notes
   const [notes, setNotes] = useState('')
   const [editingNotes, setEditingNotes] = useState(false)
 
   async function load() {
-    const { data } = await supabase
-      .from('seminar_registrations')
-      .select('*, seminar_events(title, starts_at), seminar_tariffs(*)')
-      .eq('id', regId)
-      .single()
-    if (data) {
-      setReg(data as Registration)
-      setNotes(data.notes || '')
-      setDiscountForm({ discount_pct: String(data.discount_pct || 0), discount_reason: data.discount_reason || '' })
-      if (data.referred_by_student_id) {
-        const { data: stu } = await supabase.from('students').select('id, name, referral_credits').eq('id', data.referred_by_student_id).single()
+    const [{ data: regData }, { data: sessData }, { data: attData }] = await Promise.all([
+      supabase.from('seminar_registrations')
+        .select('*, seminar_events(title, starts_at), seminar_tariffs(*)')
+        .eq('id', regId).single(),
+      supabase.from('seminar_sessions')
+        .select('*').eq('seminar_id', id).order('sort_order'),
+      supabase.from('seminar_session_attendance')
+        .select('session_id, attended').eq('registration_id', regId),
+    ])
+
+    if (regData) {
+      setReg(regData as Registration)
+      setNotes(regData.notes || '')
+      setDiscountForm({ discount_pct: String(regData.discount_pct || 0), discount_reason: regData.discount_reason || '' })
+      if (regData.referred_by_student_id) {
+        const { data: stu } = await supabase.from('students').select('id, name, referral_credits').eq('id', regData.referred_by_student_id).single()
         setReferrer(stu)
       }
     }
+
+    setSessions(sessData || [])
+
+    const attMap: Record<string, boolean> = {}
+    for (const row of (attData || [])) attMap[row.session_id] = row.attended
+    setSessionAttendance(attMap)
+
     setLoading(false)
   }
 
@@ -135,18 +165,14 @@ export default function RegDetailPage() {
     setSaving(null)
   }
 
-  async function toggleAttended() {
-    if (!reg) return
-    const attended = !reg.attended
-    setSaving('attended')
-    const updates: Record<string, unknown> = { attended }
-    if (attended && reg.status === 'deposit_paid') updates.status = 'deposit_paid'
-    if (attended && reg.status === 'pending') {
-      // no-show means they registered but didn't pay
-    }
-    await supabase.from('seminar_registrations').update(updates).eq('id', regId)
-    setReg(prev => prev ? { ...prev, attended, ...updates } : prev)
-    setSaving(null)
+  async function toggleSessionAttendance(sessionId: string) {
+    const current = sessionAttendance[sessionId] ?? false
+    const next = !current
+    setSessionAttendance(prev => ({ ...prev, [sessionId]: next }))
+    await supabase.from('seminar_session_attendance').upsert(
+      { session_id: sessionId, registration_id: regId, attended: next },
+      { onConflict: 'session_id,registration_id' }
+    )
   }
 
   async function saveDeposit(e: React.FormEvent) {
@@ -156,7 +182,7 @@ export default function RegDetailPage() {
     const amount = parseFloat(depositForm.amount)
     const tariff = reg.seminar_tariffs as Tariff | null
     const price = tariff ? currentPrice(tariff) : (reg.locked_price || 0)
-    const effectivePrice = price * (1 - (reg.discount_pct || 0) / 100)
+    const effectivePrice = Math.round(price * (1 - (reg.discount_pct || 0) / 100))
     const locked = reg.locked_price ?? effectivePrice
 
     const updates = {
@@ -169,7 +195,6 @@ export default function RegDetailPage() {
     }
     await supabase.from('seminar_registrations').update(updates).eq('id', regId)
 
-    // Write to payments
     await supabase.from('payments').insert({
       amount,
       direction: 'income',
@@ -181,14 +206,12 @@ export default function RegDetailPage() {
       student_id: reg.student_id || null,
     })
 
-    // Referral credit: if external participant has a referrer, credit them
     if (reg.is_external && reg.referred_by_student_id) {
       const credit = Math.round(amount * 0.1)
       const { data: refStu } = await supabase.from('students').select('referral_credits').eq('id', reg.referred_by_student_id).single()
       await supabase.from('students').update({ referral_credits: ((refStu?.referral_credits as number) || 0) + credit }).eq('id', reg.referred_by_student_id)
     }
 
-    // Notify via Telegram if we have telegram
     if (reg.participant_telegram) {
       const minDep = tariff ? Math.ceil(effectivePrice * (tariff.min_deposit_pct || 20) / 100) : 0
       if (amount >= minDep) {
@@ -283,6 +306,10 @@ export default function RegDetailPage() {
   const st = STATUS_LABELS[reg.status] || { label: reg.status, color: 'bg-gray-100 text-gray-500' }
   const minDep = tariff ? Math.ceil(discountedPrice * (tariff.min_deposit_pct || 20) / 100) : 0
 
+  const mainStageIndex = STAGES.indexOf(reg.status as typeof STAGES[number])
+  const isMainStage = mainStageIndex >= 0
+  const sessionAttended = sessions.filter(s => sessionAttendance[s.id]).length
+
   return (
     <main className="max-w-lg mx-auto p-4 pb-20">
       {/* Header */}
@@ -295,41 +322,273 @@ export default function RegDetailPage() {
         <span className={`text-xs px-2 py-1 rounded-full font-medium whitespace-nowrap ${st.color}`}>{st.label}</span>
       </div>
 
-      {/* Status controls */}
+      {/* Progress stepper */}
       {canEdit && (
-        <div className="bg-white rounded-2xl p-3 border border-gray-100 shadow-sm mb-4">
-          <div className="text-xs text-gray-400 mb-2">Статус участника</div>
-          <div className="flex gap-2 flex-wrap">
-            {STATUS_FLOW.map(s => (
-              <button key={s} onClick={() => updateStatus(s)}
-                disabled={reg.status === s || saving === 'status'}
-                className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-all ${reg.status === s ? STATUS_LABELS[s]?.color : 'bg-gray-50 text-gray-500 hover:bg-gray-100'}`}>
-                {STATUS_LABELS[s]?.label}
+        <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm mb-4">
+          <div className="flex items-center justify-between mb-3">
+            {STAGES.map((stage, i) => {
+              const done = isMainStage && mainStageIndex > i
+              const active = isMainStage && mainStageIndex === i
+              return (
+                <div key={stage} className="flex items-center flex-1">
+                  <button
+                    onClick={() => updateStatus(stage)}
+                    disabled={saving === 'status'}
+                    className="flex flex-col items-center gap-1 flex-1"
+                  >
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold border-2 transition-all
+                      ${done ? 'bg-green-500 border-green-500 text-white'
+                        : active ? 'bg-black border-black text-white'
+                        : 'bg-white border-gray-300 text-gray-400'}`}>
+                      {done ? '✓' : i + 1}
+                    </div>
+                    <div className={`text-xs font-medium ${active ? 'text-black' : done ? 'text-green-600' : 'text-gray-400'}`}>
+                      {STAGE_LABELS[stage]}
+                    </div>
+                  </button>
+                  {i < STAGES.length - 1 && (
+                    <div className={`h-0.5 flex-1 mx-1 rounded ${mainStageIndex > i ? 'bg-green-400' : 'bg-gray-200'}`} />
+                  )}
+                </div>
+              )
+            })}
+          </div>
+
+          {/* Extra statuses */}
+          {(!isMainStage || reg.status === 'no_show' || reg.status === 'cancelled') && (
+            <div className="flex gap-2 pt-2 border-t border-gray-100">
+              {['no_show', 'cancelled'].map(s => (
+                <button key={s} onClick={() => updateStatus(s)}
+                  disabled={saving === 'status'}
+                  className={`flex-1 text-xs px-3 py-1.5 rounded-lg font-medium transition-all
+                    ${reg.status === s ? STATUS_LABELS[s]?.color : 'bg-gray-50 text-gray-500 hover:bg-gray-100'}`}>
+                  {STATUS_LABELS[s]?.label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Extra status toggle for active registrations */}
+          {isMainStage && (
+            <div className="flex gap-2 pt-2 border-t border-gray-100">
+              {['no_show', 'cancelled'].map(s => (
+                <button key={s} onClick={() => updateStatus(s)}
+                  disabled={saving === 'status'}
+                  className="flex-1 text-xs px-3 py-1.5 rounded-lg bg-gray-50 text-gray-400 hover:bg-gray-100">
+                  {STATUS_LABELS[s]?.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Payment block */}
+      <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm mb-4">
+        <div className="text-sm font-semibold text-gray-700 mb-3">💰 Оплата</div>
+
+        <div className="space-y-2 text-sm">
+          {tariff && (
+            <div className="flex justify-between">
+              <span className="text-gray-400">Тариф</span>
+              <span className="text-gray-800">{tariff.name}</span>
+            </div>
+          )}
+          <div className="flex justify-between">
+            <span className="text-gray-400">Стоимость</span>
+            <div className="text-right">
+              <span className="font-semibold text-gray-900">{discountedPrice.toLocaleString('ru')} ₽</span>
+              {reg.discount_pct > 0 && (
+                <div className="text-xs text-green-600">скидка {reg.discount_pct}%{reg.discount_reason ? ` (${reg.discount_reason})` : ''}</div>
+              )}
+              {reg.price_locked_at && <div className="text-xs text-gray-400">🔒 зафиксирована</div>}
+            </div>
+          </div>
+          {(reg.deposit_amount || 0) > 0 && (
+            <div className="flex justify-between">
+              <span className="text-gray-400">Предоплата</span>
+              <span className="text-green-700 font-medium">+{reg.deposit_amount!.toLocaleString('ru')} ₽
+                {reg.deposit_paid_at && <span className="text-xs text-gray-400 ml-1">({reg.deposit_paid_at})</span>}
+              </span>
+            </div>
+          )}
+          {(reg.total_paid || 0) > 0 && (
+            <div className="flex justify-between">
+              <span className="text-gray-400">Доплата</span>
+              <span className="text-green-700 font-medium">+{reg.total_paid.toLocaleString('ru')} ₽
+                {reg.total_paid_at && <span className="text-xs text-gray-400 ml-1">({reg.total_paid_at})</span>}
+              </span>
+            </div>
+          )}
+          <div className="flex justify-between border-t border-gray-100 pt-2">
+            <span className="text-gray-600 font-medium">Остаток</span>
+            <span className={`font-bold ${outstanding > 0 ? 'text-red-600' : 'text-green-700'}`}>
+              {outstanding > 0 ? `${outstanding.toLocaleString('ru')} ₽` : '✅ Оплачено'}
+            </span>
+          </div>
+        </div>
+
+        {reg.status === 'pending' && tariff && !reg.price_locked_at && (
+          <div className="mt-3 p-2 bg-blue-50 rounded-xl text-xs text-blue-700">
+            Для фиксации цены нужна предоплата от {minDep.toLocaleString('ru')} ₽
+          </div>
+        )}
+
+        {canEdit && (
+          <div className="mt-3 space-y-2">
+            {/* Скидка */}
+            {!showDiscountForm ? (
+              <button onClick={() => setShowDiscountForm(true)} className="text-xs text-gray-400 hover:text-gray-600 underline">
+                Изменить скидку
               </button>
-            ))}
+            ) : (
+              <div className="bg-gray-50 rounded-xl p-3 space-y-2">
+                <div className="flex gap-2">
+                  <input value={discountForm.discount_pct} onChange={e => setDiscountForm({ ...discountForm, discount_pct: e.target.value })}
+                    type="number" min="0" max="100" placeholder="Скидка %"
+                    className="flex-1 border border-gray-200 rounded-lg px-2 py-1.5 text-sm outline-none" />
+                  <input value={discountForm.discount_reason} onChange={e => setDiscountForm({ ...discountForm, discount_reason: e.target.value })}
+                    placeholder="Причина" className="flex-1 border border-gray-200 rounded-lg px-2 py-1.5 text-sm outline-none" />
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={saveDiscount} disabled={saving === 'discount'}
+                    className="flex-1 bg-black text-white py-1.5 rounded-lg text-xs font-medium disabled:opacity-50">Сохранить</button>
+                  <button onClick={() => setShowDiscountForm(false)} className="flex-1 bg-gray-100 text-gray-600 py-1.5 rounded-lg text-xs">Отмена</button>
+                </div>
+              </div>
+            )}
+
+            {/* Предоплата — только если статус pending */}
+            {reg.status === 'pending' && (
+              !showDepositForm ? (
+                <button onClick={() => setShowDepositForm(true)}
+                  className="w-full bg-blue-600 text-white py-2.5 rounded-xl text-sm font-medium">
+                  Принять предоплату
+                </button>
+              ) : (
+                <form onSubmit={saveDeposit} className="bg-blue-50 rounded-xl p-3 space-y-2">
+                  <div className="text-xs font-medium text-blue-700 mb-1">Предоплата (мин. {minDep.toLocaleString('ru')} ₽)</div>
+                  <input required value={depositForm.amount} onChange={e => setDepositForm({ ...depositForm, amount: e.target.value })}
+                    type="number" min="1" placeholder={`Сумма (мин. ${minDep}) *`}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none" />
+                  <div className="flex gap-2">
+                    <select value={depositForm.method} onChange={e => setDepositForm({ ...depositForm, method: e.target.value })}
+                      className="flex-1 border border-gray-200 rounded-lg px-2 py-2 text-sm outline-none bg-white">
+                      {PAYMENT_METHODS.map(m => <option key={m} value={m}>{PAYMENT_METHOD_LABELS[m]}</option>)}
+                    </select>
+                    <input type="date" value={depositForm.date} onChange={e => setDepositForm({ ...depositForm, date: e.target.value })}
+                      className="flex-1 border border-gray-200 rounded-lg px-2 py-2 text-sm outline-none" />
+                  </div>
+                  <div className="flex gap-2">
+                    <button type="submit" disabled={saving === 'deposit'}
+                      className="flex-1 bg-blue-600 text-white py-2 rounded-lg text-sm font-medium disabled:opacity-50">
+                      {saving === 'deposit' ? '...' : 'Принять'}
+                    </button>
+                    <button type="button" onClick={() => setShowDepositForm(false)}
+                      className="flex-1 bg-gray-100 text-gray-600 py-2 rounded-lg text-sm">Отмена</button>
+                  </div>
+                </form>
+              )
+            )}
+
+            {/* Доплата — только если статус deposit_paid и есть остаток */}
+            {reg.status === 'deposit_paid' && outstanding > 0 && (
+              !showPayForm ? (
+                <button onClick={() => { setPayForm({ ...payForm, amount: String(outstanding) }); setShowPayForm(true) }}
+                  className="w-full bg-green-600 text-white py-2.5 rounded-xl text-sm font-medium">
+                  Принять доплату ({outstanding.toLocaleString('ru')} ₽)
+                </button>
+              ) : (
+                <form onSubmit={saveFinalPayment} className="bg-green-50 rounded-xl p-3 space-y-2">
+                  <div className="text-xs font-medium text-green-700 mb-1">Финальная оплата</div>
+                  <input required value={payForm.amount} onChange={e => setPayForm({ ...payForm, amount: e.target.value })}
+                    type="number" min="1" placeholder="Сумма *"
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none" />
+                  <div className="flex gap-2">
+                    <select value={payForm.method} onChange={e => setPayForm({ ...payForm, method: e.target.value })}
+                      className="flex-1 border border-gray-200 rounded-lg px-2 py-2 text-sm outline-none bg-white">
+                      {PAYMENT_METHODS.map(m => <option key={m} value={m}>{PAYMENT_METHOD_LABELS[m]}</option>)}
+                    </select>
+                    <input type="date" value={payForm.date} onChange={e => setPayForm({ ...payForm, date: e.target.value })}
+                      className="flex-1 border border-gray-200 rounded-lg px-2 py-2 text-sm outline-none" />
+                  </div>
+                  <div className="flex gap-2">
+                    <button type="submit" disabled={saving === 'payment'}
+                      className="flex-1 bg-green-600 text-white py-2 rounded-lg text-sm font-medium disabled:opacity-50">
+                      {saving === 'payment' ? '...' : 'Принять'}
+                    </button>
+                    <button type="button" onClick={() => setShowPayForm(false)}
+                      className="flex-1 bg-gray-100 text-gray-600 py-2 rounded-lg text-sm">Отмена</button>
+                  </div>
+                </form>
+              )
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Session attendance */}
+      {sessions.length > 0 && (
+        <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm mb-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-sm font-semibold text-gray-700">Посещение тренировок</div>
+            <div className="text-xs text-gray-400">{sessionAttended}/{sessions.length}</div>
+          </div>
+          <div className="space-y-2">
+            {sessions.map(session => {
+              const attended = sessionAttendance[session.id] ?? false
+              return (
+                <label key={session.id} className={`flex items-center gap-3 p-2.5 rounded-xl cursor-pointer transition-colors
+                  ${attended ? 'bg-green-50' : 'bg-gray-50 hover:bg-gray-100'}`}>
+                  <input
+                    type="checkbox"
+                    checked={attended}
+                    onChange={() => canEdit && toggleSessionAttendance(session.id)}
+                    disabled={!canEdit}
+                    className="w-4 h-4 rounded accent-green-600"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className={`text-sm font-medium ${attended ? 'text-green-700' : 'text-gray-700'}`}>
+                      {session.title}
+                    </div>
+                    {session.session_date && (
+                      <div className="text-xs text-gray-400">
+                        {new Date(session.session_date).toLocaleDateString('ru', { day: 'numeric', month: 'long' })}
+                      </div>
+                    )}
+                  </div>
+                  {attended && <span className="text-green-500 text-sm">✓</span>}
+                </label>
+              )
+            })}
           </div>
         </div>
       )}
 
-      {/* Attendance */}
+      {/* Global attendance + certificate */}
       <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm mb-4">
         <div className="flex items-center justify-between">
           <div>
-            <div className="text-sm font-semibold text-gray-700">Посещение</div>
+            <div className="text-sm font-semibold text-gray-700">Итоговое посещение</div>
             <div className={`text-xs mt-0.5 ${reg.attended ? 'text-green-600' : 'text-gray-400'}`}>
               {reg.attended ? '✅ Пришёл на семинар' : '⏳ Ещё не отмечен'}
             </div>
           </div>
           {canEdit && (
-            <button onClick={toggleAttended} disabled={saving === 'attended'}
-              className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${reg.attended ? 'bg-green-100 text-green-700 hover:bg-red-50 hover:text-red-600' : 'bg-gray-100 text-gray-600 hover:bg-green-50 hover:text-green-700'}`}>
+            <button onClick={async () => {
+              const attended = !reg.attended
+              setSaving('attended')
+              await supabase.from('seminar_registrations').update({ attended }).eq('id', regId)
+              setReg(prev => prev ? { ...prev, attended } : prev)
+              setSaving(null)
+            }} disabled={saving === 'attended'}
+              className={`px-4 py-2 rounded-xl text-sm font-medium transition-all
+                ${reg.attended ? 'bg-green-100 text-green-700 hover:bg-red-50 hover:text-red-600' : 'bg-gray-100 text-gray-600 hover:bg-green-50 hover:text-green-700'}`}>
               {saving === 'attended' ? '...' : reg.attended ? 'Отменить' : 'Отметить'}
             </button>
           )}
         </div>
-        {reg.certificate_issued && (
-          <div className="mt-2 text-xs text-blue-600">🎖 Сертификат выдан</div>
-        )}
+        {reg.certificate_issued && <div className="mt-2 text-xs text-blue-600">🎖 Сертификат выдан</div>}
         {reg.attended && !reg.certificate_issued && canEdit && (
           <button onClick={async () => {
             await supabase.from('seminar_registrations').update({ certificate_issued: true }).eq('id', regId)
@@ -358,7 +617,7 @@ export default function RegDetailPage() {
         {reg.school_status && (
           <div className="flex justify-between text-sm">
             <span className="text-gray-400">Статус</span>
-            <span className="text-gray-800">{SCHOOL_STATUS_LABELS[reg.school_status] || reg.school_status}</span>
+            <span className="text-gray-800 text-right max-w-[60%]">{SCHOOL_STATUS_LABELS[reg.school_status] || reg.school_status}</span>
           </div>
         )}
         {reg.is_external && (
@@ -396,162 +655,6 @@ export default function RegDetailPage() {
         </div>
       )}
 
-      {/* Tariff & pricing */}
-      <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm mb-4">
-        <div className="text-sm font-semibold text-gray-700 mb-3">💰 Оплата</div>
-
-        <div className="space-y-2 text-sm">
-          {tariff && (
-            <div className="flex justify-between">
-              <span className="text-gray-400">Тариф</span>
-              <span className="text-gray-800">{tariff.name}</span>
-            </div>
-          )}
-          <div className="flex justify-between">
-            <span className="text-gray-400">Стоимость</span>
-            <div className="text-right">
-              <span className="font-semibold text-gray-900">{discountedPrice.toLocaleString('ru')} ₽</span>
-              {reg.discount_pct > 0 && (
-                <div className="text-xs text-green-600">скидка {reg.discount_pct}%{reg.discount_reason ? ` (${reg.discount_reason})` : ''}</div>
-              )}
-              {reg.price_locked_at && (
-                <div className="text-xs text-gray-400">🔒 зафиксирована</div>
-              )}
-            </div>
-          </div>
-          {reg.deposit_amount && reg.deposit_amount > 0 && (
-            <div className="flex justify-between">
-              <span className="text-gray-400">Предоплата</span>
-              <span className="text-green-700 font-medium">+{reg.deposit_amount.toLocaleString('ru')} ₽
-                {reg.deposit_paid_at && <span className="text-xs text-gray-400 ml-1">({reg.deposit_paid_at})</span>}
-              </span>
-            </div>
-          )}
-          {reg.total_paid > 0 && (
-            <div className="flex justify-between">
-              <span className="text-gray-400">Доплата</span>
-              <span className="text-green-700 font-medium">+{reg.total_paid.toLocaleString('ru')} ₽
-                {reg.total_paid_at && <span className="text-xs text-gray-400 ml-1">({reg.total_paid_at})</span>}
-              </span>
-            </div>
-          )}
-          <div className="flex justify-between border-t border-gray-100 pt-2">
-            <span className="text-gray-600 font-medium">Остаток</span>
-            <span className={`font-bold ${outstanding > 0 ? 'text-red-600' : 'text-green-700'}`}>
-              {outstanding > 0 ? `${outstanding.toLocaleString('ru')} ₽` : '✅ Оплачено'}
-            </span>
-          </div>
-        </div>
-
-        {/* Deposit info hint */}
-        {reg.status === 'pending' && tariff && !reg.price_locked_at && (
-          <div className="mt-3 p-2 bg-blue-50 rounded-xl text-xs text-blue-700">
-            Для фиксации цены нужна предоплата от {minDep.toLocaleString('ru')} ₽
-          </div>
-        )}
-
-        {canEdit && (
-          <div className="mt-3 space-y-2">
-            {/* Discount */}
-            {!showDiscountForm ? (
-              <button onClick={() => setShowDiscountForm(true)}
-                className="text-xs text-gray-400 hover:text-gray-600 underline">
-                Изменить скидку
-              </button>
-            ) : (
-              <div className="bg-gray-50 rounded-xl p-3 space-y-2">
-                <div className="flex gap-2">
-                  <input value={discountForm.discount_pct} onChange={e => setDiscountForm({ ...discountForm, discount_pct: e.target.value })}
-                    type="number" min="0" max="100" placeholder="Скидка %"
-                    className="flex-1 border border-gray-200 rounded-lg px-2 py-1.5 text-sm outline-none" />
-                  <input value={discountForm.discount_reason} onChange={e => setDiscountForm({ ...discountForm, discount_reason: e.target.value })}
-                    placeholder="Причина" className="flex-1 border border-gray-200 rounded-lg px-2 py-1.5 text-sm outline-none" />
-                </div>
-                <div className="flex gap-2">
-                  <button onClick={saveDiscount} disabled={saving === 'discount'}
-                    className="flex-1 bg-black text-white py-1.5 rounded-lg text-xs font-medium disabled:opacity-50">
-                    Сохранить
-                  </button>
-                  <button onClick={() => setShowDiscountForm(false)} className="flex-1 bg-gray-100 text-gray-600 py-1.5 rounded-lg text-xs">
-                    Отмена
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Deposit */}
-            {reg.status === 'pending' && (
-              !showDepositForm ? (
-                <button onClick={() => setShowDepositForm(true)}
-                  className="w-full bg-blue-600 text-white py-2.5 rounded-xl text-sm font-medium">
-                  Принять предоплату
-                </button>
-              ) : (
-                <form onSubmit={saveDeposit} className="bg-blue-50 rounded-xl p-3 space-y-2">
-                  <div className="text-xs font-medium text-blue-700 mb-1">Предоплата (мин. {minDep.toLocaleString('ru')} ₽)</div>
-                  <input required value={depositForm.amount} onChange={e => setDepositForm({ ...depositForm, amount: e.target.value })}
-                    type="number" min="1" placeholder={`Сумма (мин. ${minDep}) *`}
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none" />
-                  <div className="flex gap-2">
-                    <select value={depositForm.method} onChange={e => setDepositForm({ ...depositForm, method: e.target.value })}
-                      className="flex-1 border border-gray-200 rounded-lg px-2 py-2 text-sm outline-none bg-white">
-                      {PAYMENT_METHODS.map(m => <option key={m} value={m}>{PAYMENT_METHOD_LABELS[m]}</option>)}
-                    </select>
-                    <input type="date" value={depositForm.date} onChange={e => setDepositForm({ ...depositForm, date: e.target.value })}
-                      className="flex-1 border border-gray-200 rounded-lg px-2 py-2 text-sm outline-none" />
-                  </div>
-                  <div className="flex gap-2">
-                    <button type="submit" disabled={saving === 'deposit'}
-                      className="flex-1 bg-blue-600 text-white py-2 rounded-lg text-sm font-medium disabled:opacity-50">
-                      {saving === 'deposit' ? '...' : 'Принять'}
-                    </button>
-                    <button type="button" onClick={() => setShowDepositForm(false)}
-                      className="flex-1 bg-gray-100 text-gray-600 py-2 rounded-lg text-sm">
-                      Отмена
-                    </button>
-                  </div>
-                </form>
-              )
-            )}
-
-            {/* Final payment */}
-            {(reg.status === 'deposit_paid') && outstanding > 0 && (
-              !showPayForm ? (
-                <button onClick={() => { setPayForm({ ...payForm, amount: String(outstanding) }); setShowPayForm(true) }}
-                  className="w-full bg-green-600 text-white py-2.5 rounded-xl text-sm font-medium">
-                  Принять доплату ({outstanding.toLocaleString('ru')} ₽)
-                </button>
-              ) : (
-                <form onSubmit={saveFinalPayment} className="bg-green-50 rounded-xl p-3 space-y-2">
-                  <div className="text-xs font-medium text-green-700 mb-1">Финальная оплата</div>
-                  <input required value={payForm.amount} onChange={e => setPayForm({ ...payForm, amount: e.target.value })}
-                    type="number" min="1" placeholder="Сумма *"
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none" />
-                  <div className="flex gap-2">
-                    <select value={payForm.method} onChange={e => setPayForm({ ...payForm, method: e.target.value })}
-                      className="flex-1 border border-gray-200 rounded-lg px-2 py-2 text-sm outline-none bg-white">
-                      {PAYMENT_METHODS.map(m => <option key={m} value={m}>{PAYMENT_METHOD_LABELS[m]}</option>)}
-                    </select>
-                    <input type="date" value={payForm.date} onChange={e => setPayForm({ ...payForm, date: e.target.value })}
-                      className="flex-1 border border-gray-200 rounded-lg px-2 py-2 text-sm outline-none" />
-                  </div>
-                  <div className="flex gap-2">
-                    <button type="submit" disabled={saving === 'payment'}
-                      className="flex-1 bg-green-600 text-white py-2 rounded-lg text-sm font-medium disabled:opacity-50">
-                      {saving === 'payment' ? '...' : 'Принять'}
-                    </button>
-                    <button type="button" onClick={() => setShowPayForm(false)}
-                      className="flex-1 bg-gray-100 text-gray-600 py-2 rounded-lg text-sm">
-                      Отмена
-                    </button>
-                  </div>
-                </form>
-              )
-            )}
-          </div>
-        )}
-      </div>
-
       {/* Notes */}
       <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
         <div className="flex items-center justify-between mb-2">
@@ -570,9 +673,7 @@ export default function RegDetailPage() {
                 {saving === 'notes' ? '...' : 'Сохранить'}
               </button>
               <button onClick={() => { setNotes(reg.notes || ''); setEditingNotes(false) }}
-                className="flex-1 bg-gray-100 text-gray-600 py-2 rounded-xl text-sm">
-                Отмена
-              </button>
+                className="flex-1 bg-gray-100 text-gray-600 py-2 rounded-xl text-sm">Отмена</button>
             </div>
           </div>
         ) : (
