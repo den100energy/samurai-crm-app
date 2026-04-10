@@ -290,6 +290,12 @@ export default function StudentPage() {
     sessionsTotal: number
     sessionsAttended: number
   }[]>([])
+  const [eventHistory, setEventHistory] = useState<{
+    id: string
+    paid: boolean
+    attendance_type: string | null
+    events: { name: string; date: string; bonus_type: string | null } | null
+  }[]>([])
 
   useEffect(() => {
     async function load() {
@@ -357,6 +363,14 @@ export default function StudentPage() {
           return { ...r, sessionsTotal: sessions.length, sessionsAttended: attended.length }
         }))
       }
+
+      // Load event history
+      const { data: evParts } = await supabase
+        .from('event_participants')
+        .select('id, paid, attendance_type, events(name, date, bonus_type)')
+        .eq('student_id', id)
+        .order('id', { ascending: false })
+      setEventHistory((evParts || []) as any)
 
       // Load assignments
       const { data: asgn } = await supabase
@@ -1674,36 +1688,70 @@ export default function StudentPage() {
         </div>
       )}
 
-      {/* Seminars */}
-      {seminarHistory.length > 0 && (
+      {/* Activity: seminars + events */}
+      {(seminarHistory.length > 0 || eventHistory.length > 0) && (
         <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm mb-4">
-          <div className="font-semibold text-gray-800 mb-3">🥋 Семинары</div>
-          <div className="space-y-2">
-            {seminarHistory.map(reg => {
-              const title = (reg.seminar_events as any)?.title || 'Семинар'
-              const date = (reg.seminar_events as any)?.starts_at || ''
-              const tariffName = (reg.seminar_tariffs as any)?.name || null
-              return (
-                <div key={reg.id} className="flex items-start justify-between py-2 border-b border-gray-50 last:border-0">
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-gray-900">{title}</div>
-                    <div className="text-xs text-gray-400 mt-0.5">
-                      {date && new Date(date).toLocaleDateString('ru', { day: 'numeric', month: 'long', year: 'numeric' })}
-                      {tariffName && <span className="ml-2">· {tariffName}</span>}
-                    </div>
-                    {reg.sessionsTotal > 0 && (
-                      <div className="text-xs text-gray-500 mt-0.5">
-                        Тренировок: {reg.sessionsAttended}/{reg.sessionsTotal}
-                      </div>
-                    )}
-                    {reg.certificate_issued && (
-                      <div className="text-xs text-blue-600 mt-0.5">🎖 Сертификат выдан</div>
-                    )}
-                  </div>
-                </div>
-              )
-            })}
+          <div className="flex items-center justify-between mb-3">
+            <div className="font-semibold text-gray-800">🏆 Активность</div>
+            <div className="text-xs text-gray-400">{seminarHistory.length + eventHistory.length} событий</div>
           </div>
+
+          {seminarHistory.length > 0 && (
+            <div className="mb-3">
+              <div className="text-xs font-medium text-gray-500 mb-2 uppercase tracking-wide">Семинары</div>
+              <div className="space-y-2">
+                {seminarHistory.map(reg => {
+                  const title = (reg.seminar_events as any)?.title || 'Семинар'
+                  const date = (reg.seminar_events as any)?.starts_at || ''
+                  const tariffName = (reg.seminar_tariffs as any)?.name || null
+                  return (
+                    <div key={reg.id} className="flex items-start gap-2 py-2 border-b border-gray-50 last:border-0">
+                      <div className="text-base mt-0.5">🥋</div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium text-gray-900">{title}</div>
+                        <div className="text-xs text-gray-400 mt-0.5">
+                          {date && new Date(date).toLocaleDateString('ru', { day: 'numeric', month: 'long', year: 'numeric' })}
+                          {tariffName && <span className="ml-1">· {tariffName}</span>}
+                        </div>
+                        {reg.sessionsTotal > 0 && (
+                          <div className="text-xs text-gray-500 mt-0.5">Тренировок: {reg.sessionsAttended}/{reg.sessionsTotal}</div>
+                        )}
+                        {reg.certificate_issued && <div className="text-xs text-blue-600 mt-0.5">🎖 Сертификат выдан</div>}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {eventHistory.length > 0 && (
+            <div>
+              <div className="text-xs font-medium text-gray-500 mb-2 uppercase tracking-wide">Мероприятия</div>
+              <div className="space-y-2">
+                {eventHistory.map(ep => {
+                  const ev = (ep.events as any)
+                  if (!ev) return null
+                  const icon = ev.bonus_type === 'тренировка с оружием' ? '⚔️'
+                    : ev.bonus_type === 'мастер-класс' ? '🎓'
+                    : ev.bonus_type === 'инд.тренировка' ? '👤'
+                    : '📅'
+                  return (
+                    <div key={ep.id} className="flex items-start gap-2 py-2 border-b border-gray-50 last:border-0">
+                      <div className="text-base mt-0.5">{icon}</div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium text-gray-900">{ev.name}</div>
+                        <div className="text-xs text-gray-400 mt-0.5">
+                          {ev.date && new Date(ev.date).toLocaleDateString('ru', { day: 'numeric', month: 'long', year: 'numeric' })}
+                          {ev.bonus_type && <span className="ml-1">· {ev.bonus_type}</span>}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
