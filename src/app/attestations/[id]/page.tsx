@@ -113,6 +113,7 @@ export default function AttestationEventPage() {
   const [editForm, setEditForm] = useState({ title: '', applications_open_at: '', event_date: '', notes: '' })
   const [editGroups, setEditGroups] = useState<PreattGroup[]>([])
   const [editSaving, setEditSaving] = useState(false)
+  const [dashFilter, setDashFilter] = useState<string | null>(null)
 
   async function load() {
     const [{ data: ev }, { data: ap }, { data: stu }] = await Promise.all([
@@ -198,7 +199,6 @@ export default function AttestationEventPage() {
     return ['1 степень', '2 степень', '3 степень', '4 степень'].includes(grade) ? 2500 : 1500
   }
 
-  const filtered = discFilter === 'all' ? apps : apps.filter(a => a.discipline === discFilter)
   const studentName = (app: Application) => {
     if (!app.students) return '—'
     return Array.isArray(app.students) ? (app.students[0] as any)?.name : (app.students as any).name
@@ -222,8 +222,22 @@ export default function AttestationEventPage() {
 
   const si = EVENT_STATUS_INFO[event.status] || EVENT_STATUS_INFO.draft
   const totalApps = apps.length
-  const paidCount = apps.filter(a => a.paid).length
-  const approvedCount = apps.filter(a => a.preatt1_status === 'approved' || a.preatt1_status === 'conditional').length
+  const admittedCount  = apps.filter(a => a.req_override_by != null || (a.req_tenure_ok !== false && a.req_visits_ok !== false && a.req_age_ok !== false && (a.req_tenure_ok !== null || a.req_visits_ok !== null || a.req_age_ok !== null))).length
+  const preatt1Count   = apps.filter(a => a.preatt1_status === 'approved' || a.preatt1_status === 'conditional').length
+  const paidCount      = apps.filter(a => a.paid).length
+  const preatt2Count   = apps.filter(a => a.preatt2_status === 'approved' || a.preatt2_status === 'conditional').length
+  const passedCount    = apps.filter(a => a.result === 'passed' || a.result === 'passed_remarks').length
+
+  const DASH_STATS = [
+    { key: 'all',     icon: '📋', label: 'Заявок',  val: totalApps,    fn: () => apps },
+    { key: 'admitted',icon: '✅', label: 'Допущ.',   val: admittedCount, fn: () => apps.filter(a => a.req_override_by != null || (a.req_tenure_ok !== false && a.req_visits_ok !== false && a.req_age_ok !== false && (a.req_tenure_ok !== null || a.req_visits_ok !== null || a.req_age_ok !== null))) },
+    { key: 'preatt1', icon: '1️⃣', label: 'Пред.1',   val: preatt1Count,  fn: () => apps.filter(a => a.preatt1_status === 'approved' || a.preatt1_status === 'conditional') },
+    { key: 'paid',    icon: '💳', label: 'Оплатили', val: paidCount,     fn: () => apps.filter(a => a.paid) },
+    { key: 'preatt2', icon: '2️⃣', label: 'Пред.2',   val: preatt2Count,  fn: () => apps.filter(a => a.preatt2_status === 'approved' || a.preatt2_status === 'conditional') },
+    { key: 'passed',  icon: '🎖', label: 'Сдали',    val: passedCount,   fn: () => apps.filter(a => a.result === 'passed' || a.result === 'passed_remarks') },
+  ]
+  const dashFiltered = dashFilter ? (DASH_STATS.find(s => s.key === dashFilter)?.fn() ?? apps) : apps
+  const filtered = discFilter === 'all' ? dashFiltered : dashFiltered.filter((a: Application) => a.discipline === discFilter)
 
   return (
     <main className="max-w-2xl mx-auto p-4">
@@ -317,14 +331,20 @@ export default function AttestationEventPage() {
         </form>
       )}
 
-      {/* Stats */}
-      <div className="grid grid-cols-3 gap-2 mb-4">
-        {[{ val: totalApps, label: 'Заявок' }, { val: paidCount, label: 'Оплачено' }, { val: approvedCount, label: 'Допущено' }].map(m => (
-          <div key={m.label} className="bg-white border border-gray-200 rounded-xl p-3 text-center">
-            <p className="text-xl font-bold text-gray-900">{m.val}</p>
-            <p className="text-xs text-gray-500 mt-0.5">{m.label}</p>
-          </div>
-        ))}
+      {/* Stats dashboard */}
+      <div className="grid grid-cols-6 gap-1.5 mb-4">
+        {DASH_STATS.map(s => {
+          const active = dashFilter === s.key || (dashFilter === null && s.key === 'all')
+          return (
+            <button key={s.key}
+              onClick={() => setDashFilter(dashFilter === s.key || (s.key === 'all' && dashFilter === null) ? null : s.key === 'all' ? null : s.key)}
+              className={`rounded-xl p-2 text-center transition-all border ${active ? 'bg-black text-white border-black' : 'bg-white text-gray-700 border-gray-200 hover:border-gray-400'}`}>
+              <div className="text-base leading-none">{s.icon}</div>
+              <div className={`text-lg font-bold leading-tight mt-0.5 ${active ? 'text-white' : 'text-gray-900'}`}>{s.val}</div>
+              <div className={`text-[10px] leading-tight mt-0.5 ${active ? 'text-gray-300' : 'text-gray-400'}`}>{s.label}</div>
+            </button>
+          )
+        })}
       </div>
 
       {/* Group schedule */}
