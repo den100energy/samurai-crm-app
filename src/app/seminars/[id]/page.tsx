@@ -115,6 +115,13 @@ export default function SeminarPage() {
     increase_every_days: '7', increase_starts_at: '', min_deposit_pct: '20', max_participants: '',
   })
 
+  // Tariff edit
+  const [editingTariffId, setEditingTariffId] = useState<string | null>(null)
+  const [editTariffForm, setEditTariffForm] = useState({
+    name: '', description: '', base_price: '', increase_pct: '10',
+    increase_every_days: '7', increase_starts_at: '', min_deposit_pct: '20', max_participants: '',
+  })
+
   // Manual registration form
   const [showRegForm, setShowRegForm] = useState(false)
   const [regForm, setRegForm] = useState({
@@ -172,6 +179,38 @@ export default function SeminarPage() {
     if (!confirm('Удалить тариф?')) return
     await supabase.from('seminar_tariffs').delete().eq('id', tariffId)
     setTariffs(prev => prev.filter(t => t.id !== tariffId))
+  }
+
+  function startEditTariff(t: Tariff) {
+    setEditingTariffId(t.id)
+    setEditTariffForm({
+      name: t.name,
+      description: t.description || '',
+      base_price: t.base_price?.toString() || '',
+      increase_pct: t.increase_pct.toString(),
+      increase_every_days: t.increase_every_days.toString(),
+      increase_starts_at: t.increase_starts_at || '',
+      min_deposit_pct: t.min_deposit_pct.toString(),
+      max_participants: t.max_participants?.toString() || '',
+    })
+  }
+
+  async function saveTariff(e: React.FormEvent, tariffId: string) {
+    e.preventDefault()
+    setSaving('edit-tariff')
+    await supabase.from('seminar_tariffs').update({
+      name: editTariffForm.name,
+      description: editTariffForm.description || null,
+      base_price: editTariffForm.base_price ? parseFloat(editTariffForm.base_price) : null,
+      increase_pct: parseInt(editTariffForm.increase_pct) || 0,
+      increase_every_days: parseInt(editTariffForm.increase_every_days) || 7,
+      increase_starts_at: editTariffForm.increase_starts_at || null,
+      min_deposit_pct: parseInt(editTariffForm.min_deposit_pct) || 20,
+      max_participants: editTariffForm.max_participants ? parseInt(editTariffForm.max_participants) : null,
+    }).eq('id', tariffId)
+    setEditingTariffId(null)
+    setSaving(null)
+    load()
   }
 
   async function addRegistration(e: React.FormEvent) {
@@ -372,33 +411,97 @@ export default function SeminarPage() {
               const nextDate = nextPriceDate(t)
               const deposit = minDeposit(t)
               const tRegCount = regs.filter(r => r.tariff_id === t.id).length
+              const isEditing = editingTariffId === t.id
               return (
-                <div key={t.id} className="bg-white rounded-xl p-3 border border-gray-100 shadow-sm">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="font-medium text-gray-800 text-sm">{t.name}</div>
-                      {t.description && <div className="text-xs text-gray-500 mt-1 whitespace-pre-line">{t.description}</div>}
-                      <div className="flex items-center gap-3 mt-2 flex-wrap">
-                        <span className="text-base font-bold text-gray-900">{price.toLocaleString('ru')} ₽</span>
-                        {t.base_price !== price && (
-                          <span className="text-xs text-gray-400 line-through">{t.base_price?.toLocaleString('ru')} ₽</span>
-                        )}
-                        <span className="text-xs text-gray-500">предоплата от {deposit.toLocaleString('ru')} ₽</span>
-                      </div>
-                      {nextDate && nextDate > today && (
-                        <div className="text-xs text-orange-600 mt-1">
-                          ⚡ Цена вырастет до {Math.round(price * (1 + t.increase_pct / 100)).toLocaleString('ru')} ₽ с {nextDate}
+                <div key={t.id} className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+                  {isEditing ? (
+                    <form onSubmit={e => saveTariff(e, t.id)} className="p-3 space-y-3">
+                      <div className="text-xs font-medium text-indigo-600 mb-1">Редактирование тарифа</div>
+                      <input required value={editTariffForm.name} onChange={e => setEditTariffForm({ ...editTariffForm, name: e.target.value })}
+                        placeholder="Название *" className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none" />
+                      <textarea value={editTariffForm.description} onChange={e => setEditTariffForm({ ...editTariffForm, description: e.target.value })}
+                        placeholder="Расписание / описание" rows={3}
+                        className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none resize-none" />
+                      <input value={editTariffForm.base_price} onChange={e => setEditTariffForm({ ...editTariffForm, base_price: e.target.value })}
+                        placeholder="Стартовая цена (₽) *" type="number" required
+                        className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none" />
+                      <div className="border border-gray-100 rounded-xl p-3 space-y-2">
+                        <div className="text-xs font-medium text-gray-500">Повышение цены</div>
+                        <div className="flex gap-2">
+                          <div className="flex-1">
+                            <label className="text-xs text-gray-400 mb-1 block">% повышения</label>
+                            <input value={editTariffForm.increase_pct} onChange={e => setEditTariffForm({ ...editTariffForm, increase_pct: e.target.value })}
+                              type="number" min="0" className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none" />
+                          </div>
+                          <div className="flex-1">
+                            <label className="text-xs text-gray-400 mb-1 block">каждые N дней</label>
+                            <input value={editTariffForm.increase_every_days} onChange={e => setEditTariffForm({ ...editTariffForm, increase_every_days: e.target.value })}
+                              type="number" min="1" className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none" />
+                          </div>
                         </div>
-                      )}
-                      <div className="text-xs text-gray-400 mt-1">
-                        👥 {tRegCount}{t.max_participants ? `/${t.max_participants}` : ''} записей
+                        <div>
+                          <label className="text-xs text-gray-400 mb-1 block">Начало роста цены</label>
+                          <input value={editTariffForm.increase_starts_at} onChange={e => setEditTariffForm({ ...editTariffForm, increase_starts_at: e.target.value })}
+                            type="date" className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none" />
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <div className="flex-1">
+                          <label className="text-xs text-gray-400 mb-1 block">Мин. предоплата %</label>
+                          <input value={editTariffForm.min_deposit_pct} onChange={e => setEditTariffForm({ ...editTariffForm, min_deposit_pct: e.target.value })}
+                            type="number" min="0" max="100" className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none" />
+                        </div>
+                        <div className="flex-1">
+                          <label className="text-xs text-gray-400 mb-1 block">Макс. участников</label>
+                          <input value={editTariffForm.max_participants} onChange={e => setEditTariffForm({ ...editTariffForm, max_participants: e.target.value })}
+                            type="number" min="1" placeholder="без лимита"
+                            className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none" />
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button type="submit" disabled={saving === 'edit-tariff'}
+                          className="flex-1 bg-indigo-600 text-white py-2 rounded-xl text-sm font-medium disabled:opacity-50">
+                          {saving === 'edit-tariff' ? 'Сохранение...' : 'Сохранить'}
+                        </button>
+                        <button type="button" onClick={() => setEditingTariffId(null)}
+                          className="flex-1 bg-gray-100 text-gray-600 py-2 rounded-xl text-sm">
+                          Отмена
+                        </button>
+                      </div>
+                    </form>
+                  ) : (
+                    <div className="p-3">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="font-medium text-gray-800 text-sm">{t.name}</div>
+                          {t.description && <div className="text-xs text-gray-500 mt-1 whitespace-pre-line">{t.description}</div>}
+                          <div className="flex items-center gap-3 mt-2 flex-wrap">
+                            <span className="text-base font-bold text-gray-900">{price.toLocaleString('ru')} ₽</span>
+                            {t.base_price !== price && (
+                              <span className="text-xs text-gray-400 line-through">{t.base_price?.toLocaleString('ru')} ₽</span>
+                            )}
+                            <span className="text-xs text-gray-500">предоплата от {deposit.toLocaleString('ru')} ₽</span>
+                          </div>
+                          {nextDate && nextDate > today && (
+                            <div className="text-xs text-orange-600 mt-1">
+                              ⚡ Цена вырастет до {Math.round(price * (1 + t.increase_pct / 100)).toLocaleString('ru')} ₽ с {nextDate}
+                            </div>
+                          )}
+                          <div className="text-xs text-gray-400 mt-1">
+                            👥 {tRegCount}{t.max_participants ? `/${t.max_participants}` : ''} записей
+                          </div>
+                        </div>
+                        {canEdit && (
+                          <div className="flex items-center gap-2 ml-2">
+                            <button onClick={() => startEditTariff(t)}
+                              className="text-gray-400 hover:text-indigo-600 text-sm px-1">✏️</button>
+                            <button onClick={() => deleteTariff(t.id)}
+                              className="text-gray-300 hover:text-red-400 text-lg leading-none">×</button>
+                          </div>
+                        )}
                       </div>
                     </div>
-                    {canEdit && (
-                      <button onClick={() => deleteTariff(t.id)}
-                        className="text-gray-300 hover:text-red-400 text-lg leading-none ml-2">×</button>
-                    )}
-                  </div>
+                  )}
                 </div>
               )
             })}
