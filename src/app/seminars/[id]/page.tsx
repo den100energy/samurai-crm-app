@@ -108,6 +108,46 @@ export default function SeminarPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState<string | null>(null)
 
+  // Seminar edit
+  const [editingSeminar, setEditingSeminar] = useState(false)
+  const [editSeminarForm, setEditSeminarForm] = useState({
+    title: '', discipline: '', location: '', starts_at: '', ends_at: '',
+    registration_deadline: '', description: '', schedule_text: '',
+  })
+
+  function startEditSeminar() {
+    if (!seminar) return
+    setEditSeminarForm({
+      title: seminar.title,
+      discipline: seminar.discipline || '',
+      location: seminar.location || '',
+      starts_at: seminar.starts_at,
+      ends_at: seminar.ends_at,
+      registration_deadline: seminar.registration_deadline || '',
+      description: seminar.description || '',
+      schedule_text: seminar.schedule_text || '',
+    })
+    setEditingSeminar(true)
+  }
+
+  async function saveSeminar(e: React.FormEvent) {
+    e.preventDefault()
+    setSaving('seminar')
+    await supabase.from('seminar_events').update({
+      title: editSeminarForm.title,
+      discipline: editSeminarForm.discipline || null,
+      location: editSeminarForm.location || null,
+      starts_at: editSeminarForm.starts_at,
+      ends_at: editSeminarForm.ends_at,
+      registration_deadline: editSeminarForm.registration_deadline || null,
+      description: editSeminarForm.description || null,
+      schedule_text: editSeminarForm.schedule_text || null,
+    }).eq('id', id)
+    setEditingSeminar(false)
+    setSaving(null)
+    load()
+  }
+
   // Tariff form
   const [showTariffForm, setShowTariffForm] = useState(false)
   const [tariffForm, setTariffForm] = useState({
@@ -275,7 +315,62 @@ export default function SeminarPage() {
         <span className={`text-xs px-2 py-1 rounded-full font-medium whitespace-nowrap ${statusColors[seminar.status] || 'bg-gray-100 text-gray-500'}`}>
           {SEMINAR_STATUS_LABELS[seminar.status] || seminar.status}
         </span>
+        {canEdit && (
+          <button onClick={startEditSeminar} className="text-gray-400 hover:text-indigo-600 text-sm">✏️</button>
+        )}
       </div>
+
+      {/* Seminar edit form */}
+      {editingSeminar && canEdit && (
+        <form onSubmit={saveSeminar} className="bg-white rounded-2xl p-4 border border-indigo-100 shadow-sm mb-4 space-y-3">
+          <div className="text-sm font-semibold text-indigo-700 mb-1">Редактирование семинара</div>
+          <input required value={editSeminarForm.title} onChange={e => setEditSeminarForm({ ...editSeminarForm, title: e.target.value })}
+            placeholder="Название *" className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none" />
+          <select value={editSeminarForm.discipline} onChange={e => setEditSeminarForm({ ...editSeminarForm, discipline: e.target.value })}
+            className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none bg-white">
+            <option value="">Дисциплина (необязательно)</option>
+            <option value="aikido">Айкидо</option>
+            <option value="wushu">Ушу</option>
+            <option value="both">Айкидо + Ушу</option>
+            <option value="qigong">Цигун</option>
+          </select>
+          <input value={editSeminarForm.location} onChange={e => setEditSeminarForm({ ...editSeminarForm, location: e.target.value })}
+            placeholder="Место проведения" className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none" />
+          <div className="flex gap-2">
+            <div className="flex-1">
+              <label className="text-xs text-gray-400 mb-1 block">Начало *</label>
+              <input required type="date" value={editSeminarForm.starts_at} onChange={e => setEditSeminarForm({ ...editSeminarForm, starts_at: e.target.value })}
+                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none" />
+            </div>
+            <div className="flex-1">
+              <label className="text-xs text-gray-400 mb-1 block">Конец *</label>
+              <input required type="date" value={editSeminarForm.ends_at} onChange={e => setEditSeminarForm({ ...editSeminarForm, ends_at: e.target.value })}
+                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none" />
+            </div>
+          </div>
+          <div>
+            <label className="text-xs text-gray-400 mb-1 block">Приём заявок до</label>
+            <input type="date" value={editSeminarForm.registration_deadline} onChange={e => setEditSeminarForm({ ...editSeminarForm, registration_deadline: e.target.value })}
+              className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none" />
+          </div>
+          <textarea value={editSeminarForm.description} onChange={e => setEditSeminarForm({ ...editSeminarForm, description: e.target.value })}
+            placeholder="Описание (покажется участникам)" rows={3}
+            className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none resize-none" />
+          <textarea value={editSeminarForm.schedule_text} onChange={e => setEditSeminarForm({ ...editSeminarForm, schedule_text: e.target.value })}
+            placeholder="Общее расписание семинара (необязательно)" rows={3}
+            className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none resize-none" />
+          <div className="flex gap-2">
+            <button type="submit" disabled={saving === 'seminar'}
+              className="flex-1 bg-indigo-600 text-white py-2.5 rounded-xl text-sm font-medium disabled:opacity-50">
+              {saving === 'seminar' ? 'Сохранение...' : 'Сохранить'}
+            </button>
+            <button type="button" onClick={() => setEditingSeminar(false)}
+              className="flex-1 bg-gray-100 text-gray-600 py-2.5 rounded-xl text-sm">
+              Отмена
+            </button>
+          </div>
+        </form>
+      )}
 
       {/* Status controls */}
       {canEdit && (
