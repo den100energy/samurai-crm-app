@@ -508,12 +508,14 @@ export default function ApplicationDetailPage() {
             {(tenureOk === false || visitsOk === false || ageOk === false) && (
               <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 space-y-2">
                 <p className="text-xs font-medium text-amber-800">Не проходит по нормативам — допустить вручную?</p>
-                <input
+                <select
                   value={overrideForm.by}
                   onChange={e => setOverrideForm(p => ({ ...p, by: e.target.value }))}
-                  placeholder="Ф.И.О. тренера, который допускает"
-                  className="w-full border rounded-xl px-3 py-2 text-sm"
-                />
+                  className="w-full border rounded-xl px-3 py-2 text-sm bg-white"
+                >
+                  <option value="">Выберите тренера</option>
+                  {trainers.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
                 <input
                   value={overrideForm.note}
                   onChange={e => setOverrideForm(p => ({ ...p, note: e.target.value }))}
