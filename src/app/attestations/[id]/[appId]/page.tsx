@@ -127,6 +127,7 @@ const PREATT_STATUSES = [
   { value: 'approved', label: 'Допущен' },
   { value: 'conditional', label: 'Условно допущен' },
   { value: 'rejected', label: 'Не допущен' },
+  { value: 'no_show', label: 'Не пришёл' },
 ]
 
 const RESULT_STATUSES = [
