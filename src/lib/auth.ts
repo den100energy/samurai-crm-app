@@ -25,6 +25,11 @@ export const PUBLIC_ROUTES = [
   '/api',
 ]
 
+// Публичные маршруты по точному паттерну (regex)
+export const PUBLIC_ROUTE_PATTERNS = [
+  /^\/seminars\/[^/]+\/register(\/.*)?$/,
+]
+
 // Иерархия разделов с подпунктами
 export const SECTIONS = [
   {

@@ -1,12 +1,13 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
-import { PUBLIC_ROUTES, ROLE_HOME, UserRole, canAccessRoute } from '@/lib/auth'
+import { PUBLIC_ROUTES, PUBLIC_ROUTE_PATTERNS, ROLE_HOME, UserRole, canAccessRoute } from '@/lib/auth'
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   // Пропускаем публичные маршруты без проверки
   const isPublic = PUBLIC_ROUTES.some(route => pathname.startsWith(route))
+    || PUBLIC_ROUTE_PATTERNS.some(pattern => pattern.test(pathname))
   if (isPublic) return NextResponse.next()
 
   let response = NextResponse.next({ request })
