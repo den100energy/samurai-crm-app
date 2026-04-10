@@ -133,9 +133,22 @@ export default function SeminarRegisterPage() {
     const referralDiscount = isExternal && refCode ? 10 : 0
     const finalPrice = price && referralDiscount > 0 ? Math.round(price * (1 - referralDiscount / 100)) : price
 
+    // Auto-match student by phone
+    let matchedStudentId: string | null = null
+    if (form.participant_phone) {
+      const phone = form.participant_phone.replace(/\D/g, '')
+      const { data: students } = await supabase
+        .from('students')
+        .select('id, phone')
+        .eq('status', 'active')
+      const match = (students || []).find(s => s.phone && s.phone.replace(/\D/g, '') === phone)
+      if (match) matchedStudentId = match.id
+    }
+
     await supabase.from('seminar_registrations').insert({
       seminar_id: id,
       tariff_id: form.tariff_id,
+      student_id: matchedStudentId,
       is_external: isExternal,
       participant_name: form.participant_name,
       participant_phone: form.participant_phone || null,

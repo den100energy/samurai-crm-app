@@ -130,6 +130,11 @@ export default function RegDetailPage() {
   const [showTariffEdit, setShowTariffEdit] = useState(false)
   const [newTariffId, setNewTariffId] = useState('')
 
+  const [allStudents, setAllStudents] = useState<{id: string; name: string; phone: string | null; group_name: string | null}[]>([])
+  const [showLinkStudent, setShowLinkStudent] = useState(false)
+  const [linkGroup, setLinkGroup] = useState('')
+  const [linkStudentId, setLinkStudentId] = useState('')
+
   async function load() {
     const [{ data: regData }, { data: sessData }, { data: attData }, { data: tarData }] = await Promise.all([
       supabase.from('seminar_registrations')
@@ -315,6 +320,22 @@ export default function RegDetailPage() {
     setNewTariffId('')
     setSaving(null)
     load()
+  }
+
+  async function loadStudents() {
+    if (allStudents.length > 0) return
+    const { data } = await supabase.from('students').select('id, name, phone, group_name').eq('status', 'active').order('name')
+    setAllStudents(data || [])
+  }
+
+  async function linkStudent() {
+    if (!linkStudentId) return
+    setSaving('link')
+    await supabase.from('seminar_registrations').update({ student_id: linkStudentId }).eq('id', regId)
+    setReg(prev => prev ? { ...prev, student_id: linkStudentId } : prev)
+    setShowLinkStudent(false)
+    setLinkStudentId('')
+    setSaving(null)
   }
 
   if (loading) return <div className="text-center py-12 text-gray-400">Загрузка...</div>
@@ -647,7 +668,12 @@ export default function RegDetailPage() {
 
       {/* Participant info */}
       <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm mb-4 space-y-2">
-        <div className="text-sm font-semibold text-gray-700 mb-2">Данные участника</div>
+        <div className="flex items-center justify-between mb-2">
+          <div className="text-sm font-semibold text-gray-700">Данные участника</div>
+          {reg.student_id && (
+            <Link href={`/students/${reg.student_id}`} className="text-xs text-indigo-600 hover:underline">→ Карточка ученика</Link>
+          )}
+        </div>
         {reg.participant_phone && (
           <div className="flex justify-between text-sm">
             <span className="text-gray-400">Телефон</span>
@@ -688,6 +714,52 @@ export default function RegDetailPage() {
           </div>
         )}
       </div>
+
+      {/* Link to student */}
+      {!reg.student_id && canEdit && (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-2xl p-3 mb-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-xs font-medium text-yellow-700">Не привязан к ученику</div>
+              <div className="text-xs text-gray-500 mt-0.5">Телефон не совпал ни с кем в базе</div>
+            </div>
+            {!showLinkStudent && (
+              <button onClick={() => { setShowLinkStudent(true); loadStudents() }}
+                className="text-xs px-3 py-1.5 bg-yellow-100 text-yellow-700 rounded-lg hover:bg-yellow-200 font-medium">
+                Привязать
+              </button>
+            )}
+          </div>
+          {showLinkStudent && (
+            <div className="mt-3 space-y-2">
+              <select value={linkGroup} onChange={e => { setLinkGroup(e.target.value); setLinkStudentId('') }}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none bg-white">
+                <option value="">Все группы</option>
+                {[...new Set(allStudents.map(s => s.group_name).filter(Boolean))].sort().map(g => (
+                  <option key={g} value={g!}>{g}</option>
+                ))}
+              </select>
+              <select value={linkStudentId} onChange={e => setLinkStudentId(e.target.value)}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none bg-white">
+                <option value="">Выберите ученика</option>
+                {allStudents
+                  .filter(s => !linkGroup || s.group_name === linkGroup)
+                  .map(s => (
+                    <option key={s.id} value={s.id}>{s.name}{s.phone ? ` · ${s.phone}` : ''}</option>
+                  ))}
+              </select>
+              <div className="flex gap-2">
+                <button onClick={linkStudent} disabled={!linkStudentId || saving === 'link'}
+                  className="flex-1 bg-black text-white py-1.5 rounded-lg text-xs font-medium disabled:opacity-50">
+                  {saving === 'link' ? '...' : 'Привязать'}
+                </button>
+                <button onClick={() => setShowLinkStudent(false)}
+                  className="flex-1 bg-gray-100 text-gray-600 py-1.5 rounded-lg text-xs">Отмена</button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Referral */}
       {referrer && (
