@@ -368,7 +368,7 @@ export default function CabinetPage() {
         .eq('student_id', sid).order('date', { ascending: false }),
       supabase.from('attendance').select('date, present').eq('student_id', sid)
         .order('date', { ascending: false }).limit(180),
-      supabase.from('event_participants').select('events(date, title, bonus_type)').eq('student_id', sid),
+      supabase.from('event_participants').select('events(name, date, bonus_type)').eq('student_id', sid),
       supabase.from('tickets').select('id, type, description, status, resolution_note, created_at')
         .eq('student_id', sid).neq('type', 'crm_задача').order('created_at', { ascending: false }),
       supabase.from('diagnostic_surveys').select('ai_program').eq('student_id', sid)
@@ -447,8 +447,8 @@ export default function CabinetPage() {
     setAttendance(attRes.data || [])
     const evVisits = ((evParticipantsRes.data || []) as any[])
       .map(ep => ep.events)
-      .filter(ev => ev?.date && ev?.title)
-      .map(ev => ({ date: ev.date as string, title: ev.title as string, bonus_type: (ev.bonus_type as string | null) ?? null }))
+      .filter(ev => ev?.date && ev?.name)
+      .map(ev => ({ date: ev.date as string, title: ev.name as string, bonus_type: (ev.bonus_type as string | null) ?? null }))
     setEventVisits(evVisits)
 
     const semRegs = ((semRegRes.data || []) as any[])
