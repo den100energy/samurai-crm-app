@@ -316,6 +316,7 @@ export default function CabinetPage() {
   const [eventVisits, setEventVisits] = useState<{ date: string; title: string; bonus_type: string | null; event_id: string; paid: boolean }[]>([])
   const [seminarHistory, setSeminarHistory] = useState<{ id: string; title: string; starts_at: string }[]>([])
   const [mySeminarRegs, setMySeminarRegs] = useState<Record<string, string>>({})
+  const [myEventRegs, setMyEventRegs] = useState<Record<string, boolean>>({})
   const [upcomingItems, setUpcomingItems] = useState<{
     type: 'seminar' | 'event' | 'attestation'
     id: string
@@ -521,6 +522,7 @@ export default function CabinetPage() {
     ])
 
     const groupName = studentData.group_name
+    const phoneNorm = (studentData.phone || '').replace(/\D/g, '')
 
     const semItems = (upcomSeminars || []).map(s => ({
       type: 'seminar' as const,
@@ -557,6 +559,34 @@ export default function CabinetPage() {
     const allUpcoming = [...semItems, ...evItems, ...attItems]
       .sort((a, b) => a.date.localeCompare(b.date))
     setUpcomingItems(allUpcoming)
+
+    // Проверить статус записи на ближайшие мероприятия (по student_id ИЛИ телефону)
+    const upcomSemIds = semItems.map(s => s.id)
+    const upcomEvIds = evItems.map(e => e.id)
+    const [{ data: semRegsUpcoming }, { data: evRegsUpcoming }] = await Promise.all([
+      upcomSemIds.length > 0
+        ? supabase.from('seminar_registrations').select('seminar_id, status, student_id, participant_phone').in('seminar_id', upcomSemIds)
+        : Promise.resolve({ data: [] as any[] }),
+      upcomEvIds.length > 0
+        ? supabase.from('event_participants').select('event_id, paid, student_id, participant_phone').in('event_id', upcomEvIds)
+        : Promise.resolve({ data: [] as any[] }),
+    ])
+    const semRegsMap: Record<string, string> = {}
+    ;(semRegsUpcoming || []).forEach((r: any) => {
+      const rPhone = (r.participant_phone || '').replace(/\D/g, '')
+      if (r.student_id === sid || (phoneNorm && rPhone === phoneNorm)) {
+        semRegsMap[r.seminar_id] = r.status
+      }
+    })
+    setMySeminarRegs(semRegsMap)
+    const evRegsMap: Record<string, boolean> = {}
+    ;(evRegsUpcoming || []).forEach((r: any) => {
+      const rPhone = (r.participant_phone || '').replace(/\D/g, '')
+      if (r.student_id === sid || (phoneNorm && rPhone === phoneNorm)) {
+        evRegsMap[r.event_id] = r.paid
+      }
+    })
+    setMyEventRegs(evRegsMap)
 
     setLoading(false)
   }
@@ -1077,9 +1107,11 @@ export default function CabinetPage() {
                           return <a href={`/seminars/${item.id}/register`} className="shrink-0 text-xs bg-black text-white px-3 py-1.5 rounded-lg font-medium hover:bg-gray-800 transition-colors">Записаться</a>
                         })()}
                         {item.type === 'event' && item.id && (() => {
-                          const reg = eventVisits.find(ev => ev.event_id === item.id)
-                          if (reg?.paid) return <span className="shrink-0 text-xs bg-green-100 text-green-700 px-3 py-1.5 rounded-lg font-medium">✅ Оплачено</span>
-                          if (reg) return <span className="shrink-0 text-xs bg-yellow-100 text-yellow-700 px-3 py-1.5 rounded-lg font-medium">⏳ Заявка</span>
+                          if (item.id in myEventRegs) {
+                            return myEventRegs[item.id]
+                              ? <span className="shrink-0 text-xs bg-green-100 text-green-700 px-3 py-1.5 rounded-lg font-medium">✅ Оплачено</span>
+                              : <span className="shrink-0 text-xs bg-yellow-100 text-yellow-700 px-3 py-1.5 rounded-lg font-medium">⏳ Заявка</span>
+                          }
                           return <a href={`/events/${item.id}/register`} className="shrink-0 text-xs bg-black text-white px-3 py-1.5 rounded-lg font-medium hover:bg-gray-800 transition-colors">Записаться</a>
                         })()}
                       </div>

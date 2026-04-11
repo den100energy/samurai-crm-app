@@ -189,6 +189,7 @@ export default function ParentPage() {
   const [upcomingRegEvents, setUpcomingRegEvents] = useState<{ id: string; name: string; date: string; time_start: string | null; bonus_type: string | null }[]>([])
   const [openSeminars, setOpenSeminars] = useState<{ id: string; title: string; starts_at: string; ends_at: string; seminar_tariffs: { id: string; name: string; base_price: number | null; increase_pct: number; increase_every_days: number; increase_starts_at: string | null; min_deposit_pct: number }[] }[]>([])
   const [myRegistrations, setMyRegistrations] = useState<{ id: string; seminar_id: string; participant_name: string; status: string; locked_price: number | null; deposit_amount: number | null; seminar_tariffs: { name: string } | null }[]>([])
+  const [myEventRegs, setMyEventRegs] = useState<Record<string, boolean>>({})
   const [showAppForm, setShowAppForm] = useState(false)
   const [appSubmitting, setAppSubmitting] = useState(false)
   const [appForm, setAppForm] = useState({ event_id: '', discipline: 'aikido' as 'aikido' | 'wushu', current_grade: '', target_grade: '', last_attestation_date: '' })
@@ -250,10 +251,39 @@ export default function ParentPage() {
       setSeminarHistory(semRegs)
 
       const groupName = s.group_name
+      const phoneNorm = (s.phone || '').replace(/\D/g, '')
       const regEvs = ((regEventsData || []) as any[])
         .filter(e => !e.group_restriction || e.group_restriction.length === 0 || (groupName && e.group_restriction.includes(groupName)))
         .map(e => ({ id: e.id, name: e.name, date: e.date, time_start: e.time_start, bonus_type: e.bonus_type }))
       setUpcomingRegEvents(regEvs)
+
+      // Проверить статус записи по student_id ИЛИ телефону
+      const upcomEvIds = regEvs.map(e => e.id)
+      const upcomSemIds = ((openSeminarsData as any[]) || []).map((sem: any) => sem.id)
+      const [{ data: evRegsUpcoming }, { data: semRegsUpcoming }] = await Promise.all([
+        upcomEvIds.length > 0
+          ? supabase.from('event_participants').select('event_id, paid, student_id, participant_phone').in('event_id', upcomEvIds)
+          : Promise.resolve({ data: [] as any[] }),
+        upcomSemIds.length > 0
+          ? supabase.from('seminar_registrations').select('seminar_id, status, student_id, participant_phone').in('seminar_id', upcomSemIds)
+          : Promise.resolve({ data: [] as any[] }),
+      ])
+      const evRegsMap: Record<string, boolean> = {}
+      ;(evRegsUpcoming || []).forEach((r: any) => {
+        const rPhone = (r.participant_phone || '').replace(/\D/g, '')
+        if (r.student_id === s.id || (phoneNorm && rPhone === phoneNorm)) {
+          evRegsMap[r.event_id] = r.paid
+        }
+      })
+      setMyEventRegs(evRegsMap)
+      // Добавить записи на семинары, найденные по телефону
+      const studentIdRegs = (myRegsData as any[]) || []
+      const existingSemIds = new Set(studentIdRegs.map((r: any) => r.seminar_id))
+      const phoneMatchedSemRegs = (semRegsUpcoming || [])
+        .filter((r: any) => !existingSemIds.has(r.seminar_id) && phoneNorm && (r.participant_phone || '').replace(/\D/g, '') === phoneNorm)
+        .map((r: any) => ({ id: r.id || '', seminar_id: r.seminar_id, participant_name: '', status: r.status, locked_price: null, deposit_amount: null, seminar_tariffs: null }))
+      setMyRegistrations([...studentIdRegs, ...phoneMatchedSemRegs])
+
       const foundSub = subs?.find((s: Subscription) => !s.is_pending) || null
       if (subs && subs.length > 0) setActiveSub(foundSub)
       if (foundSub?.id) {
@@ -291,7 +321,7 @@ export default function ParentPage() {
       const openEvs = (openEventsData || []) as { id: string; title: string; discipline: string; event_date: string }[]
       setOpenEvents(openEvs)
       setOpenSeminars((openSeminarsData as any[]) || [])
-      setMyRegistrations((myRegsData as any[]) || [])
+      // myRegistrations уже обновлён выше (с phone-matching)
       if (openEvs.length > 0) {
         const ev = openEvs[0]
         const disc: 'aikido' | 'wushu' = ev.discipline === 'wushu' ? 'wushu' : 'aikido'
@@ -1196,7 +1226,6 @@ export default function ParentPage() {
                         : ev.bonus_type === 'мастер-класс' ? '🎓'
                         : ev.bonus_type === 'индивидуальное занятие' ? '👤'
                         : '📅'
-                      const reg = eventVisits.find(v => v.event_id === ev.id)
                       return (
                         <div key={ev.id} className="pb-3 border-b border-gray-50 last:border-0 last:pb-0">
                           <div className="flex items-start justify-between gap-2">
@@ -1207,14 +1236,14 @@ export default function ParentPage() {
                                 {ev.time_start && <span className="ml-1">· {ev.time_start.slice(0, 5)}</span>}
                               </div>
                             </div>
-                            {reg?.paid
-                              ? <span className="shrink-0 text-xs bg-green-100 text-green-700 px-3 py-1.5 rounded-lg font-medium">✅ Оплачено</span>
-                              : reg
-                                ? <span className="shrink-0 text-xs bg-yellow-100 text-yellow-700 px-3 py-1.5 rounded-lg font-medium">⏳ Заявка</span>
-                                : <a href={`/events/${ev.id}/register`} target="_blank" rel="noreferrer"
-                                    className="shrink-0 text-xs bg-black text-white px-3 py-1.5 rounded-lg font-medium">
-                                    Записаться
-                                  </a>
+                            {ev.id in myEventRegs
+                              ? myEventRegs[ev.id]
+                                ? <span className="shrink-0 text-xs bg-green-100 text-green-700 px-3 py-1.5 rounded-lg font-medium">✅ Оплачено</span>
+                                : <span className="shrink-0 text-xs bg-yellow-100 text-yellow-700 px-3 py-1.5 rounded-lg font-medium">⏳ Заявка</span>
+                              : <a href={`/events/${ev.id}/register`} target="_blank" rel="noreferrer"
+                                  className="shrink-0 text-xs bg-black text-white px-3 py-1.5 rounded-lg font-medium">
+                                  Записаться
+                                </a>
                             }
                           </div>
                         </div>
