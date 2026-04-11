@@ -42,6 +42,8 @@ async function loadWithSub(students: { id: string; name: string; group_name: str
   }))
 }
 
+type MissingDay = { date: string; group_name: string }
+
 export default function AttendancePage() {
   const { role, permissions } = useAuth()
   const canEdit = role !== 'trainer' || permissions.includes('attendance.edit')
@@ -56,6 +58,8 @@ export default function AttendancePage() {
   const [saved, setSaved] = useState(false)
   const [originalPresent, setOriginalPresent] = useState<Set<string>>(new Set())
   const [selectedSubs, setSelectedSubs] = useState<Record<string, string>>({}) // studentId → subId
+  const [missingDays, setMissingDays] = useState<MissingDay[]>([])
+  const [showAllMissing, setShowAllMissing] = useState(false)
 
   useEffect(() => {
     async function load() {
@@ -111,6 +115,64 @@ export default function AttendancePage() {
     setShowGuests(next)
     if (next) loadGuests()
   }
+
+  useEffect(() => {
+    async function loadMissingDays() {
+      const today = localDateStr()
+
+      // Последние 14 дней (не включая сегодня)
+      const days: string[] = []
+      for (let i = 1; i <= 14; i++) {
+        const d = new Date()
+        d.setDate(d.getDate() - i)
+        days.push(localDateStr(d))
+      }
+
+      // Расписание и отмены за этот период
+      const [{ data: schedules }, { data: overrides }] = await Promise.all([
+        supabase.from('schedule').select('group_name, day_of_week'),
+        supabase.from('schedule_overrides').select('date, group_name, cancelled').gte('date', days[days.length - 1]).lte('date', today),
+      ])
+
+      // Строим set отменённых: "date|group"
+      const cancelledSet = new Set<string>()
+      for (const ov of overrides || []) {
+        if (ov.cancelled) cancelledSet.add(`${ov.date}|${ov.group_name}`)
+      }
+
+      // Вычисляем все ожидаемые тренировки
+      const expected: MissingDay[] = []
+      for (const dayStr of days) {
+        // day_of_week: 1=Пн … 7=Вс (как в нашей таблице)
+        const jsDay = new Date(dayStr + 'T00:00:00').getDay() // 0=Вс
+        const dayOfWeek = jsDay === 0 ? 7 : jsDay
+        for (const s of schedules || []) {
+          if (s.day_of_week === dayOfWeek && !cancelledSet.has(`${dayStr}|${s.group_name}`)) {
+            expected.push({ date: dayStr, group_name: s.group_name })
+          }
+        }
+      }
+
+      if (expected.length === 0) { setMissingDays([]); return }
+
+      // Проверяем, какие из них есть в attendance
+      const dateSet = [...new Set(expected.map(e => e.date))]
+      const groupSet = [...new Set(expected.map(e => e.group_name))]
+      const { data: attData } = await supabase
+        .from('attendance')
+        .select('date, group_name')
+        .in('date', dateSet)
+        .in('group_name', groupSet)
+
+      const markedSet = new Set<string>((attData || []).map(a => `${a.date}|${a.group_name}`))
+
+      const missing = expected.filter(e => !markedSet.has(`${e.date}|${e.group_name}`))
+      // Сортируем: сначала самые свежие
+      missing.sort((a, b) => b.date.localeCompare(a.date))
+      setMissingDays(missing)
+    }
+    loadMissingDays()
+  }, [])
 
   function toggle(id: string) {
     setPresent(prev => {
@@ -206,6 +268,38 @@ export default function AttendancePage() {
       </div>
 
       <OnboardingHint id="attendance" className="mb-4" />
+
+      {missingDays.length > 0 && (
+        <div className="mb-4 bg-orange-50 border border-orange-200 rounded-2xl px-4 py-3">
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex items-start gap-2 min-w-0">
+              <span className="text-orange-500 text-base shrink-0 mt-0.5">⚠️</span>
+              <div className="min-w-0">
+                <div className="text-sm font-semibold text-orange-800 mb-1">
+                  Не отмечено {missingDays.length} {missingDays.length === 1 ? 'тренировка' : missingDays.length <= 4 ? 'тренировки' : 'тренировок'} за 14 дней
+                </div>
+                <div className="space-y-0.5">
+                  {(showAllMissing ? missingDays : missingDays.slice(0, 3)).map(m => (
+                    <button
+                      key={`${m.date}|${m.group_name}`}
+                      onClick={() => { setDate(m.date); setGroup(m.group_name) }}
+                      className="block text-xs text-orange-700 hover:text-orange-900 hover:underline text-left"
+                    >
+                      {new Date(m.date + 'T00:00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', weekday: 'short' })} — {m.group_name}
+                    </button>
+                  ))}
+                  {missingDays.length > 3 && (
+                    <button onClick={() => setShowAllMissing(v => !v)}
+                      className="text-xs text-orange-500 hover:text-orange-700 mt-1">
+                      {showAllMissing ? 'Скрыть' : `Ещё ${missingDays.length - 3}...`}
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <input type="date" value={date} onChange={e => setDate(e.target.value)}
         className="w-full border border-gray-200 rounded-xl px-4 py-2.5 mb-3 outline-none focus:border-gray-400" />
