@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useAuth } from '@/components/AuthProvider'
 import { ROLE_LABELS, SECTIONS, UserRole } from '@/lib/auth'
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || ''
 
 type StaffUser = {
   id: string
@@ -323,7 +324,7 @@ export default function AdminUsersPage() {
                 </div>
 
                 {/* Кнопки действий */}
-                <div className="border-t border-gray-50 px-4 py-2.5 flex items-center gap-2">
+                <div className="border-t border-gray-50 px-4 py-2.5 flex items-center gap-2 flex-wrap">
                   {u.role !== 'founder' && (
                     <button onClick={() => togglePanel(u.id, 'permissions')}
                       className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${
@@ -342,6 +343,13 @@ export default function AdminUsersPage() {
                     }`}>
                     ✏️ Изменить
                   </button>
+                  {u.role === 'trainer' && u.name && (
+                    <Link
+                      href={`/trainer?as=${encodeURIComponent(u.name)}`}
+                      className="text-xs px-3 py-1.5 rounded-lg border border-indigo-200 text-indigo-600 hover:bg-indigo-50 transition-colors">
+                      👁 Кабинет
+                    </Link>
+                  )}
                   <button onClick={() => deleteUser(u.id, u.name)}
                     className="text-xs px-3 py-1.5 rounded-lg border border-red-100 text-red-400 hover:bg-red-50 ml-auto">
                     🗑 Удалить

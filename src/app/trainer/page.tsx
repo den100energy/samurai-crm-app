@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/components/AuthProvider'
 import { useTheme } from '@/components/ThemeProvider'
@@ -48,6 +48,10 @@ export default function TrainerPage() {
   const { userName, role, trainerId, permissions, loading } = useAuth()
   const { theme, toggle: toggleTheme } = useTheme()
   const router = useRouter()
+  const searchParams = useSearchParams()
+  // Основатель может просматривать кабинет любого тренера через ?as=ИмяТренера
+  const viewAsName = role === 'founder' ? (searchParams.get('as') || null) : null
+  const effectiveName = viewAsName ?? userName
   const [schedule, setSchedule] = useState<ScheduleSlot[]>([])
   const [overrides, setOverrides] = useState<Override[]>([])
   const [studentCount, setStudentCount] = useState(0)
@@ -66,12 +70,12 @@ export default function TrainerPage() {
   const dark = theme === 'dark'
 
   useEffect(() => {
-    if (!loading && role !== 'trainer' && !(role === 'founder' && trainerId)) {
+    if (!loading && role !== 'trainer' && role !== 'founder') {
       router.replace('/')
       return
     }
-    if (!loading && userName) loadData()
-  }, [loading, role, userName])
+    if (!loading && effectiveName) loadData()
+  }, [loading, role, effectiveName])
 
   async function loadData() {
     const weekDates = getWeekDates()
@@ -79,11 +83,11 @@ export default function TrainerPage() {
     const sunday = weekDates[7]
 
     const [{ data: slots }, { data: students }, { data: ovData }, { data: trainerRow }] = await Promise.all([
-      supabase.from('schedule').select('*').eq('trainer_name', userName).order('day_of_week').order('time_start'),
+      supabase.from('schedule').select('*').eq('trainer_name', effectiveName).order('day_of_week').order('time_start'),
       supabase.from('students').select('id, group_name').eq('status', 'active'),
       supabase.from('schedule_overrides').select('date, group_name, trainer_name, cancelled')
         .gte('date', monday).lte('date', sunday),
-      supabase.from('trainers').select('id, phone, telegram_username, vk_url, photo_url').eq('name', userName).maybeSingle(),
+      supabase.from('trainers').select('id, phone, telegram_username, vk_url, photo_url').eq('name', effectiveName).maybeSingle(),
     ])
     setSchedule(slots || [])
     setOverrides(ovData || [])
@@ -146,11 +150,11 @@ export default function TrainerPage() {
   }
 
   async function saveProfile() {
-    if (!userName) return
+    if (!effectiveName) return
     setSavingProfile(true)
     await supabase.from('trainers')
       .update({ phone: trainerPhone || null, telegram_username: trainerTg || null, vk_url: trainerVk || null })
-      .eq('name', userName)
+      .eq('name', effectiveName)
     setSavingProfile(false)
     setProfileSaved(true)
     setShowProfile(false)
@@ -169,7 +173,7 @@ export default function TrainerPage() {
         const dateStr = weekDates[dayNum]
         const override = overrides.find(o => o.date === dateStr && o.group_name === s.group_name)
         if (override?.cancelled) return null
-        if (override?.trainer_name && override.trainer_name !== userName) return null
+        if (override?.trainer_name && override.trainer_name !== effectiveName) return null
         return { ...s, dateStr, dayNum, override }
       })
       .filter(Boolean)
@@ -197,6 +201,14 @@ export default function TrainerPage() {
   return (
     <main className="max-w-lg mx-auto" style={{ background: 'var(--bg)', minHeight: '100vh' }}>
 
+      {/* Баннер режима просмотра для основателя */}
+      {viewAsName && (
+        <div className="flex items-center justify-between gap-2 px-4 py-2 bg-indigo-50 border-b border-indigo-100 text-xs text-indigo-700">
+          <span>👁 Просмотр кабинета: <b>{viewAsName}</b></span>
+          <Link href="/admin-users" className="underline text-indigo-500">← Сотрудники</Link>
+        </div>
+      )}
+
       {/* Hero: FujiScene + header overlay */}
       <div className="relative overflow-hidden">
         <FujiScene dark={dark} bgColor={dark ? '#1C1C1E' : '#F5F4F0'} />
@@ -206,8 +218,8 @@ export default function TrainerPage() {
               <label className="relative cursor-pointer shrink-0">
                 <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-white/30 bg-black/30 flex items-center justify-center text-xl font-bold text-white">
                   {trainerPhoto
-                    ? <img src={trainerPhoto} alt={userName || ''} className="w-full h-full object-cover" />
-                    : <span>{(userName || 'Т')[0]}</span>
+                    ? <img src={trainerPhoto} alt={effectiveName || ''} className="w-full h-full object-cover" />
+                    : <span>{(effectiveName || 'Т')[0]}</span>
                   }
                 </div>
                 {trainerDbId && (
@@ -219,7 +231,7 @@ export default function TrainerPage() {
               </label>
               <div>
                 <h1 className="text-white text-xl font-bold leading-tight drop-shadow-lg">
-                  {userName || 'Тренер'}
+                  {effectiveName || 'Тренер'}
                 </h1>
                 <p className="text-white/60 text-xs mt-0.5">Кабинет тренера</p>
               </div>
