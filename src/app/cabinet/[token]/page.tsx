@@ -1696,10 +1696,22 @@ export default function CabinetPage() {
                         </div>
                         {app.result_grade && <div className="text-xs text-gray-600 mt-1">Присвоено: <strong>{app.result_grade}</strong></div>}
                         {app.sensei_notes && <div className="text-xs text-gray-500 mt-1 italic">«{app.sensei_notes}»</div>}
-                        {!app.result && (app.preatt1_status || app.preatt2_status) && (
-                          <div className="flex gap-3 mt-2 text-xs">
-                            {app.preatt1_status && <span>П1: <span className={`font-medium ${PREATT_COLOR[app.preatt1_status]}`}>{PREATT_TEXT[app.preatt1_status]}</span></span>}
-                            {app.preatt2_status && <span>П2: <span className={`font-medium ${PREATT_COLOR[app.preatt2_status]}`}>{PREATT_TEXT[app.preatt2_status]}</span></span>}
+                        {app.preatt1_status && (
+                          <div className="mt-2">
+                            <div className="text-xs text-gray-400 font-medium uppercase tracking-wide mb-0.5">Предаттестация 1</div>
+                            <div className={`text-xs font-medium ${PREATT_COLOR[app.preatt1_status]}`}>{PREATT_TEXT[app.preatt1_status]}</div>
+                            {app.preatt1_notes && (
+                              <div className="text-xs text-gray-600 mt-1 bg-gray-100 rounded-lg px-2.5 py-1.5">{app.preatt1_notes}</div>
+                            )}
+                          </div>
+                        )}
+                        {app.preatt2_status && (
+                          <div className="mt-2">
+                            <div className="text-xs text-gray-400 font-medium uppercase tracking-wide mb-0.5">Предаттестация 2</div>
+                            <div className={`text-xs font-medium ${PREATT_COLOR[app.preatt2_status]}`}>{PREATT_TEXT[app.preatt2_status]}</div>
+                            {app.preatt2_notes && (
+                              <div className="text-xs text-gray-600 mt-1 bg-gray-100 rounded-lg px-2.5 py-1.5">{app.preatt2_notes}</div>
+                            )}
                           </div>
                         )}
                       </div>
