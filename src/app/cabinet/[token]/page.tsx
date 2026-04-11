@@ -312,7 +312,8 @@ export default function CabinetPage() {
   const [togglingAssignment, setTogglingAssignment] = useState<string | null>(null)
   const [certs, setCerts] = useState<Cert[]>([])
   const [attendance, setAttendance] = useState<{ date: string; present: boolean }[]>([])
-  const [eventVisits, setEventVisits] = useState<{ date: string; title: string }[]>([])
+  const [eventVisits, setEventVisits] = useState<{ date: string; title: string; bonus_type: string | null }[]>([])
+  const [seminarHistory, setSeminarHistory] = useState<{ id: string; title: string; starts_at: string }[]>([])
   const [aiProgram, setAiProgram] = useState<string | null>(null)
   const [scheduleSlots, setScheduleSlots] = useState<ScheduleSlot[]>([])
   const [scheduleOverrides, setScheduleOverrides] = useState<ScheduleOverride[]>([])
@@ -356,7 +357,7 @@ export default function CabinetPage() {
     const monday = weekDates[1]
     const sunday = weekDates[7]
 
-    const [subRes, surveysRes, tasksRes, certsRes, attRes, evParticipantsRes, tkRes, diagRes, schedRes, ovRes, firstSubRes, profileRes, asgnRes, attAppsRes] = await Promise.all([
+    const [subRes, surveysRes, tasksRes, certsRes, attRes, evParticipantsRes, tkRes, diagRes, schedRes, ovRes, firstSubRes, profileRes, asgnRes, attAppsRes, semRegRes] = await Promise.all([
       supabase.from('subscriptions').select('id, sessions_left, sessions_total, start_date, end_date, type, amount, bonuses, bonuses_used')
         .eq('student_id', sid).eq('is_pending', false).order('created_at', { ascending: false }).limit(1).maybeSingle(),
       supabase.from('progress_surveys').select('*').eq('student_id', sid).order('created_at'),
@@ -366,7 +367,7 @@ export default function CabinetPage() {
         .eq('student_id', sid).order('date', { ascending: false }),
       supabase.from('attendance').select('date, present').eq('student_id', sid)
         .order('date', { ascending: false }).limit(180),
-      supabase.from('event_participants').select('events(date, title)').eq('student_id', sid),
+      supabase.from('event_participants').select('events(date, title, bonus_type)').eq('student_id', sid),
       supabase.from('tickets').select('id, type, description, status, resolution_note, created_at')
         .eq('student_id', sid).neq('type', 'crm_задача').order('created_at', { ascending: false }),
       supabase.from('diagnostic_surveys').select('ai_program').eq('student_id', sid)
@@ -388,6 +389,10 @@ export default function CabinetPage() {
       supabase.from('attestation_applications')
         .select('id, discipline, current_grade, target_grade, preatt1_status, preatt1_notes, preatt2_status, preatt2_notes, paid, price, result, result_grade, sensei_notes, status, attestation_events(title, event_date)')
         .eq('student_id', sid).order('created_at', { ascending: false }),
+      supabase.from('seminar_registrations')
+        .select('id, seminar_events(title, starts_at)')
+        .eq('student_id', sid).eq('attended', true)
+        .order('created_at', { ascending: false }),
     ])
 
     setSubscription(subRes.data)
@@ -442,8 +447,13 @@ export default function CabinetPage() {
     const evVisits = ((evParticipantsRes.data || []) as any[])
       .map(ep => ep.events)
       .filter(ev => ev?.date && ev?.title)
-      .map(ev => ({ date: ev.date as string, title: ev.title as string }))
+      .map(ev => ({ date: ev.date as string, title: ev.title as string, bonus_type: (ev.bonus_type as string | null) ?? null }))
     setEventVisits(evVisits)
+
+    const semRegs = ((semRegRes.data || []) as any[])
+      .filter(r => r.seminar_events?.title)
+      .map(r => ({ id: r.id as string, title: r.seminar_events.title as string, starts_at: r.seminar_events.starts_at as string }))
+    setSeminarHistory(semRegs)
     setTickets(tkRes.data || [])
     setAiProgram(diagRes.data?.ai_program || null)
     const slots = (schedRes.data as ScheduleSlot[]) || []
@@ -1507,6 +1517,61 @@ export default function CabinetPage() {
                     )
                   })}
                 </div>
+              </div>
+            )}
+
+            {/* Активность — семинары и мероприятия */}
+            {(seminarHistory.length > 0 || eventVisits.length > 0) && (
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="font-semibold text-gray-800">🏆 Активность</h2>
+                  <span className="text-xs text-gray-400">{seminarHistory.length + eventVisits.length} событий</span>
+                </div>
+
+                {seminarHistory.length > 0 && (
+                  <div className="mb-4">
+                    <div className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2">Семинары</div>
+                    <div className="space-y-2">
+                      {seminarHistory.map(s => (
+                        <div key={s.id} className="flex items-center gap-3 py-1.5">
+                          <span className="text-lg">🥋</span>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-medium text-gray-800 truncate">{s.title}</div>
+                            <div className="text-xs text-gray-400">
+                              {new Date(s.starts_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {eventVisits.length > 0 && (
+                  <div>
+                    <div className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2">Мероприятия</div>
+                    <div className="space-y-2">
+                      {eventVisits.map((ev, i) => {
+                        const icon = ev.bonus_type === 'тренировка с оружием' ? '⚔️'
+                          : ev.bonus_type === 'мастер-класс' ? '🎓'
+                          : ev.bonus_type === 'индивидуальное занятие' ? '👤'
+                          : '📅'
+                        return (
+                          <div key={i} className="flex items-center gap-3 py-1.5">
+                            <span className="text-lg">{icon}</span>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm font-medium text-gray-800 truncate">{ev.title}</div>
+                              <div className="text-xs text-gray-400">
+                                {new Date(ev.date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}
+                                {ev.bonus_type && <span className="ml-1">· {ev.bonus_type}</span>}
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
