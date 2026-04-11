@@ -573,18 +573,18 @@ export default function CabinetPage() {
         ? supabase.from('event_participants').select('event_id, paid, student_id, participant_phone, participant_name').in('event_id', upcomEvIds)
         : Promise.resolve({ data: [] as any[] }),
     ])
-    const semRegsMap: Record<string, string> = {}
+    const semRegsMapUpcoming: Record<string, string> = {}
     ;(semRegsUpcoming || []).forEach((r: any) => {
       const rPhone = normPhone(r.participant_phone || '')
       const rName = (r.participant_name || '').toLowerCase().trim()
       if (r.student_id === sid
         || (phoneNorm && rPhone === phoneNorm)
         || (studentNameLower && rName === studentNameLower)) {
-        semRegsMap[r.seminar_id] = r.status
+        semRegsMapUpcoming[r.seminar_id] = r.status
       }
     })
     // Merge with existing (step 1 already set student_id-matched ones)
-    setMySeminarRegs(prev => ({ ...prev, ...semRegsMap }))
+    setMySeminarRegs(prev => ({ ...prev, ...semRegsMapUpcoming }))
     const evRegsMap: Record<string, boolean> = {}
     ;(evRegsUpcoming || []).forEach((r: any) => {
       const rPhone = normPhone(r.participant_phone || '')

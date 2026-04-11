@@ -197,7 +197,7 @@ export default function ParentPage() {
   useEffect(() => {
     async function load() {
       const { data: s } = await supabase
-        .from('students').select('id, name, group_name, birth_date, photo_url')
+        .from('students').select('id, name, group_name, birth_date, photo_url, phone')
         .eq('parent_token', token).eq('status', 'active').single()
       if (!s) { setNotFound(true); return }
       setStudent(s)
