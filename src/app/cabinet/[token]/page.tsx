@@ -522,7 +522,8 @@ export default function CabinetPage() {
     ])
 
     const groupName = studentData.group_name
-    const phoneNorm = (studentData.phone || '').replace(/\D/g, '')
+    const normPhone = (p: string) => p.replace(/\D/g, '').slice(-10)
+    const phoneNorm = normPhone(studentData.phone || '')
 
     const semItems = (upcomSeminars || []).map(s => ({
       type: 'seminar' as const,
@@ -573,7 +574,7 @@ export default function CabinetPage() {
     ])
     const semRegsMap: Record<string, string> = {}
     ;(semRegsUpcoming || []).forEach((r: any) => {
-      const rPhone = (r.participant_phone || '').replace(/\D/g, '')
+      const rPhone = normPhone(r.participant_phone || '')
       if (r.student_id === sid || (phoneNorm && rPhone === phoneNorm)) {
         semRegsMap[r.seminar_id] = r.status
       }
@@ -581,7 +582,7 @@ export default function CabinetPage() {
     setMySeminarRegs(semRegsMap)
     const evRegsMap: Record<string, boolean> = {}
     ;(evRegsUpcoming || []).forEach((r: any) => {
-      const rPhone = (r.participant_phone || '').replace(/\D/g, '')
+      const rPhone = normPhone(r.participant_phone || '')
       if (r.student_id === sid || (phoneNorm && rPhone === phoneNorm)) {
         evRegsMap[r.event_id] = r.paid
       }

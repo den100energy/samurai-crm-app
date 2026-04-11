@@ -251,7 +251,8 @@ export default function ParentPage() {
       setSeminarHistory(semRegs)
 
       const groupName = s.group_name
-      const phoneNorm = (s.phone || '').replace(/\D/g, '')
+      const normPhone = (p: string) => p.replace(/\D/g, '').slice(-10)
+      const phoneNorm = normPhone(s.phone || '')
       const regEvs = ((regEventsData || []) as any[])
         .filter(e => !e.group_restriction || e.group_restriction.length === 0 || (groupName && e.group_restriction.includes(groupName)))
         .map(e => ({ id: e.id, name: e.name, date: e.date, time_start: e.time_start, bonus_type: e.bonus_type }))
@@ -270,7 +271,7 @@ export default function ParentPage() {
       ])
       const evRegsMap: Record<string, boolean> = {}
       ;(evRegsUpcoming || []).forEach((r: any) => {
-        const rPhone = (r.participant_phone || '').replace(/\D/g, '')
+        const rPhone = normPhone(r.participant_phone || '')
         if (r.student_id === s.id || (phoneNorm && rPhone === phoneNorm)) {
           evRegsMap[r.event_id] = r.paid
         }
@@ -280,7 +281,7 @@ export default function ParentPage() {
       const studentIdRegs = (myRegsData as any[]) || []
       const existingSemIds = new Set(studentIdRegs.map((r: any) => r.seminar_id))
       const phoneMatchedSemRegs = (semRegsUpcoming || [])
-        .filter((r: any) => !existingSemIds.has(r.seminar_id) && phoneNorm && (r.participant_phone || '').replace(/\D/g, '') === phoneNorm)
+        .filter((r: any) => !existingSemIds.has(r.seminar_id) && phoneNorm && normPhone(r.participant_phone || '') === phoneNorm)
         .map((r: any) => ({ id: r.id || '', seminar_id: r.seminar_id, participant_name: '', status: r.status, locked_price: null, deposit_amount: null, seminar_tariffs: null }))
       setMyRegistrations([...studentIdRegs, ...phoneMatchedSemRegs])
 
