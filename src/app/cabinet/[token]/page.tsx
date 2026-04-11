@@ -8,6 +8,7 @@ import { localDateStr } from '@/lib/dates'
 import { CabinetTour } from '@/components/CabinetTour'
 import { CABINET_TOUR_SLIDES } from '@/lib/onboarding'
 import { SubscriptionQuiz } from '@/components/SubscriptionQuiz'
+import { getQuoteOfTheDay } from '@/lib/quotes'
 
 const supabase = createBrowserClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -1409,15 +1410,71 @@ export default function CabinetPage() {
         {/* ── ДОСТИЖЕНИЯ ── */}
         {tab === 'achievements' && (
           <>
-            {certs.length === 0 ? (
-              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8 text-center">
-                <div className="text-4xl mb-3">🏆</div>
-                <div className="font-medium text-gray-700">Достижений пока нет</div>
-                <div className="text-sm text-gray-400 mt-1">Здесь будут аттестации, семинары и соревнования</div>
+            {/* Цитата дня */}
+            {(() => {
+              const q = getQuoteOfTheDay()
+              return (
+                <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl p-5 shadow-sm">
+                  <div className="text-xs text-gray-400 uppercase tracking-widest mb-3 font-medium">Мудрость дня</div>
+                  <blockquote className="text-white text-sm leading-relaxed font-medium mb-3">
+                    «{q.text}»
+                  </blockquote>
+                  <div className="flex items-center gap-2">
+                    <div className="h-px flex-1 bg-gray-700" />
+                    <div className="text-right">
+                      <div className="text-xs text-gray-300 font-medium">— {q.author}</div>
+                      {q.source && <div className="text-xs text-gray-500 mt-0.5">{q.source}</div>}
+                    </div>
+                  </div>
+                </div>
+              )
+            })()}
+
+            {/* Ступени мастерства — всегда первыми */}
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+              <h2 className="font-semibold text-gray-800 mb-3">🎯 Ступени мастерства</h2>
+              <div className="grid grid-cols-3 gap-2">
+                {milestones.map(m => (
+                  <div key={m.count} className={`rounded-xl p-3 text-center transition-all ${
+                    m.achieved ? 'bg-black text-white' : 'bg-gray-50'
+                  }`}>
+                    <div className={`text-2xl mb-1 ${m.achieved ? '' : 'grayscale opacity-30'}`}>{m.icon}</div>
+                    <div className={`text-xs font-medium leading-tight ${m.achieved ? 'text-white' : 'text-gray-400'}`}>
+                      {m.label}
+                    </div>
+                    {m.achieved && <div className="text-xs text-white/60 mt-0.5">✓</div>}
+                  </div>
+                ))}
               </div>
-            ) : (
+              {/* Прогресс-бар до следующей ступени */}
+              {(() => {
+                const next = milestones.find(m => !m.achieved)
+                const prev = [...milestones].reverse().find(m => m.achieved)
+                if (!next) return (
+                  <div className="mt-3 text-xs text-center text-amber-600 font-medium">🏆 Все ступени пройдены!</div>
+                )
+                const from = prev?.count ?? 0
+                const pct = Math.round(((totalAttendance - from) / (next.count - from)) * 100)
+                return (
+                  <div className="mt-4">
+                    <div className="flex justify-between text-xs text-gray-400 mb-1.5">
+                      <span>{totalAttendance} тренировок</span>
+                      <span>до «{next.label}»: {next.count - totalAttendance}</span>
+                    </div>
+                    <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-black rounded-full transition-all"
+                        style={{ width: `${Math.min(pct, 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                )
+              })()}
+            </div>
+
+            {/* Сертификаты — только если есть */}
+            {certs.length > 0 && (
               <>
-                {/* Сгруппировать по типу */}
                 {(['belt','competition','seminar','masterclass','other'] as const).map(type => {
                   const list = certs.filter(c => c.type === type)
                   if (list.length === 0) return null
@@ -1446,33 +1503,6 @@ export default function CabinetPage() {
                 })}
               </>
             )}
-
-            {/* Милстоуны */}
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-              <h2 className="font-semibold text-gray-800 mb-3">🎯 Ступени мастерства</h2>
-              <div className="grid grid-cols-3 gap-2">
-                {milestones.map(m => (
-                  <div key={m.count} className={`rounded-xl p-3 text-center transition-all ${
-                    m.achieved ? 'bg-black text-white' : 'bg-gray-50 text-gray-300'
-                  }`}>
-                    <div className={`text-2xl mb-1 ${m.achieved ? '' : 'grayscale opacity-40'}`}>{m.icon}</div>
-                    <div className={`text-xs font-medium leading-tight ${m.achieved ? 'text-white' : 'text-gray-400'}`}>
-                      {m.label}
-                    </div>
-                    {m.achieved && <div className="text-xs text-white/60 mt-0.5">✓</div>}
-                  </div>
-                ))}
-              </div>
-              {totalAttendance > 0 && (
-                <div className="mt-3 text-xs text-gray-400 text-center">
-                  Всего тренировок: <span className="font-semibold text-gray-700">{totalAttendance}</span>
-                  {totalAttendance < 100 && (() => {
-                    const next = milestones.find(m => !m.achieved)
-                    return next ? ` · до «${next.label}»: ${next.count - totalAttendance}` : null
-                  })()}
-                </div>
-              )}
-            </div>
 
             {/* История аттестаций */}
             {attestationApps.length > 0 && (
