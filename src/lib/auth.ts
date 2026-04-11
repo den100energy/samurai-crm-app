@@ -28,6 +28,7 @@ export const PUBLIC_ROUTES = [
 // Публичные маршруты по точному паттерну (regex)
 export const PUBLIC_ROUTE_PATTERNS = [
   /^\/seminars\/[^/]+\/register(\/.*)?$/,
+  /^\/events\/[^/]+\/register(\/.*)?$/,
 ]
 
 // Иерархия разделов с подпунктами

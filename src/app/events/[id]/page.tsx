@@ -244,6 +244,12 @@ export default function EventDetailPage() {
             </div>
           )}
         </div>
+        <button onClick={() => {
+          navigator.clipboard.writeText(`${window.location.origin}/events/${id}/register`)
+          alert('Ссылка скопирована!')
+        }} className="text-sm border border-gray-200 px-3 py-1.5 rounded-xl text-gray-600 hover:border-gray-400">
+          🔗
+        </button>
         <button onClick={startEdit}
           className="text-sm border border-gray-200 px-3 py-1.5 rounded-xl text-gray-600 hover:border-gray-400">
           ✎ Изменить

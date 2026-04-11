@@ -1059,8 +1059,8 @@ export default function CabinetPage() {
                             {item.subtitle && <span className="ml-1">· {item.subtitle}</span>}
                           </div>
                         </div>
-                        {item.type === 'seminar' && item.seminar_id && (
-                          <a href={`/seminars/${item.seminar_id}/register`}
+                        {(item.type === 'seminar' || item.type === 'event') && item.id && (
+                          <a href={item.type === 'seminar' ? `/seminars/${item.id}/register` : `/events/${item.id}/register`}
                             className="shrink-0 text-xs bg-black text-white px-3 py-1.5 rounded-lg font-medium hover:bg-gray-800 transition-colors">
                             Записаться
                           </a>
