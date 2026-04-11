@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
+import { StudentAutocomplete } from '@/components/StudentAutocomplete'
 
 const supabase = createBrowserClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -61,6 +62,8 @@ export default function EventRegisterPage() {
     source: '',
     questions: '',
   })
+  const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null)
+  const [updatedFields, setUpdatedFields] = useState<string[]>([])
 
   async function load() {
     const { data } = await supabase
@@ -74,19 +77,26 @@ export default function EventRegisterPage() {
 
   useEffect(() => { load() }, [id])
 
+  function handleStudentSelect(s: { id: string; name: string; phone: string | null }) {
+    setSelectedStudentId(s.id)
+    setForm(prev => ({
+      ...prev,
+      participant_name: s.name,
+      participant_phone: s.phone || prev.participant_phone,
+    }))
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!event) return
     setSubmitting(true)
 
-    // Попробуем найти ученика по телефону
-    let matchedStudentId: string | null = null
-    if (form.participant_phone) {
+    // Используем выбранного ученика или ищем по телефону
+    let matchedStudentId: string | null = selectedStudentId
+    if (!matchedStudentId && form.participant_phone) {
       const phone = form.participant_phone.replace(/\D/g, '')
       const { data: students } = await supabase
-        .from('students')
-        .select('id, phone')
-        .eq('status', 'active')
+        .from('students').select('id, phone').eq('status', 'active')
       const match = (students || []).find(s => s.phone && s.phone.replace(/\D/g, '') === phone)
       if (match) matchedStudentId = match.id
     }
@@ -104,6 +114,19 @@ export default function EventRegisterPage() {
       paid: false,
       attendance_type: 'regular',
     })
+
+    // Обновить карточку ученика если данных не хватало
+    if (matchedStudentId && form.participant_phone) {
+      const res = await fetch('/api/students/update-contact', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ student_id: matchedStudentId, phone: form.participant_phone }),
+      }).catch(() => null)
+      if (res?.ok) {
+        const data = await res.json()
+        if (data.updated?.length > 0) setUpdatedFields(data.updated)
+      }
+    }
 
     await fetch('/api/notify', {
       method: 'POST',
@@ -166,7 +189,12 @@ export default function EventRegisterPage() {
               </div>
             )}
           </div>
-          <p className="text-xs text-gray-400">
+          {updatedFields.length > 0 && (
+            <div className="mt-3 bg-green-50 border border-green-200 rounded-2xl px-4 py-3 text-sm text-green-700 text-left">
+              ✅ Ваши данные обновлены в системе: <b>{updatedFields.join(', ')}</b>
+            </div>
+          )}
+          <p className="text-xs text-gray-400 mt-4">
             По вопросам обращайтесь к тренеру.
           </p>
         </div>
@@ -215,10 +243,14 @@ export default function EventRegisterPage() {
 
           <div>
             <label className="text-sm text-gray-600 mb-1 block">Фамилия и Имя *</label>
-            <input required value={form.participant_name}
-              onChange={e => setForm({ ...form, participant_name: e.target.value })}
+            <StudentAutocomplete
+              required
+              value={form.participant_name}
+              onChange={v => { setForm({ ...form, participant_name: v }); setSelectedStudentId(null) }}
+              onSelect={handleStudentSelect}
               placeholder="Иванов Иван"
-              className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-indigo-400 bg-white" />
+              inputClassName="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-indigo-400 bg-white"
+            />
           </div>
 
           <div>
