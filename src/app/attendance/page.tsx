@@ -42,7 +42,7 @@ async function loadWithSub(students: { id: string; name: string; group_name: str
   }))
 }
 
-type MissingDay = { date: string; group_name: string }
+type MissingDay = { date: string; group_name: string; trainer_name: string | null }
 
 export default function AttendancePage() {
   const { role, permissions } = useAuth()
@@ -130,7 +130,7 @@ export default function AttendancePage() {
 
       // Расписание и отмены за этот период
       const [{ data: schedules }, { data: overrides }] = await Promise.all([
-        supabase.from('schedule').select('group_name, day_of_week'),
+        supabase.from('schedule').select('group_name, day_of_week, trainer_name'),
         supabase.from('schedule_overrides').select('date, group_name, cancelled').gte('date', days[days.length - 1]).lte('date', today),
       ])
 
@@ -148,7 +148,7 @@ export default function AttendancePage() {
         const dayOfWeek = jsDay === 0 ? 7 : jsDay
         for (const s of schedules || []) {
           if (s.day_of_week === dayOfWeek && !cancelledSet.has(`${dayStr}|${s.group_name}`)) {
-            expected.push({ date: dayStr, group_name: s.group_name })
+            expected.push({ date: dayStr, group_name: s.group_name, trainer_name: s.trainer_name ?? null })
           }
         }
       }
@@ -285,7 +285,7 @@ export default function AttendancePage() {
                       onClick={() => { setDate(m.date); setGroup(m.group_name) }}
                       className="block text-xs text-orange-700 hover:text-orange-900 hover:underline text-left"
                     >
-                      {new Date(m.date + 'T00:00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', weekday: 'short' })} — {m.group_name}
+                      {new Date(m.date + 'T00:00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', weekday: 'short' })} — {m.group_name}{m.trainer_name ? ` · ${m.trainer_name}` : ''}
                     </button>
                   ))}
                   {missingDays.length > 3 && (
