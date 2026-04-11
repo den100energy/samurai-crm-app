@@ -313,8 +313,9 @@ export default function CabinetPage() {
   const [togglingAssignment, setTogglingAssignment] = useState<string | null>(null)
   const [certs, setCerts] = useState<Cert[]>([])
   const [attendance, setAttendance] = useState<{ date: string; present: boolean }[]>([])
-  const [eventVisits, setEventVisits] = useState<{ date: string; title: string; bonus_type: string | null }[]>([])
+  const [eventVisits, setEventVisits] = useState<{ date: string; title: string; bonus_type: string | null; event_id: string; paid: boolean }[]>([])
   const [seminarHistory, setSeminarHistory] = useState<{ id: string; title: string; starts_at: string }[]>([])
+  const [mySeminarRegs, setMySeminarRegs] = useState<Record<string, string>>({})
   const [upcomingItems, setUpcomingItems] = useState<{
     type: 'seminar' | 'event' | 'attestation'
     id: string
@@ -377,7 +378,7 @@ export default function CabinetPage() {
         .eq('student_id', sid).order('date', { ascending: false }),
       supabase.from('attendance').select('date, present').eq('student_id', sid)
         .order('date', { ascending: false }).limit(180),
-      supabase.from('event_participants').select('events(name, date, bonus_type)').eq('student_id', sid),
+      supabase.from('event_participants').select('event_id, paid, events(name, date, bonus_type)').eq('student_id', sid),
       supabase.from('tickets').select('id, type, description, status, resolution_note, created_at')
         .eq('student_id', sid).neq('type', 'crm_задача').order('created_at', { ascending: false }),
       supabase.from('diagnostic_surveys').select('ai_program').eq('student_id', sid)
@@ -400,8 +401,8 @@ export default function CabinetPage() {
         .select('id, discipline, current_grade, target_grade, preatt1_status, preatt1_notes, preatt2_status, preatt2_notes, paid, price, result, result_grade, sensei_notes, status, attestation_events(title, event_date)')
         .eq('student_id', sid).order('created_at', { ascending: false }),
       supabase.from('seminar_registrations')
-        .select('id, seminar_events(title, starts_at)')
-        .eq('student_id', sid).eq('attended', true)
+        .select('id, seminar_id, status, attended, seminar_events(title, starts_at)')
+        .eq('student_id', sid)
         .order('created_at', { ascending: false }),
     ])
 
@@ -455,15 +456,24 @@ export default function CabinetPage() {
     setCerts(certsRes.data || [])
     setAttendance(attRes.data || [])
     const evVisits = ((evParticipantsRes.data || []) as any[])
-      .map(ep => ep.events)
-      .filter(ev => ev?.date && ev?.name)
-      .map(ev => ({ date: ev.date as string, title: ev.name as string, bonus_type: (ev.bonus_type as string | null) ?? null }))
+      .filter(ep => ep.events?.date && ep.events?.name)
+      .map(ep => ({
+        date: ep.events.date as string,
+        title: ep.events.name as string,
+        bonus_type: (ep.events.bonus_type as string | null) ?? null,
+        event_id: ep.event_id as string,
+        paid: ep.paid as boolean,
+      }))
     setEventVisits(evVisits)
 
-    const semRegs = ((semRegRes.data || []) as any[])
-      .filter(r => r.seminar_events?.title)
+    const allSemRegs = ((semRegRes.data || []) as any[])
+    const semRegs = allSemRegs
+      .filter(r => r.seminar_events?.title && r.attended)
       .map(r => ({ id: r.id as string, title: r.seminar_events.title as string, starts_at: r.seminar_events.starts_at as string }))
     setSeminarHistory(semRegs)
+    const semRegsMap: Record<string, string> = {}
+    allSemRegs.forEach(r => { if (r.seminar_id) semRegsMap[r.seminar_id] = r.status })
+    setMySeminarRegs(semRegsMap)
     setTickets(tkRes.data || [])
     setAiProgram(diagRes.data?.ai_program || null)
     const slots = (schedRes.data as ScheduleSlot[]) || []
@@ -1059,12 +1069,19 @@ export default function CabinetPage() {
                             {item.subtitle && <span className="ml-1">· {item.subtitle}</span>}
                           </div>
                         </div>
-                        {(item.type === 'seminar' || item.type === 'event') && item.id && (
-                          <a href={item.type === 'seminar' ? `/seminars/${item.id}/register` : `/events/${item.id}/register`}
-                            className="shrink-0 text-xs bg-black text-white px-3 py-1.5 rounded-lg font-medium hover:bg-gray-800 transition-colors">
-                            Записаться
-                          </a>
-                        )}
+                        {item.type === 'seminar' && item.id && (() => {
+                          const status = mySeminarRegs[item.id]
+                          if (status === 'fully_paid') return <span className="shrink-0 text-xs bg-green-100 text-green-700 px-3 py-1.5 rounded-lg font-medium">✅ Оплачено</span>
+                          if (status === 'deposit_paid') return <span className="shrink-0 text-xs bg-blue-100 text-blue-700 px-3 py-1.5 rounded-lg font-medium">💳 Предоплата</span>
+                          if (status === 'pending') return <span className="shrink-0 text-xs bg-yellow-100 text-yellow-700 px-3 py-1.5 rounded-lg font-medium">⏳ Заявка</span>
+                          return <a href={`/seminars/${item.id}/register`} className="shrink-0 text-xs bg-black text-white px-3 py-1.5 rounded-lg font-medium hover:bg-gray-800 transition-colors">Записаться</a>
+                        })()}
+                        {item.type === 'event' && item.id && (() => {
+                          const reg = eventVisits.find(ev => ev.event_id === item.id)
+                          if (reg?.paid) return <span className="shrink-0 text-xs bg-green-100 text-green-700 px-3 py-1.5 rounded-lg font-medium">✅ Оплачено</span>
+                          if (reg) return <span className="shrink-0 text-xs bg-yellow-100 text-yellow-700 px-3 py-1.5 rounded-lg font-medium">⏳ Заявка</span>
+                          return <a href={`/events/${item.id}/register`} className="shrink-0 text-xs bg-black text-white px-3 py-1.5 rounded-lg font-medium hover:bg-gray-800 transition-colors">Записаться</a>
+                        })()}
                       </div>
                     )
                   })}

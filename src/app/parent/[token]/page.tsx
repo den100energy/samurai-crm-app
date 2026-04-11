@@ -183,7 +183,7 @@ export default function ParentPage() {
   const [certs, setCerts] = useState<Cert[]>([])
   const [bonusTotalValue, setBonusTotalValue] = useState<number | null>(null)
   const [subTypes, setSubTypes] = useState<any[]>([])
-  const [eventVisits, setEventVisits] = useState<{ date: string; title: string; bonus_type: string | null }[]>([])
+  const [eventVisits, setEventVisits] = useState<{ date: string; title: string; bonus_type: string | null; event_id: string; paid: boolean }[]>([])
   const [seminarHistory, setSeminarHistory] = useState<{ id: string; title: string; starts_at: string }[]>([])
   const [openEvents, setOpenEvents] = useState<{ id: string; title: string; discipline: string; event_date: string }[]>([])
   const [upcomingRegEvents, setUpcomingRegEvents] = useState<{ id: string; name: string; date: string; time_start: string | null; bonus_type: string | null }[]>([])
@@ -220,7 +220,7 @@ export default function ParentPage() {
         s.group_name
           ? supabase.from('schedule_overrides').select('date, trainer_name, cancelled').eq('group_name', s.group_name).gte('date', mondayStr).lte('date', sundayStr)
           : Promise.resolve({ data: [] }),
-        supabase.from('event_participants').select('events(name, date, bonus_type)').eq('student_id', s.id),
+        supabase.from('event_participants').select('event_id, paid, events(name, date, bonus_type)').eq('student_id', s.id),
         supabase.from('assignments').select('id, title, description, due_date, completed')
           .eq('student_id', s.id).eq('status', 'approved').order('created_at', { ascending: false }),
         supabase.from('attestation_applications')
@@ -234,9 +234,14 @@ export default function ParentPage() {
         supabase.from('events').select('id, name, date, time_start, bonus_type, group_restriction').gte('date', localDateStr(new Date())).order('date'),
       ])
       const evVisits = ((evParts || []) as any[])
-        .map(ep => ep.events)
-        .filter(ev => ev?.date && ev?.name)
-        .map(ev => ({ date: ev.date as string, title: ev.name as string, bonus_type: (ev.bonus_type as string | null) ?? null }))
+        .filter(ep => ep.events?.date && ep.events?.name)
+        .map(ep => ({
+          date: ep.events.date as string,
+          title: ep.events.name as string,
+          bonus_type: (ep.events.bonus_type as string | null) ?? null,
+          event_id: ep.event_id as string,
+          paid: ep.paid as boolean,
+        }))
       setEventVisits(evVisits)
 
       const semRegs = ((semRegsData || []) as any[])
@@ -1191,6 +1196,7 @@ export default function ParentPage() {
                         : ev.bonus_type === 'мастер-класс' ? '🎓'
                         : ev.bonus_type === 'индивидуальное занятие' ? '👤'
                         : '📅'
+                      const reg = eventVisits.find(v => v.event_id === ev.id)
                       return (
                         <div key={ev.id} className="pb-3 border-b border-gray-50 last:border-0 last:pb-0">
                           <div className="flex items-start justify-between gap-2">
@@ -1201,10 +1207,15 @@ export default function ParentPage() {
                                 {ev.time_start && <span className="ml-1">· {ev.time_start.slice(0, 5)}</span>}
                               </div>
                             </div>
-                            <a href={`/events/${ev.id}/register`} target="_blank" rel="noreferrer"
-                              className="shrink-0 text-xs bg-black text-white px-3 py-1.5 rounded-lg font-medium">
-                              Записаться
-                            </a>
+                            {reg?.paid
+                              ? <span className="shrink-0 text-xs bg-green-100 text-green-700 px-3 py-1.5 rounded-lg font-medium">✅ Оплачено</span>
+                              : reg
+                                ? <span className="shrink-0 text-xs bg-yellow-100 text-yellow-700 px-3 py-1.5 rounded-lg font-medium">⏳ Заявка</span>
+                                : <a href={`/events/${ev.id}/register`} target="_blank" rel="noreferrer"
+                                    className="shrink-0 text-xs bg-black text-white px-3 py-1.5 rounded-lg font-medium">
+                                    Записаться
+                                  </a>
+                            }
                           </div>
                         </div>
                       )
