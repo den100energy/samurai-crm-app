@@ -183,7 +183,8 @@ export default function ParentPage() {
   const [certs, setCerts] = useState<Cert[]>([])
   const [bonusTotalValue, setBonusTotalValue] = useState<number | null>(null)
   const [subTypes, setSubTypes] = useState<any[]>([])
-  const [eventVisits, setEventVisits] = useState<{ date: string; title: string }[]>([])
+  const [eventVisits, setEventVisits] = useState<{ date: string; title: string; bonus_type: string | null }[]>([])
+  const [seminarHistory, setSeminarHistory] = useState<{ id: string; title: string; starts_at: string }[]>([])
   const [openEvents, setOpenEvents] = useState<{ id: string; title: string; discipline: string; event_date: string }[]>([])
   const [openSeminars, setOpenSeminars] = useState<{ id: string; title: string; starts_at: string; ends_at: string; seminar_tariffs: { id: string; name: string; base_price: number | null; increase_pct: number; increase_every_days: number; increase_starts_at: string | null; min_deposit_pct: number }[] }[]>([])
   const [myRegistrations, setMyRegistrations] = useState<{ id: string; seminar_id: string; participant_name: string; status: string; locked_price: number | null; deposit_amount: number | null; seminar_tariffs: { name: string } | null }[]>([])
@@ -206,7 +207,7 @@ export default function ParentPage() {
       const mondayStr = localDateStr(monday)
       const sundayStr = localDateStr(sunday)
 
-      const [{ data: subs }, { data: att }, { data: sv }, { data: tk }, { data: certsData }, { data: sched }, { data: ovs }, { data: evParts }, { data: asgnData }, { data: attApps }, { data: openEventsData }, { data: beltsData }, { data: openSeminarsData }, { data: myRegsData }] = await Promise.all([
+      const [{ data: subs }, { data: att }, { data: sv }, { data: tk }, { data: certsData }, { data: sched }, { data: ovs }, { data: evParts }, { data: asgnData }, { data: attApps }, { data: openEventsData }, { data: beltsData }, { data: openSeminarsData }, { data: myRegsData }, { data: semRegsData }] = await Promise.all([
         supabase.from('subscriptions').select('*').eq('student_id', s.id).order('created_at', { ascending: false }).limit(1),
         supabase.from('attendance').select('*').eq('student_id', s.id).order('date', { ascending: false }).limit(90),
         supabase.from('progress_surveys').select('*').eq('student_id', s.id).not('filled_at', 'is', null).order('created_at'),
@@ -218,7 +219,7 @@ export default function ParentPage() {
         s.group_name
           ? supabase.from('schedule_overrides').select('date, trainer_name, cancelled').eq('group_name', s.group_name).gte('date', mondayStr).lte('date', sundayStr)
           : Promise.resolve({ data: [] }),
-        supabase.from('event_participants').select('events(date, title)').eq('student_id', s.id),
+        supabase.from('event_participants').select('events(name, date, bonus_type)').eq('student_id', s.id),
         supabase.from('assignments').select('id, title, description, due_date, completed')
           .eq('student_id', s.id).eq('status', 'approved').order('created_at', { ascending: false }),
         supabase.from('attestation_applications')
@@ -228,12 +229,18 @@ export default function ParentPage() {
         supabase.from('belts').select('discipline, belt_name, date').eq('student_id', s.id).order('date', { ascending: false }),
         supabase.from('seminar_events').select('id, title, starts_at, ends_at, seminar_tariffs(id, name, base_price, increase_pct, increase_every_days, increase_starts_at, min_deposit_pct)').eq('status', 'open').order('starts_at'),
         supabase.from('seminar_registrations').select('id, seminar_id, participant_name, status, locked_price, deposit_amount, seminar_tariffs(name)').eq('student_id', s.id).order('submitted_at', { ascending: false }),
+        supabase.from('seminar_registrations').select('id, seminar_events(title, starts_at)').eq('student_id', s.id).eq('attended', true).order('created_at', { ascending: false }),
       ])
       const evVisits = ((evParts || []) as any[])
         .map(ep => ep.events)
-        .filter(ev => ev?.date && ev?.title)
-        .map(ev => ({ date: ev.date as string, title: ev.title as string }))
+        .filter(ev => ev?.date && ev?.name)
+        .map(ev => ({ date: ev.date as string, title: ev.name as string, bonus_type: (ev.bonus_type as string | null) ?? null }))
       setEventVisits(evVisits)
+
+      const semRegs = ((semRegsData || []) as any[])
+        .filter(r => r.seminar_events?.title)
+        .map(r => ({ id: r.id as string, title: r.seminar_events.title as string, starts_at: r.seminar_events.starts_at as string }))
+      setSeminarHistory(semRegs)
       const foundSub = subs?.find((s: Subscription) => !s.is_pending) || null
       if (subs && subs.length > 0) setActiveSub(foundSub)
       if (foundSub?.id) {
@@ -707,62 +714,134 @@ export default function ParentPage() {
 
           {/* ── ПОСЕЩЕНИЯ ── */}
           {tab === 'attendance' && (
-            <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
-              <div className="text-xs text-gray-400 uppercase tracking-wide mb-3">История посещений</div>
-              {(() => {
-                // Бонусные даты из абонемента
-                const bonusRows: { date: string; label: string; kind: 'bonus' }[] = []
-                if (activeSub?.bonuses && activeSub?.bonuses_used) {
-                  for (const key of Object.keys(activeSub.bonuses)) {
-                    const val = activeSub.bonuses_used[key]
-                    const dates: string[] = Array.isArray(val) ? val : Array.from({ length: (val as number) || 0 }, () => '')
-                    for (const d of dates) {
-                      if (d) bonusRows.push({ date: d, label: key, kind: 'bonus' })
+            <>
+              {/* История посещений со скроллом */}
+              <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
+                <div className="text-xs text-gray-400 uppercase tracking-wide mb-3">История посещений</div>
+                {(() => {
+                  const bonusRows: { date: string; label: string; kind: 'bonus' }[] = []
+                  if (activeSub?.bonuses && activeSub?.bonuses_used) {
+                    for (const key of Object.keys(activeSub.bonuses)) {
+                      const val = activeSub.bonuses_used[key]
+                      const dates: string[] = Array.isArray(val) ? val : Array.from({ length: (val as number) || 0 }, () => '')
+                      for (const d of dates) {
+                        if (d) bonusRows.push({ date: d, label: key, kind: 'bonus' })
+                      }
                     }
                   }
-                }
-                // Объединяем всё в один список
-                type Row =
-                  | { kind: 'att'; date: string; a: Attendance }
-                  | { kind: 'bonus'; date: string; label: string }
-                  | { kind: 'event'; date: string; label: string }
-                const rows: Row[] = [
-                  ...attendance.map(a => ({ kind: 'att' as const, date: a.date, a })),
-                  ...bonusRows.map(b => ({ kind: 'bonus' as const, date: b.date, label: b.label })),
-                  ...eventVisits.map(ev => ({ kind: 'event' as const, date: ev.date, label: ev.title })),
-                ].sort((a, b) => b.date.localeCompare(a.date))
+                  type Row =
+                    | { kind: 'att'; date: string; a: Attendance }
+                    | { kind: 'bonus'; date: string; label: string }
+                    | { kind: 'event'; date: string; label: string }
+                  const rows: Row[] = [
+                    ...attendance.map(a => ({ kind: 'att' as const, date: a.date, a })),
+                    ...bonusRows.map(b => ({ kind: 'bonus' as const, date: b.date, label: b.label })),
+                    ...eventVisits.map(ev => ({ kind: 'event' as const, date: ev.date, label: ev.title })),
+                  ].sort((a, b) => b.date.localeCompare(a.date))
 
-                if (rows.length === 0) return <div className="text-sm text-gray-400 text-center py-4">Нет данных</div>
+                  if (rows.length === 0) return <div className="text-sm text-gray-400 text-center py-4">Нет данных</div>
 
-                return (
-                  <div className="space-y-2">
-                    {rows.map((row, i) => {
-                      if (row.kind === 'bonus') return (
-                        <div key={`b-${i}`} className="flex items-center justify-between text-sm py-0.5">
-                          <span className="text-gray-500">{fmtDate(row.date)}</span>
-                          <span className="text-purple-600 font-medium">🎁 {row.label}</span>
+                  const ROW_H = 36 // px на строку
+                  const VISIBLE = 12
+                  const needScroll = rows.length > VISIBLE
+
+                  return (
+                    <>
+                      <div
+                        className={needScroll ? 'overflow-y-auto pr-1' : ''}
+                        style={needScroll ? { maxHeight: `${VISIBLE * ROW_H}px` } : {}}
+                      >
+                        <div className="space-y-1">
+                          {rows.map((row, i) => {
+                            if (row.kind === 'bonus') return (
+                              <div key={`b-${i}`} className="flex items-center justify-between text-sm py-0.5">
+                                <span className="text-gray-500">{fmtDate(row.date)}</span>
+                                <span className="text-purple-600 font-medium">🎁 {row.label}</span>
+                              </div>
+                            )
+                            if (row.kind === 'event') return (
+                              <div key={`e-${i}`} className="flex items-center justify-between text-sm py-0.5">
+                                <span className="text-gray-500">{fmtDate(row.date)}</span>
+                                <span className="text-blue-600 font-medium">🏟 {row.label}</span>
+                              </div>
+                            )
+                            const a = row.a
+                            return (
+                              <div key={a.id} className="flex items-center justify-between text-sm py-0.5">
+                                <span className="text-gray-500">{fmtDate(a.date)}</span>
+                                <span className={a.present ? 'text-green-600 font-medium' : 'text-gray-300'}>
+                                  {a.present ? '✓ был' : '— не был'}
+                                </span>
+                              </div>
+                            )
+                          })}
                         </div>
-                      )
-                      if (row.kind === 'event') return (
-                        <div key={`e-${i}`} className="flex items-center justify-between text-sm py-0.5">
-                          <span className="text-gray-500">{fmtDate(row.date)}</span>
-                          <span className="text-blue-600 font-medium">🏟 {row.label}</span>
+                      </div>
+                      {needScroll && (
+                        <div className="text-xs text-gray-400 text-center mt-2 pt-2 border-t border-gray-50">
+                          Всего записей: {rows.length} · прокрутите вверх для более ранних
                         </div>
-                      )
-                      const a = row.a
-                      return (
-                        <div key={a.id} className="flex items-center justify-between text-sm py-0.5">
-                          <span className="text-gray-500">{fmtDate(a.date)}</span>
-                          <span className={a.present ? 'text-green-600 font-medium' : 'text-gray-300'}>
-                            {a.present ? '✓ был' : '— не был'}
-                          </span>
-                        </div>
-                      )
-                    })}
+                      )}
+                    </>
+                  )
+                })()}
+              </div>
+
+              {/* Активность — семинары и мероприятия */}
+              {(seminarHistory.length > 0 || eventVisits.length > 0) && (
+                <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
+                  <div className="flex items-center justify-between mb-3">
+                    <h2 className="font-semibold text-gray-800">🏆 Активность</h2>
+                    <span className="text-xs text-gray-400">{seminarHistory.length + eventVisits.length} событий</span>
                   </div>
-                )
-              })()}
-            </div>
+
+                  {seminarHistory.length > 0 && (
+                    <div className="mb-4">
+                      <div className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2">Семинары</div>
+                      <div className="space-y-2">
+                        {seminarHistory.map(s => (
+                          <div key={s.id} className="flex items-center gap-3 py-1.5">
+                            <span className="text-lg">🥋</span>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm font-medium text-gray-800 truncate">{s.title}</div>
+                              <div className="text-xs text-gray-400">
+                                {new Date(s.starts_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {eventVisits.length > 0 && (
+                    <div>
+                      <div className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2">Мероприятия</div>
+                      <div className="space-y-2">
+                        {eventVisits.map((ev, i) => {
+                          const icon = ev.bonus_type === 'тренировка с оружием' ? '⚔️'
+                            : ev.bonus_type === 'мастер-класс' ? '🎓'
+                            : ev.bonus_type === 'индивидуальное занятие' ? '👤'
+                            : '📅'
+                          return (
+                            <div key={i} className="flex items-center gap-3 py-1.5">
+                              <span className="text-lg">{icon}</span>
+                              <div className="flex-1 min-w-0">
+                                <div className="text-sm font-medium text-gray-800 truncate">{ev.title}</div>
+                                <div className="text-xs text-gray-400">
+                                  {new Date(ev.date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}
+                                  {ev.bonus_type && <span className="ml-1">· {ev.bonus_type}</span>}
+                                </div>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
           )}
 
           {/* ── ПРОГРЕСС ── */}
