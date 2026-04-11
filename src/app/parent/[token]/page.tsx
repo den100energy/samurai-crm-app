@@ -186,6 +186,7 @@ export default function ParentPage() {
   const [eventVisits, setEventVisits] = useState<{ date: string; title: string; bonus_type: string | null }[]>([])
   const [seminarHistory, setSeminarHistory] = useState<{ id: string; title: string; starts_at: string }[]>([])
   const [openEvents, setOpenEvents] = useState<{ id: string; title: string; discipline: string; event_date: string }[]>([])
+  const [upcomingRegEvents, setUpcomingRegEvents] = useState<{ id: string; name: string; date: string; time_start: string | null; bonus_type: string | null }[]>([])
   const [openSeminars, setOpenSeminars] = useState<{ id: string; title: string; starts_at: string; ends_at: string; seminar_tariffs: { id: string; name: string; base_price: number | null; increase_pct: number; increase_every_days: number; increase_starts_at: string | null; min_deposit_pct: number }[] }[]>([])
   const [myRegistrations, setMyRegistrations] = useState<{ id: string; seminar_id: string; participant_name: string; status: string; locked_price: number | null; deposit_amount: number | null; seminar_tariffs: { name: string } | null }[]>([])
   const [showAppForm, setShowAppForm] = useState(false)
@@ -207,7 +208,7 @@ export default function ParentPage() {
       const mondayStr = localDateStr(monday)
       const sundayStr = localDateStr(sunday)
 
-      const [{ data: subs }, { data: att }, { data: sv }, { data: tk }, { data: certsData }, { data: sched }, { data: ovs }, { data: evParts }, { data: asgnData }, { data: attApps }, { data: openEventsData }, { data: beltsData }, { data: openSeminarsData }, { data: myRegsData }, { data: semRegsData }] = await Promise.all([
+      const [{ data: subs }, { data: att }, { data: sv }, { data: tk }, { data: certsData }, { data: sched }, { data: ovs }, { data: evParts }, { data: asgnData }, { data: attApps }, { data: openEventsData }, { data: beltsData }, { data: openSeminarsData }, { data: myRegsData }, { data: semRegsData }, { data: regEventsData }] = await Promise.all([
         supabase.from('subscriptions').select('*').eq('student_id', s.id).order('created_at', { ascending: false }).limit(1),
         supabase.from('attendance').select('*').eq('student_id', s.id).order('date', { ascending: false }).limit(90),
         supabase.from('progress_surveys').select('*').eq('student_id', s.id).not('filled_at', 'is', null).order('created_at'),
@@ -230,6 +231,7 @@ export default function ParentPage() {
         supabase.from('seminar_events').select('id, title, starts_at, ends_at, seminar_tariffs(id, name, base_price, increase_pct, increase_every_days, increase_starts_at, min_deposit_pct)').eq('status', 'open').order('starts_at'),
         supabase.from('seminar_registrations').select('id, seminar_id, participant_name, status, locked_price, deposit_amount, seminar_tariffs(name)').eq('student_id', s.id).order('submitted_at', { ascending: false }),
         supabase.from('seminar_registrations').select('id, seminar_events(title, starts_at)').eq('student_id', s.id).eq('attended', true).order('created_at', { ascending: false }),
+        supabase.from('events').select('id, name, date, time_start, bonus_type, group_restriction').gte('date', localDateStr(new Date())).order('date'),
       ])
       const evVisits = ((evParts || []) as any[])
         .map(ep => ep.events)
@@ -241,6 +243,12 @@ export default function ParentPage() {
         .filter(r => r.seminar_events?.title)
         .map(r => ({ id: r.id as string, title: r.seminar_events.title as string, starts_at: r.seminar_events.starts_at as string }))
       setSeminarHistory(semRegs)
+
+      const groupName = s.group_name
+      const regEvs = ((regEventsData || []) as any[])
+        .filter(e => !e.group_restriction || e.group_restriction.length === 0 || (groupName && e.group_restriction.includes(groupName)))
+        .map(e => ({ id: e.id, name: e.name, date: e.date, time_start: e.time_start, bonus_type: e.bonus_type }))
+      setUpcomingRegEvents(regEvs)
       const foundSub = subs?.find((s: Subscription) => !s.is_pending) || null
       if (subs && subs.length > 0) setActiveSub(foundSub)
       if (foundSub?.id) {
@@ -451,7 +459,7 @@ export default function ParentPage() {
             { key: 'attendance',  icon: '📅', label: 'Посещ.' },
             { key: 'progress',    icon: '📈', label: 'Прогр.', badge: surveys.length > 0 ? surveys.length : null },
             { key: 'tasks',       icon: '📋', label: 'Задан.', badge: assignments.filter(a => !a.completed).length || null },
-            { key: 'attestation', icon: '🥋', label: 'Атт-я',  badge: attestationApps.filter(a => a.status === 'pending' || (!a.paid && a.preatt1_status === 'approved')).length || null },
+            { key: 'attestation', icon: '🎉', label: 'Мероп.',  badge: attestationApps.filter(a => a.status === 'pending' || (!a.paid && a.preatt1_status === 'approved')).length || null },
             { key: 'tickets',     icon: '📞', label: 'Тренер', badge: tickets.filter(t => t.status === 'pending').length || null },
           ] as { key: typeof tab; icon: string; label: string; badge?: number | null }[]).map(t => (
             <button key={t.key} onClick={() => setTab(t.key)}
@@ -1132,7 +1140,80 @@ export default function ParentPage() {
           {/* ── АТТЕСТАЦИЯ ── */}
           {tab === 'attestation' && (
             <div className="space-y-3">
-              {/* Кнопка подачи заявки */}
+
+              {/* ── БЛИЖАЙШИЕ СОБЫТИЯ ── */}
+              {(openSeminars.length > 0 || openEvents.length > 0 || upcomingRegEvents.length > 0) && (
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+                  <h2 className="font-semibold text-gray-800 mb-3">📌 Ближайшие события</h2>
+                  <div className="space-y-3">
+                    {/* Семинары */}
+                    {openSeminars.map(sem => {
+                      const myReg = myRegistrations.find(r => r.seminar_id === sem.id)
+                      return (
+                        <div key={sem.id} className="pb-3 border-b border-gray-50 last:border-0 last:pb-0">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm font-medium text-gray-800">🥋 {sem.title}</div>
+                              <div className="text-xs text-gray-400 mt-0.5">
+                                📅 {sem.starts_at}{sem.ends_at !== sem.starts_at ? ` — ${sem.ends_at}` : ''}
+                              </div>
+                            </div>
+                            {myReg ? (
+                              <span className={`shrink-0 text-xs px-2 py-1 rounded-full font-medium ${myReg.status === 'fully_paid' ? 'bg-green-100 text-green-700' : myReg.status === 'deposit_paid' ? 'bg-blue-100 text-blue-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                                {myReg.status === 'fully_paid' ? 'Оплачен' : myReg.status === 'deposit_paid' ? 'Предоплата' : 'Заявка'}
+                              </span>
+                            ) : (
+                              <a href={`/seminars/${sem.id}/register`} target="_blank" rel="noreferrer"
+                                className="shrink-0 text-xs bg-black text-white px-3 py-1.5 rounded-lg font-medium">
+                                Записаться
+                              </a>
+                            )}
+                          </div>
+                          {myReg && myReg.seminar_tariffs && (
+                            <div className="text-xs text-gray-500 mt-1 ml-0">
+                              {(myReg.seminar_tariffs as any).name}{myReg.locked_price ? ` · ${myReg.locked_price.toLocaleString('ru')} ₽` : ''}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                    {/* Аттестации */}
+                    {openEvents.map(ev => (
+                      <div key={ev.id} className="pb-3 border-b border-gray-50 last:border-0 last:pb-0">
+                        <div className="text-sm font-medium text-gray-800">📋 {ev.title}</div>
+                        <div className="text-xs text-gray-400 mt-0.5">📅 {ev.event_date}</div>
+                        <div className="text-xs text-indigo-600 mt-1 font-medium">Аттестация · заявку принимает тренер</div>
+                      </div>
+                    ))}
+                    {/* Мероприятия */}
+                    {upcomingRegEvents.map(ev => {
+                      const icon = ev.bonus_type === 'тренировка с оружием' ? '⚔️'
+                        : ev.bonus_type === 'мастер-класс' ? '🎓'
+                        : ev.bonus_type === 'индивидуальное занятие' ? '👤'
+                        : '📅'
+                      return (
+                        <div key={ev.id} className="pb-3 border-b border-gray-50 last:border-0 last:pb-0">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm font-medium text-gray-800">{icon} {ev.name}</div>
+                              <div className="text-xs text-gray-400 mt-0.5">
+                                📅 {new Date(ev.date + 'T00:00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}
+                                {ev.time_start && <span className="ml-1">· {ev.time_start.slice(0, 5)}</span>}
+                              </div>
+                            </div>
+                            <a href={`/events/${ev.id}/register`} target="_blank" rel="noreferrer"
+                              className="shrink-0 text-xs bg-black text-white px-3 py-1.5 rounded-lg font-medium">
+                              Записаться
+                            </a>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* ── ФОРМА ЗАЯВКИ НА АТТЕСТАЦИЮ ── */}
               {openEvents.length > 0 && !attestationApps.some(a => a.status !== 'rejected') && (
                 <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
                   {!showAppForm ? (
@@ -1220,100 +1301,12 @@ export default function ParentPage() {
                 </div>
               )}
 
-              {/* ── Семинары ── */}
-              {openSeminars.length > 0 && (
-                <div className="mb-2">
-                  <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Открытые семинары</div>
-                  {openSeminars.map(sem => {
-                    const myReg = myRegistrations.find(r => r.seminar_id === sem.id)
-                    const semTariffs = (sem.seminar_tariffs || []) as any[]
-                    function semCurrentPrice(t: any) {
-                      if (!t.base_price) return 0
-                      if (!t.increase_starts_at || t.increase_pct === 0) return t.base_price
-                      const start = new Date(t.increase_starts_at)
-                      const days = Math.max(0, Math.floor((Date.now() - start.getTime()) / 86400000))
-                      const periods = Math.floor(days / (t.increase_every_days || 7))
-                      return Math.round(t.base_price * Math.pow(1 + t.increase_pct / 100, periods))
-                    }
-                    return (
-                      <div key={sem.id} className="bg-white rounded-2xl border border-indigo-100 shadow-sm overflow-hidden mb-3">
-                        <div className="px-4 pt-4 pb-3 border-b border-gray-100">
-                          <div className="font-semibold text-gray-900">🥋 {sem.title}</div>
-                          <div className="text-xs text-gray-400 mt-0.5">
-                            📅 {sem.starts_at}{sem.ends_at !== sem.starts_at ? ` — ${sem.ends_at}` : ''}
-                          </div>
-                        </div>
-                        {myReg ? (
-                          <div className="px-4 py-3">
-                            <div className="text-xs text-gray-400 mb-1">Ваша заявка</div>
-                            <div className="flex items-center justify-between">
-                              <div className="text-sm text-gray-700">
-                                {(myReg.seminar_tariffs as any)?.name || '—'}
-                                {myReg.locked_price ? ` · ${myReg.locked_price.toLocaleString('ru')} ₽` : ''}
-                              </div>
-                              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${myReg.status === 'fully_paid' ? 'bg-green-100 text-green-700' : myReg.status === 'deposit_paid' ? 'bg-blue-100 text-blue-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                                {myReg.status === 'fully_paid' ? 'Оплачен' : myReg.status === 'deposit_paid' ? 'Предоплата' : 'Заявка'}
-                              </span>
-                            </div>
-                            {myReg.deposit_amount && myReg.status !== 'fully_paid' && (
-                              <div className="mt-2 text-xs text-gray-500">
-                                Внесено: {myReg.deposit_amount.toLocaleString('ru')} ₽
-                              </div>
-                            )}
-                          </div>
-                        ) : (
-                          <div className="px-4 py-3 space-y-2">
-                            <div className="text-xs text-gray-500 mb-2">Выберите тариф и запишитесь:</div>
-                            {semTariffs.map((t: any) => {
-                              const price = semCurrentPrice(t)
-                              const deposit = Math.ceil(price * (t.min_deposit_pct || 20) / 100)
-                              return (
-                                <div key={t.id} className="flex items-center justify-between bg-gray-50 rounded-xl px-3 py-2">
-                                  <div>
-                                    <div className="text-sm font-medium text-gray-800">{t.name}</div>
-                                    <div className="text-xs text-gray-400">предоплата от {deposit.toLocaleString('ru')} ₽</div>
-                                  </div>
-                                  <div className="text-right">
-                                    <div className="font-bold text-gray-900 text-sm">{price.toLocaleString('ru')} ₽</div>
-                                  </div>
-                                </div>
-                              )
-                            })}
-                            <a href={`/seminars/${sem.id}/register`} target="_blank" rel="noreferrer"
-                              className="block w-full text-center bg-indigo-600 text-white py-2.5 rounded-xl text-sm font-medium mt-2">
-                              Записаться на семинар
-                            </a>
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-
-              {myRegistrations.filter(r => !openSeminars.find(s => s.id === r.seminar_id)).length > 0 && (
-                <div className="mb-2">
-                  <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Мои заявки на семинары</div>
-                  {myRegistrations.filter(r => !openSeminars.find(s => s.id === r.seminar_id)).map(r => (
-                    <div key={r.id} className="bg-white rounded-xl border border-gray-100 shadow-sm p-3 mb-2">
-                      <div className="flex items-center justify-between">
-                        <div className="text-sm font-medium text-gray-800">{(r.seminar_tariffs as any)?.name || '—'}</div>
-                        <span className={`text-xs px-2 py-0.5 rounded-full ${r.status === 'fully_paid' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-                          {r.status === 'fully_paid' ? 'Оплачен' : r.status === 'deposit_paid' ? 'Предоплата' : 'Архив'}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {attestationApps.length === 0 && openEvents.length === 0 && openSeminars.length === 0 ? (
-                <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm text-center">
-                  <div className="text-4xl mb-2">🥋</div>
-                  <div className="text-gray-500 text-sm">Заявок на аттестацию нет</div>
-                  <div className="text-gray-400 text-xs mt-1">Когда откроется приём заявок, вы сможете подать заявку здесь</div>
-                </div>
-              ) : attestationApps.map(app => {
+              {/* ── ИСТОРИЯ АТТЕСТАЦИЙ ── */}
+              {attestationApps.length > 0 && (
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+                  <h2 className="font-semibold text-gray-800 mb-3">🥋 Аттестации</h2>
+                  <div className="space-y-3">
+                  {attestationApps.map(app => {
                 const discLabel = app.discipline === 'aikido' ? 'Айкидо' : 'Ушу'
                 const evTitle = (app.attestation_events as any)?.title || ''
                 const evDate = (app.attestation_events as any)?.event_date || ''
@@ -1411,6 +1404,40 @@ export default function ParentPage() {
                   </div>
                 )
               })}
+                  </div>
+                </div>
+              )}
+
+              {/* ── ДОСТИЖЕНИЯ ── */}
+              {certs.length > 0 && (
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+                  <h2 className="font-semibold text-gray-800 mb-3">🏆 Достижения</h2>
+                  <div className="space-y-2">
+                    {certs.map(c => (
+                      <div key={c.id} className="flex items-center gap-3 py-1.5 border-b border-gray-50 last:border-0">
+                        <span className="text-xl">{c.type === 'belt' ? '🥋' : c.type === 'competition' ? '🏆' : c.type === 'seminar' ? '📚' : c.type === 'masterclass' ? '🎯' : '⭐'}</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium text-gray-800">{c.title}</div>
+                        </div>
+                        {c.date && (
+                          <div className="text-xs text-gray-400 shrink-0">
+                            {new Date(c.date + 'T00:00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: '2-digit' })}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Пусто */}
+              {openSeminars.length === 0 && openEvents.length === 0 && upcomingRegEvents.length === 0 && attestationApps.length === 0 && certs.length === 0 && (
+                <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm text-center">
+                  <div className="text-4xl mb-2">🎉</div>
+                  <div className="text-gray-500 text-sm">Мероприятий пока нет</div>
+                  <div className="text-gray-400 text-xs mt-1">Здесь появятся семинары, аттестации и другие события</div>
+                </div>
+              )}
             </div>
           )}
 
