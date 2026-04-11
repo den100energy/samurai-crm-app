@@ -46,10 +46,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   useEffect(() => {
+    let userId: string | null = null
+    let realtimeChannel: ReturnType<typeof supabase.channel> | null = null
+
+    function subscribeToProfile(uid: string) {
+      // Отписываемся от предыдущего канала если был
+      if (realtimeChannel) supabase.removeChannel(realtimeChannel)
+      realtimeChannel = supabase
+        .channel(`user_profile_${uid}`)
+        .on('postgres_changes', {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'user_profiles',
+          filter: `id=eq.${uid}`,
+        }, () => {
+          // Права обновились — перезагружаем профиль
+          loadProfile(uid)
+        })
+        .subscribe()
+    }
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null)
       if (session?.user) {
-        loadProfile(session.user.id).finally(() => setLoading(false))
+        userId = session.user.id
+        loadProfile(userId).finally(() => setLoading(false))
+        subscribeToProfile(userId)
       } else {
         setLoading(false)
       }
@@ -58,16 +80,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null)
       if (session?.user) {
-        loadProfile(session.user.id)
+        userId = session.user.id
+        loadProfile(userId)
+        subscribeToProfile(userId)
       } else {
         setRole(null)
         setUserName(null)
         setTrainerId(null)
         setPermissions([])
+        if (realtimeChannel) supabase.removeChannel(realtimeChannel)
       }
     })
 
-    return () => subscription.unsubscribe()
+    return () => {
+      subscription.unsubscribe()
+      if (realtimeChannel) supabase.removeChannel(realtimeChannel)
+    }
   }, [])
 
   return (
