@@ -234,7 +234,7 @@ export async function POST(req: NextRequest) {
     const token = text.split(' ')[1]?.trim()
 
     if (!token) {
-      // Уже привязан — показать кабинет
+      // Уже привязан — показать кабинет(ы)
       const { data: linked } = await supabase
         .from('students').select('name, cabinet_token').eq('telegram_chat_id', chat_id).single()
       if (linked?.cabinet_token) {
@@ -244,17 +244,25 @@ export async function POST(req: NextRequest) {
         )
         return NextResponse.json({ ok: true })
       }
-      const { data: linkedContact } = await supabase
-        .from('student_contacts').select('name, students(name, cabinet_token)').eq('telegram_chat_id', chat_id).single()
-      if (linkedContact) {
-        const s = linkedContact.students as any
-        if (s?.cabinet_token) {
-          await sendMessage(chat_id,
-            `🥋 Добро пожаловать!\n\nЛичный кабинет <b>${s.name}</b>:`,
-            cabinetButton(`${appUrl}/cabinet/${s.cabinet_token}`)
-          )
-          return NextResponse.json({ ok: true })
-        }
+      // Родительские контакты — может быть несколько детей
+      const { data: linkedContacts } = await supabase
+        .from('student_contacts').select('students(name, cabinet_token)').eq('telegram_chat_id', chat_id)
+      const cabinets = (linkedContacts || [])
+        .map(c => (c.students as any))
+        .filter(s => s?.cabinet_token)
+      if (cabinets.length === 1) {
+        await sendMessage(chat_id,
+          `🥋 Добро пожаловать!\n\nЛичный кабинет <b>${cabinets[0].name}</b>:`,
+          cabinetButton(`${appUrl}/cabinet/${cabinets[0].cabinet_token}`)
+        )
+        return NextResponse.json({ ok: true })
+      }
+      if (cabinets.length > 1) {
+        await sendMessage(chat_id,
+          `🥋 Добро пожаловать!\n\nВыберите кабинет:`,
+          { inline_keyboard: cabinets.map(s => [{ text: `🎒 ${s.name}`, url: `${appUrl}/cabinet/${s.cabinet_token}` }]) }
+        )
+        return NextResponse.json({ ok: true })
       }
       await sendMessage(chat_id,
         `Привет, ${firstName}! 👋\n\nЭтот бот отправляет уведомления от Школы Самурая.\n\nДля привязки к карточке ученика используй ссылку от тренера.`
@@ -316,17 +324,24 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true })
     }
 
-    const { data: contact } = await supabase
-      .from('student_contacts').select('name, students(name, cabinet_token)').eq('telegram_chat_id', chat_id).single()
-    if (contact) {
-      const s = contact.students as any
-      if (s?.cabinet_token) {
-        await sendMessage(chat_id,
-          `🎒 <b>Личный кабинет — ${s.name}</b>`,
-          cabinetButton(`${appUrl}/cabinet/${s.cabinet_token}`)
-        )
-        return NextResponse.json({ ok: true })
-      }
+    const { data: linkedContacts } = await supabase
+      .from('student_contacts').select('students(name, cabinet_token)').eq('telegram_chat_id', chat_id)
+    const cabinets = (linkedContacts || [])
+      .map(c => (c.students as any))
+      .filter(s => s?.cabinet_token)
+    if (cabinets.length === 1) {
+      await sendMessage(chat_id,
+        `🎒 <b>Личный кабинет — ${cabinets[0].name}</b>`,
+        cabinetButton(`${appUrl}/cabinet/${cabinets[0].cabinet_token}`)
+      )
+      return NextResponse.json({ ok: true })
+    }
+    if (cabinets.length > 1) {
+      await sendMessage(chat_id,
+        `🎒 Выберите кабинет:`,
+        { inline_keyboard: cabinets.map(s => [{ text: `🎒 ${s.name}`, url: `${appUrl}/cabinet/${s.cabinet_token}` }]) }
+      )
+      return NextResponse.json({ ok: true })
     }
 
     await sendMessage(chat_id, `Не удалось найти ваш кабинет. Попросите тренера привязать ваш Telegram к карточке ученика.`)
