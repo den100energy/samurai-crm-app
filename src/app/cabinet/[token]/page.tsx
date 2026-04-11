@@ -315,6 +315,15 @@ export default function CabinetPage() {
   const [attendance, setAttendance] = useState<{ date: string; present: boolean }[]>([])
   const [eventVisits, setEventVisits] = useState<{ date: string; title: string; bonus_type: string | null }[]>([])
   const [seminarHistory, setSeminarHistory] = useState<{ id: string; title: string; starts_at: string }[]>([])
+  const [upcomingItems, setUpcomingItems] = useState<{
+    type: 'seminar' | 'event' | 'attestation'
+    id: string
+    title: string
+    date: string
+    subtitle: string | null
+    bonus_type: string | null
+    seminar_id: string | null
+  }[]>([])
   const [aiProgram, setAiProgram] = useState<string | null>(null)
   const [scheduleSlots, setScheduleSlots] = useState<ScheduleSlot[]>([])
   const [scheduleOverrides, setScheduleOverrides] = useState<ScheduleOverride[]>([])
@@ -482,6 +491,62 @@ export default function CabinetPage() {
         })))
       }
     }
+
+    // Загрузить ближайшие мероприятия
+    const today = localDateStr(new Date())
+    const [{ data: upcomSeminars }, { data: upcomEvents }, { data: upcomAtt }] = await Promise.all([
+      supabase.from('seminar_events')
+        .select('id, title, discipline, starts_at, location')
+        .eq('status', 'open')
+        .gte('starts_at', today)
+        .order('starts_at'),
+      supabase.from('events')
+        .select('id, name, date, time_start, bonus_type, group_restriction')
+        .gte('date', today)
+        .order('date'),
+      supabase.from('attestation_events')
+        .select('id, title, discipline, event_date, preatt1_date')
+        .gte('event_date', today)
+        .order('event_date'),
+    ])
+
+    const groupName = studentData.group_name
+
+    const semItems = (upcomSeminars || []).map(s => ({
+      type: 'seminar' as const,
+      id: s.id,
+      title: s.title,
+      date: s.starts_at,
+      subtitle: s.location || null,
+      bonus_type: null,
+      seminar_id: s.id,
+    }))
+
+    const evItems = (upcomEvents || [])
+      .filter(e => !e.group_restriction || e.group_restriction.length === 0 || (groupName && e.group_restriction.includes(groupName)))
+      .map(e => ({
+        type: 'event' as const,
+        id: e.id,
+        title: e.name,
+        date: e.date,
+        subtitle: e.time_start ? e.time_start.slice(0, 5) : null,
+        bonus_type: e.bonus_type || null,
+        seminar_id: null,
+      }))
+
+    const attItems = (upcomAtt || []).map(a => ({
+      type: 'attestation' as const,
+      id: a.id,
+      title: a.title,
+      date: a.event_date,
+      subtitle: a.preatt1_date ? `Предаттестация: ${a.preatt1_date}` : null,
+      bonus_type: null,
+      seminar_id: null,
+    }))
+
+    const allUpcoming = [...semItems, ...evItems, ...attItems]
+      .sort((a, b) => a.date.localeCompare(b.date))
+    setUpcomingItems(allUpcoming)
 
     setLoading(false)
   }
@@ -970,6 +1035,42 @@ export default function CabinetPage() {
                 </div>
               )
             })()}
+
+            {/* Ближайшие события */}
+            {upcomingItems.length > 0 && (
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+                <h2 className="font-semibold text-gray-800 mb-3">🗓 Ближайшие события</h2>
+                <div className="space-y-3">
+                  {upcomingItems.map(item => {
+                    const icon = item.type === 'seminar' ? '🥋'
+                      : item.type === 'attestation' ? '📋'
+                      : item.bonus_type === 'тренировка с оружием' ? '⚔️'
+                      : item.bonus_type === 'мастер-класс' ? '🎓'
+                      : item.bonus_type === 'индивидуальное занятие' ? '👤'
+                      : '📅'
+                    const dateStr = new Date(item.date + 'T00:00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })
+                    return (
+                      <div key={`${item.type}-${item.id}`} className="flex items-start gap-3 pb-3 border-b border-gray-50 last:border-0 last:pb-0">
+                        <span className="text-xl mt-0.5">{icon}</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium text-gray-800">{item.title}</div>
+                          <div className="text-xs text-gray-400 mt-0.5">
+                            {dateStr}
+                            {item.subtitle && <span className="ml-1">· {item.subtitle}</span>}
+                          </div>
+                        </div>
+                        {item.type === 'seminar' && item.seminar_id && (
+                          <a href={`/seminars/${item.seminar_id}/register`}
+                            className="shrink-0 text-xs bg-black text-white px-3 py-1.5 rounded-lg font-medium hover:bg-gray-800 transition-colors">
+                            Записаться
+                          </a>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* Контакты тренеров */}
             {trainersInfo.length > 0 && (
