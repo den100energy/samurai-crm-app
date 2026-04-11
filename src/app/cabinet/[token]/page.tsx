@@ -561,21 +561,25 @@ export default function CabinetPage() {
       .sort((a, b) => a.date.localeCompare(b.date))
     setUpcomingItems(allUpcoming)
 
-    // Проверить статус записи на ближайшие мероприятия (по student_id ИЛИ телефону)
+    // Проверить статус записи на ближайшие мероприятия (по student_id, телефону или имени)
     const upcomSemIds = semItems.map(s => s.id)
     const upcomEvIds = evItems.map(e => e.id)
+    const studentNameLower = (studentData.name || '').toLowerCase().trim()
     const [{ data: semRegsUpcoming }, { data: evRegsUpcoming }] = await Promise.all([
       upcomSemIds.length > 0
-        ? supabase.from('seminar_registrations').select('seminar_id, status, student_id, participant_phone').in('seminar_id', upcomSemIds)
+        ? supabase.from('seminar_registrations').select('seminar_id, status, student_id, participant_phone, participant_name').in('seminar_id', upcomSemIds)
         : Promise.resolve({ data: [] as any[] }),
       upcomEvIds.length > 0
-        ? supabase.from('event_participants').select('event_id, paid, student_id, participant_phone').in('event_id', upcomEvIds)
+        ? supabase.from('event_participants').select('event_id, paid, student_id, participant_phone, participant_name').in('event_id', upcomEvIds)
         : Promise.resolve({ data: [] as any[] }),
     ])
     const semRegsMap: Record<string, string> = {}
     ;(semRegsUpcoming || []).forEach((r: any) => {
       const rPhone = normPhone(r.participant_phone || '')
-      if (r.student_id === sid || (phoneNorm && rPhone === phoneNorm)) {
+      const rName = (r.participant_name || '').toLowerCase().trim()
+      if (r.student_id === sid
+        || (phoneNorm && rPhone === phoneNorm)
+        || (studentNameLower && rName === studentNameLower)) {
         semRegsMap[r.seminar_id] = r.status
       }
     })
@@ -584,7 +588,10 @@ export default function CabinetPage() {
     const evRegsMap: Record<string, boolean> = {}
     ;(evRegsUpcoming || []).forEach((r: any) => {
       const rPhone = normPhone(r.participant_phone || '')
-      if (r.student_id === sid || (phoneNorm && rPhone === phoneNorm)) {
+      const rName = (r.participant_name || '').toLowerCase().trim()
+      if (r.student_id === sid
+        || (phoneNorm && rPhone === phoneNorm)
+        || (studentNameLower && rName === studentNameLower)) {
         evRegsMap[r.event_id] = r.paid
       }
     })
