@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
@@ -44,7 +44,7 @@ function getWeekDates(): Record<number, string> {
   return dates
 }
 
-export default function TrainerPage() {
+function TrainerPageInner() {
   const { userName, role, trainerId, permissions, loading } = useAuth()
   const { theme, toggle: toggleTheme } = useTheme()
   const router = useRouter()
@@ -456,5 +456,13 @@ export default function TrainerPage() {
       )}
       </div>
     </main>
+  )
+}
+
+export default function TrainerPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-gray-400">Загрузка...</div>}>
+      <TrainerPageInner />
+    </Suspense>
   )
 }
