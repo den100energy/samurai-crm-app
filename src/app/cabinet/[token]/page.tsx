@@ -579,7 +579,8 @@ export default function CabinetPage() {
         semRegsMap[r.seminar_id] = r.status
       }
     })
-    setMySeminarRegs(semRegsMap)
+    // Merge with existing (step 1 already set student_id-matched ones)
+    setMySeminarRegs(prev => ({ ...prev, ...semRegsMap }))
     const evRegsMap: Record<string, boolean> = {}
     ;(evRegsUpcoming || []).forEach((r: any) => {
       const rPhone = normPhone(r.participant_phone || '')
@@ -587,7 +588,7 @@ export default function CabinetPage() {
         evRegsMap[r.event_id] = r.paid
       }
     })
-    setMyEventRegs(evRegsMap)
+    setMyEventRegs(prev => ({ ...prev, ...evRegsMap }))
 
     setLoading(false)
   }
