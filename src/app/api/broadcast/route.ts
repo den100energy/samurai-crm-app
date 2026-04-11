@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
   const recipients: Recipient[] = []
 
   if (audience === 'parents') {
-    // Только родительские контакты активных учеников
+    // Только родительские контакты активных учеников — дедупликация по chat_id
     let sq = admin.from('students').select('id, name').eq('status', 'active')
     if (group && group !== 'Все') sq = sq.eq('group_name', group)
     const { data: studs } = await sq
@@ -25,14 +25,18 @@ export async function POST(req: NextRequest) {
     if (ids.length > 0) {
       const { data: contacts } = await admin
         .from('student_contacts')
-        .select('telegram_chat_id, student_id')
+        .select('telegram_chat_id, student_id, contact_name')
         .in('student_id', ids)
+        .not('telegram_chat_id', 'is', null)
 
-      const nameMap = new Map((studs || []).map(s => [s.id, s.name]))
+      // Дедупликация: один chat_id — одно сообщение
+      const seen = new Set<string | number>()
       for (const c of contacts || []) {
+        if (!c.telegram_chat_id || seen.has(c.telegram_chat_id)) continue
+        seen.add(c.telegram_chat_id)
         recipients.push({
-          name: nameMap.get(c.student_id) || 'Родитель',
-          chat_ids: c.telegram_chat_id ? [c.telegram_chat_id] : [],
+          name: c.contact_name || 'Родитель',
+          chat_ids: [c.telegram_chat_id],
         })
       }
     }
@@ -87,8 +91,10 @@ export async function POST(req: NextRequest) {
   }
 
   // Отправка сообщений с персонализацией {имя}
+  // Глобальная дедупликация chat_id — чтобы родитель с двумя детьми не получил дубли
   let sent = 0
   const no_telegram_names: string[] = []
+  const globalSentChatIds = new Set<string | number>()
 
   for (const r of recipients) {
     if (r.chat_ids.length === 0) {
@@ -97,10 +103,14 @@ export async function POST(req: NextRequest) {
     }
     const firstName = r.name.split(' ').slice(-1)[0] // последнее слово = имя (Иванов Иван → Иван)
     const personalText = text.replace(/\{имя\}/gi, firstName)
+    let sentForRecipient = false
     for (const chat_id of r.chat_ids) {
+      if (globalSentChatIds.has(chat_id)) continue
+      globalSentChatIds.add(chat_id)
       await sendClientMessage(chat_id, personalText)
+      sentForRecipient = true
     }
-    sent++
+    if (sentForRecipient) sent++
   }
 
   const no_telegram = no_telegram_names.length
