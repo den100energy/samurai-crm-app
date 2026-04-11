@@ -25,7 +25,7 @@ const QUALITY_LABELS: Record<string,string> = {
   goal_orientation:'Целеустремлённость', activity:'Активность', self_defense:'Самозащита',
 }
 
-type Student = { id: string; name: string; group_name: string | null; birth_date: string | null; photo_url: string | null; created_at: string }
+type Student = { id: string; name: string; group_name: string | null; birth_date: string | null; photo_url: string | null; created_at: string; phone: string | null }
 type TrainerInfo = { name: string; phone: string | null; telegram_username: string | null; vk_url: string | null; days: string[] }
 type Subscription = { id: string; sessions_left: number | null; sessions_total: number | null; start_date: string | null; end_date: string | null; type: string; amount: number | null; bonuses: Record<string, number> | null; bonuses_used: Record<string, number | string[]> | null }
 type InstallmentPlan = { id: string; total_amount: number; deposit_amount: number; deposit_paid_at: string | null; installment_payments: { id: string; amount: number; due_date: string; status: string; paid_at: string | null; actual_amount: number | null }[] }
@@ -356,7 +356,7 @@ export default function CabinetPage() {
     // Найти ученика по токену
     const { data: studentData } = await supabase
       .from('students')
-      .select('id, name, group_name, birth_date, photo_url, created_at')
+      .select('id, name, group_name, birth_date, photo_url, created_at, phone')
       .eq('cabinet_token', token)
       .single()
 
