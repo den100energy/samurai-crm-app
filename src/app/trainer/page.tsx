@@ -70,6 +70,8 @@ function TrainerPageInner() {
   const [trainerTgLinked, setTrainerTgLinked] = useState(false)
   const [tgLinkUrl, setTgLinkUrl] = useState<string | null>(null)
   const [tgLinkLoading, setTgLinkLoading] = useState(false)
+  const [weekEvents, setWeekEvents] = useState<{ id: string; name: string; date: string; time_start: string | null; bonus_type: string | null; trainer_name: string | null }[]>([])
+  const [weekSeminars, setWeekSeminars] = useState<{ id: string; title: string; starts_at: string; location: string | null; trainer_name: string | null }[]>([])
 
   const dark = theme === 'dark'
 
@@ -86,12 +88,14 @@ function TrainerPageInner() {
     const monday = weekDates[1]
     const sunday = weekDates[7]
 
-    const [{ data: slots }, { data: students }, { data: ovData }, { data: trainerRow }] = await Promise.all([
+    const [{ data: slots }, { data: students }, { data: ovData }, { data: trainerRow }, { data: eventsData }, { data: seminarsData }] = await Promise.all([
       supabase.from('schedule').select('*').eq('trainer_name', effectiveName).order('day_of_week').order('time_start'),
       supabase.from('students').select('id, group_name').eq('status', 'active'),
       supabase.from('schedule_overrides').select('date, group_name, trainer_name, cancelled')
         .gte('date', monday).lte('date', sunday),
       supabase.from('trainers').select('id, phone, telegram_username, vk_url, photo_url, telegram_chat_id').eq('name', effectiveName).maybeSingle(),
+      supabase.from('events').select('id, name, date, time_start, bonus_type, trainer_name').gte('date', monday).lte('date', sunday).order('date').order('time_start'),
+      supabase.from('seminar_events').select('id, title, starts_at, location, trainer_name').eq('status', 'open').gte('starts_at', monday + 'T00:00:00').lte('starts_at', sunday + 'T23:59:59').order('starts_at'),
     ])
     setSchedule(slots || [])
     setOverrides(ovData || [])
@@ -103,6 +107,8 @@ function TrainerPageInner() {
       setTrainerPhoto(trainerRow.photo_url || null)
       setTrainerTgLinked(!!trainerRow.telegram_chat_id)
     }
+    setWeekEvents(eventsData || [])
+    setWeekSeminars(seminarsData || [])
 
     const trainerGroups = [...new Set((slots || []).map(s => s.group_name))]
     const myStudents = (students || []).filter(s => s.group_name && trainerGroups.includes(s.group_name))
@@ -237,6 +243,61 @@ function TrainerPageInner() {
       })
       .filter(Boolean)
     ) as (ScheduleSlot & { dateStr: string; dayNum: number; override: Override | undefined })[]
+
+  // Единая лента недели: тренировки + мероприятия + семинары по дням
+  type WeekItem = { type: 'training' | 'event' | 'seminar'; dateStr: string; dayNum: number; time: string | null; title: string; subtitle: string | null; href: string; isMine: boolean }
+  const allWeekItems: WeekItem[] = []
+
+  // Тренировки из расписания
+  for (const slot of upcomingSlots) {
+    allWeekItems.push({
+      type: 'training', dateStr: slot.dateStr, dayNum: slot.dayNum,
+      time: slot.time_start?.slice(0, 5) || null,
+      title: slot.group_name, subtitle: null,
+      href: `/trainer/attendance?date=${slot.dateStr}&group=${encodeURIComponent(slot.group_name)}`,
+      isMine: true,
+    })
+  }
+  // Мероприятия
+  for (const ev of weekEvents) {
+    const d = new Date(ev.date + 'T00:00:00'); const jsDay = d.getDay(); const dayNum = jsDay === 0 ? 7 : jsDay
+    allWeekItems.push({
+      type: 'event', dateStr: ev.date, dayNum,
+      time: ev.time_start ? ev.time_start.slice(0, 5) : null,
+      title: ev.name, subtitle: ev.bonus_type || null,
+      href: `/events/${ev.id}`,
+      isMine: ev.trainer_name === effectiveName,
+    })
+  }
+  // Семинары
+  for (const sem of weekSeminars) {
+    const d = new Date(sem.starts_at); const jsDay = d.getDay(); const dayNum = jsDay === 0 ? 7 : jsDay
+    const dateStr = sem.starts_at.slice(0, 10)
+    const time = sem.starts_at.slice(11, 16)
+    allWeekItems.push({
+      type: 'seminar', dateStr, dayNum,
+      time: time || null,
+      title: sem.title, subtitle: sem.location || null,
+      href: `/seminars/${sem.id}`,
+      isMine: sem.trainer_name === effectiveName,
+    })
+  }
+
+  // Группируем по дате
+  const itemsByDay = new Map<string, WeekItem[]>()
+  for (let i = 1; i <= 7; i++) {
+    const dateStr = weekDates[i]
+    if (dateStr) itemsByDay.set(dateStr, [])
+  }
+  for (const item of allWeekItems) {
+    if (itemsByDay.has(item.dateStr)) itemsByDay.get(item.dateStr)!.push(item)
+  }
+  for (const items of itemsByDay.values()) {
+    items.sort((a, b) => (a.time || '00:00').localeCompare(b.time || '00:00'))
+  }
+  const weekDaysWithItems = [...itemsByDay.entries()]
+    .filter(([, items]) => items.length > 0)
+    .sort(([a], [b]) => a.localeCompare(b))
 
   // Sections available to this trainer based on permissions
   const navSections = [
@@ -518,33 +579,49 @@ function TrainerPageInner() {
         </div>
       )}
 
-      {/* Upcoming slots this week */}
-      {upcomingSlots.length > 0 && (
+      {/* Неделя: тренировки + мероприятия + семинары */}
+      {weekDaysWithItems.length > 0 && (
         <div className={`rounded-2xl border p-4 mb-4 ${card}`}>
-          <h2 className={`font-semibold mb-3 ${textPrimary}`}>Занятия на этой неделе</h2>
-          <div className="space-y-2">
-            {upcomingSlots.map(slot => {
-              const isToday = slot.dayNum === TODAY_NUM
-              const dateLabel = new Date(slot.dateStr + 'T00:00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })
+          <h2 className={`font-semibold mb-3 ${textPrimary}`}>Неделя</h2>
+          <div className="space-y-4">
+            {weekDaysWithItems.map(([dateStr, items]) => {
+              const d = new Date(dateStr + 'T00:00:00')
+              const jsDay = d.getDay(); const dayNum = jsDay === 0 ? 7 : jsDay
+              const isToday = dayNum === TODAY_NUM
+              const dayLabel = DAYS_SHORT[dayNum] + ' ' + d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })
               return (
-                <div key={`${slot.id}-${slot.dateStr}`}
-                  className={`flex items-center justify-between py-2 border-b last:border-0 ${dark ? 'border-[#3A3A3C]' : 'border-gray-50'}`}>
-                  <div>
-                    <div className={`text-sm ${isToday ? (dark ? 'text-white font-semibold' : 'text-black font-semibold') : textPrimary}`}>
-                      {slot.group_name}
-                    </div>
-                    <div className={`text-xs mt-0.5 ${textSecondary}`}>
-                      {DAYS_SHORT[slot.dayNum]} {dateLabel}
-                      {isToday && <span className={`ml-1 font-medium ${dark ? 'text-[#E5E5E7]' : 'text-black'}`}>— сегодня</span>}
-                    </div>
+                <div key={dateStr}>
+                  {/* Заголовок дня */}
+                  <div className={`text-xs font-semibold mb-1.5 ${isToday ? 'text-indigo-500' : textSecondary}`}>
+                    {dayLabel.toUpperCase()}{isToday ? ' — СЕГОДНЯ' : ''}
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className={`text-sm font-bold ${textPrimary}`}>{slot.time_start?.slice(0, 5)}</span>
-                    <Link
-                      href={`/trainer/attendance?date=${slot.dateStr}&group=${encodeURIComponent(slot.group_name)}`}
-                      className="text-xs bg-black text-white px-2.5 py-1 rounded-lg">
-                      ✅
-                    </Link>
+                  <div className="space-y-1.5">
+                    {items.map((item, idx) => {
+                      const icon = item.type === 'training' ? '🥋' : item.type === 'event' ? '📅' : '🎓'
+                      const accentBorder = item.isMine
+                        ? (item.type === 'training' ? (dark ? 'border-l-red-500' : 'border-l-red-400')
+                          : item.type === 'event' ? (dark ? 'border-l-indigo-400' : 'border-l-indigo-400')
+                          : (dark ? 'border-l-emerald-400' : 'border-l-emerald-500'))
+                        : (dark ? 'border-l-[#3A3A3C]' : 'border-l-gray-200')
+                      return (
+                        <Link key={idx} href={item.href}
+                          className={`flex items-center justify-between px-3 py-2 rounded-xl border-l-4 ${accentBorder} ${dark ? 'bg-[#1C1C1E]' : 'bg-gray-50'} hover:opacity-80 transition-opacity`}>
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="text-base shrink-0">{icon}</span>
+                            <div className="min-w-0">
+                              <div className={`text-sm font-medium truncate ${textPrimary}`}>{item.title}</div>
+                              {item.subtitle && <div className={`text-xs truncate ${textSecondary}`}>{item.subtitle}</div>}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0 ml-2">
+                            {item.time && <span className={`text-xs font-semibold ${textSecondary}`}>{item.time}</span>}
+                            {item.type === 'training' && (
+                              <span className="text-xs bg-black text-white px-2 py-0.5 rounded-lg">✅</span>
+                            )}
+                          </div>
+                        </Link>
+                      )
+                    })}
                   </div>
                 </div>
               )
