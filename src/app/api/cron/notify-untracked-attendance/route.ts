@@ -99,20 +99,54 @@ export async function GET() {
     return NextResponse.json({ ok: true, missing: 0 })
   }
 
-  // Формируем сообщение основателю
   const dateLabel = formatDateRu(yesterdayStr)
-  const lines: string[] = []
+
+  // Получаем telegram_chat_id тренеров у которых он привязан
+  const trainerNames = [...missingByTrainer.keys()].filter(n => n !== 'Без тренера')
+  const { data: trainerRows } = trainerNames.length > 0
+    ? await admin.from('trainers').select('name, telegram_chat_id').in('name', trainerNames)
+    : { data: [] }
+
+  const trainerChatIds = new Map<string, string>(
+    (trainerRows || [])
+      .filter(t => t.telegram_chat_id)
+      .map(t => [t.name, String(t.telegram_chat_id)])
+  )
+
+  // Отправляем каждому тренеру персонально (если привязан)
+  const notifiedTrainers: string[] = []
   for (const [trainer, groups] of missingByTrainer.entries()) {
-    lines.push(`👤 <b>${trainer}</b>: ${groups.join(', ')}`)
+    const chatId = trainerChatIds.get(trainer)
+    if (!chatId) continue
+    const groupList = groups.join(', ')
+    await tgSend(chatId,
+      `⚠️ <b>Посещаемость не отмечена</b>\n` +
+      `📅 ${dateLabel}\n\n` +
+      `Группы: <b>${groupList}</b>\n\n` +
+      `Пожалуйста, зайдите в кабинет и отметьте учеников.`
+    )
+    notifiedTrainers.push(trainer)
   }
 
-  const text =
-    `⚠️ <b>Посещаемость не отмечена</b>\n` +
-    `📅 ${dateLabel}\n\n` +
-    lines.join('\n') +
-    `\n\nНапомните тренеру отметить учеников.`
+  // Основателю — итоговая сводка (только те, кому не смогли написать напрямую)
+  const unnotified = [...missingByTrainer.entries()].filter(([trainer]) => !notifiedTrainers.includes(trainer))
+  const lines: string[] = []
+  for (const [trainer, groups] of missingByTrainer.entries()) {
+    const sent = notifiedTrainers.includes(trainer)
+    lines.push(`👤 <b>${trainer}</b>: ${groups.join(', ')}${sent ? ' ✉️' : ''}`)
+  }
 
-  await tgSend(OWNER_CHAT_ID, text)
+  if (OWNER_CHAT_ID) {
+    const suffix = unnotified.length > 0
+      ? `\n\nНапомните тренеру отметить учеников.`
+      : `\n\n✉️ — уведомление отправлено тренеру напрямую.`
+    await tgSend(OWNER_CHAT_ID,
+      `⚠️ <b>Посещаемость не отмечена</b>\n` +
+      `📅 ${dateLabel}\n\n` +
+      lines.join('\n') +
+      suffix
+    )
+  }
 
-  return NextResponse.json({ ok: true, missing: missingByTrainer.size, date: yesterdayStr })
+  return NextResponse.json({ ok: true, missing: missingByTrainer.size, notified: notifiedTrainers.length, date: yesterdayStr })
 }

@@ -309,6 +309,22 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true })
     }
 
+    // Токен тренера (префикс tr_)
+    if (token.startsWith('tr_')) {
+      const { data: trainer } = await supabase
+        .from('trainers').select('id, name').eq('telegram_invite_token', token).maybeSingle()
+      if (trainer) {
+        await supabase.from('trainers')
+          .update({ telegram_chat_id: chat_id, telegram_invite_token: null })
+          .eq('id', trainer.id)
+        await sendMessage(chat_id,
+          `Привет, ${firstName}! 👋\n\nTelegram успешно привязан к профилю тренера <b>${trainer.name}</b>.\n\nТеперь вы будете получать уведомления о пропущенных отметках посещаемости. 🥋`,
+          cabinetButton(`${appUrl}/trainer`, '🎒 Открыть кабинет тренера')
+        )
+        return NextResponse.json({ ok: true })
+      }
+    }
+
     await sendMessage(chat_id, `Ссылка не распознана или устарела. Попросите тренера отправить новую ссылку-приглашение.`)
     return NextResponse.json({ ok: true })
   }

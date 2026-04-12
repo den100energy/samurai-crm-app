@@ -67,6 +67,9 @@ function TrainerPageInner() {
   const [needSurveyStudents, setNeedSurveyStudents] = useState<{ id: string; name: string }[]>([])
   const [showSurveyList, setShowSurveyList] = useState(false)
   const [missingDays, setMissingDays] = useState<{ date: string; group_name: string }[]>([])
+  const [trainerTgLinked, setTrainerTgLinked] = useState(false)
+  const [tgLinkUrl, setTgLinkUrl] = useState<string | null>(null)
+  const [tgLinkLoading, setTgLinkLoading] = useState(false)
 
   const dark = theme === 'dark'
 
@@ -88,7 +91,7 @@ function TrainerPageInner() {
       supabase.from('students').select('id, group_name').eq('status', 'active'),
       supabase.from('schedule_overrides').select('date, group_name, trainer_name, cancelled')
         .gte('date', monday).lte('date', sunday),
-      supabase.from('trainers').select('id, phone, telegram_username, vk_url, photo_url').eq('name', effectiveName).maybeSingle(),
+      supabase.from('trainers').select('id, phone, telegram_username, vk_url, photo_url, telegram_chat_id').eq('name', effectiveName).maybeSingle(),
     ])
     setSchedule(slots || [])
     setOverrides(ovData || [])
@@ -98,6 +101,7 @@ function TrainerPageInner() {
       setTrainerTg(trainerRow.telegram_username || '')
       setTrainerVk(trainerRow.vk_url || '')
       setTrainerPhoto(trainerRow.photo_url || null)
+      setTrainerTgLinked(!!trainerRow.telegram_chat_id)
     }
 
     const trainerGroups = [...new Set((slots || []).map(s => s.group_name))]
@@ -205,6 +209,15 @@ function TrainerPageInner() {
     setProfileSaved(true)
     setShowProfile(false)
     setTimeout(() => setProfileSaved(false), 2000)
+  }
+
+  async function generateTgLink() {
+    setTgLinkLoading(true)
+    setTgLinkUrl(null)
+    const res = await fetch('/api/trainer/telegram-link', { method: 'POST' })
+    const data = await res.json()
+    if (data.link) setTgLinkUrl(data.link)
+    setTgLinkLoading(false)
   }
 
   if (loading) return <div className="min-h-screen flex items-center justify-center text-gray-400">Загрузка...</div>
@@ -391,6 +404,37 @@ function TrainerPageInner() {
               className="w-full bg-black text-white py-2.5 rounded-xl text-sm font-medium disabled:opacity-50">
               {savingProfile ? 'Сохранение...' : 'Сохранить'}
             </button>
+
+            {/* Привязка Telegram для уведомлений */}
+            {!viewAsName && (
+              <div className={`mt-3 pt-3 border-t ${dark ? 'border-[#3A3A3C]' : 'border-gray-100'}`}>
+                <div className={`text-xs font-medium mb-2 ${textSecondary}`}>Уведомления в Telegram</div>
+                {trainerTgLinked ? (
+                  <div className="flex items-center gap-2 text-xs text-green-600">
+                    <span>✅ Telegram подключён</span>
+                  </div>
+                ) : (
+                  <>
+                    <p className={`text-xs mb-2 ${textSecondary}`}>
+                      Подключите Telegram, чтобы получать уведомления о пропущенных отметках посещаемости.
+                    </p>
+                    {tgLinkUrl ? (
+                      <a href={tgLinkUrl} target="_blank" rel="noopener noreferrer"
+                        className="block w-full text-center bg-blue-500 text-white py-2.5 rounded-xl text-sm font-medium">
+                        📲 Открыть бот и подключить
+                      </a>
+                    ) : (
+                      <button onClick={generateTgLink} disabled={tgLinkLoading}
+                        className={`w-full py-2.5 rounded-xl text-sm font-medium border transition-colors disabled:opacity-50 ${
+                          dark ? 'border-[#3A3A3C] text-[#E5E5E7] hover:bg-[#3A3A3C]' : 'border-gray-200 text-gray-700 hover:bg-gray-50'
+                        }`}>
+                        {tgLinkLoading ? 'Генерация ссылки...' : '🔗 Подключить Telegram'}
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>
