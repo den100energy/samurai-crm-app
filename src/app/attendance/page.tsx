@@ -6,6 +6,8 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/components/AuthProvider'
 import { localDateStr } from '@/lib/dates'
 import { OnboardingHint } from '@/components/OnboardingHint'
+import { TrainingLogSheet } from '@/components/TrainingLogSheet'
+import { TrainingLogData } from '@/lib/training-checklists'
 
 type Sub = { id: string; type: string | null; sessions_left: number | null; end_date: string | null }
 type Student = {
@@ -45,7 +47,7 @@ async function loadWithSub(students: { id: string; name: string; group_name: str
 type MissingDay = { date: string; group_name: string; trainer_name: string | null }
 
 export default function AttendancePage() {
-  const { role, permissions } = useAuth()
+  const { role, permissions, userName } = useAuth()
   const canEdit = role !== 'trainer' || permissions.includes('attendance.edit')
   const [students, setStudents] = useState<Student[]>([])
   const [guests, setGuests] = useState<Student[]>([])
@@ -60,6 +62,11 @@ export default function AttendancePage() {
   const [selectedSubs, setSelectedSubs] = useState<Record<string, string>>({}) // studentId → subId
   const [missingDays, setMissingDays] = useState<MissingDay[]>([])
   const [showAllMissing, setShowAllMissing] = useState(false)
+
+  // Training log state
+  const [showLogSheet, setShowLogSheet] = useState(false)
+  const [existingLog, setExistingLog] = useState<{ id: string; data: TrainingLogData } | null>(null)
+  const [logDates, setLogDates] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     async function load() {
@@ -91,9 +98,24 @@ export default function AttendancePage() {
       }
       setPresent(new Set(savedPresent))
       setOriginalPresent(new Set(savedPresent))
+      loadLogDates()
     }
     load()
   }, [group, date])
+
+  async function loadLogDates() {
+    const { data } = await supabase
+      .from('training_logs')
+      .select('date')
+      .eq('group_name', group)
+      .order('date', { ascending: false })
+    
+    const dateSet = new Set<string>()
+    if (data) {
+      for (const log of data) dateSet.add(log.date)
+    }
+    setLogDates(dateSet)
+  }
 
   async function loadGuests() {
     if (guestsLoaded) return
@@ -249,6 +271,44 @@ export default function AttendancePage() {
     if (noSubPresent.length > 0) {
       alert(`⚠️ Не забудь внести абонемент!\n\nПрисутствовали без абонемента:\n${noSubPresent.map(s => `• ${s.name}`).join('\n')}`)
     }
+  }
+
+  async function openLogSheet() {
+    const { data } = await supabase
+      .from('training_logs')
+      .select('id, warmup_items, fitness_items, basic_techniques, applied_techniques, taolu_items, qigong_items, aikido_ukemi, aikido_techniques, aikido_weapons, aikido_etiquette, aikido_movement, notes')
+      .eq('group_name', group)
+      .eq('date', date)
+      .order('created_at', { ascending: false })
+      .maybeSingle()
+
+    if (data) {
+      setExistingLog({
+        id: data.id,
+        data: {
+          warmup_items: data.warmup_items || [],
+          fitness_items: data.fitness_items || [],
+          basic_techniques: data.basic_techniques || [],
+          applied_techniques: data.applied_techniques || [],
+          taolu_items: data.taolu_items || [],
+          qigong_items: data.qigong_items || [],
+          aikido_ukemi: data.aikido_ukemi || [],
+          aikido_techniques: data.aikido_techniques || [],
+          aikido_weapons: data.aikido_weapons || [],
+          aikido_etiquette: data.aikido_etiquette || false,
+          aikido_movement: data.aikido_movement || [],
+          notes: data.notes || '',
+        },
+      })
+    } else {
+      setExistingLog(null)
+    }
+    setShowLogSheet(true)
+  }
+
+  function handleLogSheetClose() {
+    setShowLogSheet(false)
+    loadLogDates()
   }
 
   function sessionsColor(n: number | null) {
@@ -407,8 +467,30 @@ export default function AttendancePage() {
               {saved ? '✓ Сохранено!' : saving ? 'Сохранение...' : 'Сохранить посещаемость'}
             </button>
           )}
+
+          {/* Training Log Button */}
+          <div className="mt-3 flex gap-2">
+            <button
+              onClick={openLogSheet}
+              className={`flex-1 py-2.5 rounded-xl text-sm font-medium border transition-colors
+                ${logDates.has(date)
+                  ? 'bg-blue-50 border-blue-200 text-blue-700'
+                  : 'bg-gray-50 border-gray-200 text-gray-600 hover:border-gray-300'
+                }`}>
+              {logDates.has(date) ? '📝 Редактировать журнал' : '📝 Добавить журнал тренировки'}
+            </button>
+          </div>
         </>
       )}
+
+      <TrainingLogSheet
+        isOpen={showLogSheet}
+        onClose={handleLogSheetClose}
+        groupName={group}
+        trainerName={userName || ''}
+        date={date}
+        existingLog={existingLog}
+      />
     </main>
   )
 }

@@ -7,6 +7,8 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/components/AuthProvider'
 import { useTheme } from '@/components/ThemeProvider'
 import { localDateStr } from '@/lib/dates'
+import { TrainingLogSheet } from '@/components/TrainingLogSheet'
+import { TrainingLogData } from '@/lib/training-checklists'
 
 type Sub = { id: string; type: string | null; sessions_left: number | null; end_date: string | null }
 type Student = {
@@ -76,6 +78,11 @@ function AttendanceContent() {
   const [originalPresent, setOriginalPresent] = useState<Set<string>>(new Set())
   const [selectedSubs, setSelectedSubs] = useState<Record<string, string>>({})
 
+  // Training log state
+  const [showLogSheet, setShowLogSheet] = useState(false)
+  const [existingLog, setExistingLog] = useState<{ id: string; data: TrainingLogData } | null>(null)
+  const [logDates, setLogDates] = useState<Set<string>>(new Set())
+
   // Pre-fill from URL params (?date=&group=)
   useEffect(() => {
     const urlDate = searchParams.get('date')
@@ -107,7 +114,23 @@ function AttendanceContent() {
   useEffect(() => {
     if (!selectedGroup) return
     loadStudents()
-  }, [selectedGroup, date])
+    loadLogDates()
+  }, [selectedGroup, date, userName])
+
+  async function loadLogDates() {
+    const { data } = await supabase
+      .from('training_logs')
+      .select('id, date')
+      .eq('group_name', selectedGroup)
+      .eq('trainer_name', userName || '')
+      .order('date', { ascending: false })
+    
+    const dateSet = new Set<string>()
+    if (data) {
+      for (const log of data) dateSet.add(log.date)
+    }
+    setLogDates(dateSet)
+  }
 
   async function loadStudents() {
     const { data } = await supabase
@@ -232,6 +255,45 @@ function AttendanceContent() {
     if (noSubPresent.length > 0) {
       alert(`⚠️ Не забудь внести абонемент!\n\nПрисутствовали без абонемента:\n${noSubPresent.map(s => `• ${s.name}`).join('\n')}`)
     }
+  }
+
+  async function openLogSheet() {
+    // Check if log already exists for this date/group/trainer
+    const { data } = await supabase
+      .from('training_logs')
+      .select('id, warmup_items, fitness_items, basic_techniques, applied_techniques, taolu_items, qigong_items, aikido_ukemi, aikido_techniques, aikido_weapons, aikido_etiquette, aikido_movement, notes')
+      .eq('group_name', selectedGroup)
+      .eq('trainer_name', userName || '')
+      .eq('date', date)
+      .maybeSingle()
+
+    if (data) {
+      setExistingLog({
+        id: data.id,
+        data: {
+          warmup_items: data.warmup_items || [],
+          fitness_items: data.fitness_items || [],
+          basic_techniques: data.basic_techniques || [],
+          applied_techniques: data.applied_techniques || [],
+          taolu_items: data.taolu_items || [],
+          qigong_items: data.qigong_items || [],
+          aikido_ukemi: data.aikido_ukemi || [],
+          aikido_techniques: data.aikido_techniques || [],
+          aikido_weapons: data.aikido_weapons || [],
+          aikido_etiquette: data.aikido_etiquette || false,
+          aikido_movement: data.aikido_movement || [],
+          notes: data.notes || '',
+        },
+      })
+    } else {
+      setExistingLog(null)
+    }
+    setShowLogSheet(true)
+  }
+
+  function handleLogSheetClose() {
+    setShowLogSheet(false)
+    loadLogDates() // refresh
   }
 
   const guestsPresentCount = guests.filter(g => present.has(g.id)).length
@@ -378,8 +440,34 @@ function AttendanceContent() {
             className="w-full bg-black text-white py-3 rounded-xl font-medium disabled:opacity-50 transition-colors">
             {saved ? '✓ Сохранено!' : saving ? 'Сохранение...' : 'Сохранить посещаемость'}
           </button>
+
+          {/* Training Log Button */}
+          <div className="mt-3 flex gap-2">
+            <button
+              onClick={openLogSheet}
+              className={`flex-1 py-2.5 rounded-xl text-sm font-medium border transition-colors
+                ${logDates.has(date)
+                  ? dark
+                    ? 'bg-[#2C2C2E] border-[#3A3A3C] text-[#E5E5E7]'
+                    : 'bg-blue-50 border-blue-200 text-blue-700'
+                  : dark
+                    ? 'bg-[#2C2C2E] border-[#3A3A3C] text-[#8E8E93] hover:border-[#636366]'
+                    : 'bg-gray-50 border-gray-200 text-gray-600 hover:border-gray-300'
+                }`}>
+              {logDates.has(date) ? '📝 Редактировать журнал' : '📝 Добавить журнал тренировки'}
+            </button>
+          </div>
         </>
       )}
+
+      <TrainingLogSheet
+        isOpen={showLogSheet}
+        onClose={handleLogSheetClose}
+        groupName={selectedGroup}
+        trainerName={userName || ''}
+        date={date}
+        existingLog={existingLog}
+      />
     </main>
   )
 }
