@@ -4,179 +4,203 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 
-type StudentStat = {
-  id: string
-  name: string
-  group_name: string | null
-  last_visit: string | null
-  visits_30: number
-  days_absent: number
+type SubStats = { active: number; expiring7: number; revenueMonth: number; loading: boolean }
+type ChurnStats = { total: number; riskZone: number; safe: number; loading: boolean }
+type CabinetStats = { studentsLinked: number; parentsLinked: number; notLinked: number; loading: boolean }
+
+function MiniStat({
+  value,
+  label,
+  color = 'text-gray-800',
+}: {
+  value: number | string
+  label: string
+  color?: string
+}) {
+  return (
+    <div className="flex-1 bg-gray-50 rounded-xl p-3 text-center min-w-0">
+      <div className={`text-xl font-bold ${color} leading-tight`}>{value}</div>
+      <div className="text-xs text-gray-400 mt-0.5 leading-tight">{label}</div>
+    </div>
+  )
 }
 
-const GROUPS = ['Все', 'Старт', 'Основная (нач.)', 'Основная (оп.)', 'Цигун', 'Индивидуальные']
-
 export default function AnalyticsPage() {
-  const [stats, setStats] = useState<StudentStat[]>([])
-  const [loading, setLoading] = useState(true)
-  const [filter, setFilter] = useState('Все')
-  const [tab, setTab] = useState<'churn' | 'all'>('churn')
+  const [subStats, setSubStats] = useState<SubStats>({ active: 0, expiring7: 0, revenueMonth: 0, loading: true })
+  const [churnStats, setChurnStats] = useState<ChurnStats>({ total: 0, riskZone: 0, safe: 0, loading: true })
+  const [cabinetStats, setCabinetStats] = useState<CabinetStats>({ studentsLinked: 0, parentsLinked: 0, notLinked: 0, loading: true })
 
   useEffect(() => {
-    async function load() {
-      const today = new Date()
-      const d30 = new Date(today.getTime() - 30 * 86400000).toISOString().split('T')[0]
-
-      const { data: students } = await supabase
-        .from('students')
-        .select('id, name, group_name')
-        .eq('status', 'active')
-        .order('name')
-
-      if (!students) return
-
-      const result: StudentStat[] = await Promise.all(students.map(async s => {
-        const { data: visits } = await supabase
-          .from('attendance')
-          .select('date')
-          .eq('student_id', s.id)
-          .eq('present', true)
-          .gte('date', d30)
-          .order('date', { ascending: false })
-
-        const lastVisit = visits?.[0]?.date || null
-        const daysAbsent = lastVisit
-          ? Math.floor((today.getTime() - new Date(lastVisit).getTime()) / 86400000)
-          : 999
-
-        return {
-          id: s.id,
-          name: s.name,
-          group_name: s.group_name,
-          last_visit: lastVisit,
-          visits_30: visits?.length || 0,
-          days_absent: daysAbsent,
-        }
-      }))
-
-      setStats(result)
-      setLoading(false)
-    }
-    load()
+    loadSubStats()
+    loadChurnStats()
+    loadCabinetStats()
   }, [])
 
-  const filtered = stats.filter(s =>
-    filter === 'Все' || s.group_name === filter
-  )
+  async function loadSubStats() {
+    const today = new Date().toISOString().split('T')[0]
+    const in7 = new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0]
+    const monthStart = today.substring(0, 7) + '-01'
 
-  const churnRisk = filtered.filter(s => s.days_absent >= 10).sort((a, b) => b.days_absent - a.days_absent)
-  const allSorted = [...filtered].sort((a, b) => b.visits_30 - a.visits_30)
+    const { data } = await supabase
+      .from('subscriptions')
+      .select('sessions_left, end_date, amount, start_date, is_pending')
 
-  const displayed = tab === 'churn' ? churnRisk : allSorted
+    if (!data) { setSubStats(s => ({ ...s, loading: false })); return }
 
-  function absentColor(days: number) {
-    if (days >= 21) return 'text-red-600 font-bold'
-    if (days >= 10) return 'text-orange-500 font-medium'
-    return 'text-green-600'
+    const active = data.filter(s =>
+      !s.is_pending &&
+      (s.sessions_left === null || s.sessions_left > 0) &&
+      (!s.end_date || s.end_date >= today)
+    )
+    const expiring7 = active.filter(s => s.end_date && s.end_date <= in7).length
+    const revenueMonth = data
+      .filter(s => s.start_date && s.start_date >= monthStart)
+      .reduce((sum, s) => sum + (s.amount || 0), 0)
+
+    setSubStats({ active: active.length, expiring7, revenueMonth, loading: false })
   }
 
-  function absentLabel(days: number) {
-    if (days === 999) return 'Не был ни разу'
-    if (days === 0) return 'Сегодня'
-    return `${days} дн. назад`
+  async function loadChurnStats() {
+    const d10 = new Date(Date.now() - 10 * 86400000).toISOString().split('T')[0]
+
+    const [studentsRes, attendanceRes] = await Promise.all([
+      supabase.from('students').select('id').eq('status', 'active'),
+      supabase.from('attendance').select('student_id').gte('date', d10).eq('present', true),
+    ])
+
+    const students = studentsRes.data || []
+    const recentIds = new Set((attendanceRes.data || []).map(a => a.student_id))
+    const total = students.length
+    const riskZone = students.filter(s => !recentIds.has(s.id)).length
+    const safe = total - riskZone
+
+    setChurnStats({ total, riskZone, safe, loading: false })
+  }
+
+  async function loadCabinetStats() {
+    const [studentsRes, contactsRes] = await Promise.all([
+      supabase.from('students').select('id, telegram_chat_id').eq('status', 'active'),
+      supabase.from('student_contacts').select('id').not('telegram_chat_id', 'is', null),
+    ])
+
+    const students = studentsRes.data || []
+    const studentsLinked = students.filter(s => s.telegram_chat_id != null).length
+    const notLinked = students.filter(s => s.telegram_chat_id == null).length
+    const parentsLinked = contactsRes.data?.length || 0
+
+    setCabinetStats({ studentsLinked, parentsLinked, notLinked, loading: false })
+  }
+
+  function formatRevenue(n: number) {
+    if (n >= 1000000) return `${(n / 1000000).toFixed(1)}м`
+    if (n >= 1000) return `${Math.round(n / 1000)}к`
+    return String(n)
   }
 
   return (
     <main className="max-w-lg mx-auto p-4">
-      <div className="flex items-center gap-3 mb-4">
+      <div className="flex items-center gap-3 mb-6">
         <Link href="/" className="text-gray-500 hover:text-black text-xl font-bold leading-none">←</Link>
         <h1 className="text-xl font-bold text-gray-800">Аналитика</h1>
       </div>
 
-      <Link href="/analytics/subscriptions"
-        className="flex items-center justify-between bg-white rounded-2xl px-4 py-3 border border-gray-100 shadow-sm mb-4 hover:border-gray-300">
-        <div className="flex items-center gap-3">
-          <span className="text-2xl">📦</span>
-          <div>
-            <div className="font-semibold text-gray-800 text-sm">Аналитика абонементов</div>
-            <div className="text-xs text-gray-400">Тренды, топ-3, рейтинг по видам</div>
-          </div>
-        </div>
-        <span className="text-gray-300 text-lg">›</span>
-      </Link>
+      <div className="space-y-4">
 
-      {/* Итоги */}
-      {!loading && (
-        <div className="grid grid-cols-3 gap-3 mb-4">
-          <div className="bg-white rounded-2xl p-3 border border-gray-100 shadow-sm text-center">
-            <div className="text-2xl font-bold text-gray-800">{filtered.length}</div>
-            <div className="text-xs text-gray-400">учеников</div>
-          </div>
-          <div className="bg-white rounded-2xl p-3 border border-gray-100 shadow-sm text-center">
-            <div className="text-2xl font-bold text-red-500">{churnRisk.length}</div>
-            <div className="text-xs text-gray-400">зона риска</div>
-          </div>
-          <div className="bg-white rounded-2xl p-3 border border-gray-100 shadow-sm text-center">
-            <div className="text-2xl font-bold text-green-600">
-              {filtered.filter(s => s.days_absent < 10).length}
+        {/* ── Абонементы ── */}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          <Link href="/analytics/subscriptions"
+            className="flex items-center justify-between px-4 pt-4 pb-3 hover:bg-gray-50 transition-colors">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">📦</span>
+              <div>
+                <div className="font-semibold text-gray-800 text-sm">Абонементы</div>
+                <div className="text-xs text-gray-400">Тренды, топ-3, рейтинг по видам</div>
+              </div>
             </div>
-            <div className="text-xs text-gray-400">активных</div>
+            <span className="text-gray-300 text-xl">›</span>
+          </Link>
+          <div className="flex gap-2 px-4 pb-4">
+            {subStats.loading ? (
+              <div className="text-xs text-gray-400 py-2 pl-1">Загрузка...</div>
+            ) : (
+              <>
+                <MiniStat value={subStats.active} label="активных" color="text-blue-600" />
+                <MiniStat
+                  value={subStats.expiring7}
+                  label="истекают в 7 дн."
+                  color={subStats.expiring7 > 0 ? 'text-orange-500' : 'text-gray-800'}
+                />
+                <MiniStat
+                  value={formatRevenue(subStats.revenueMonth)}
+                  label="выручка мес."
+                  color="text-green-600"
+                />
+              </>
+            )}
           </div>
         </div>
-      )}
 
-      {/* Фильтр групп */}
-      <div className="flex gap-2 overflow-x-auto pb-2 mb-3">
-        {GROUPS.map(g => (
-          <button key={g} onClick={() => setFilter(g)}
-            className={`whitespace-nowrap px-3 py-1.5 rounded-full text-sm font-medium transition-colors
-              ${filter === g ? 'bg-black text-white' : 'bg-white text-gray-600 border border-gray-200'}`}>
-            {g}
-          </button>
-        ))}
-      </div>
-
-      {/* Табы */}
-      <div className="flex gap-2 mb-4">
-        <button onClick={() => setTab('churn')}
-          className={`flex-1 py-2 rounded-xl text-sm font-medium border transition-colors
-            ${tab === 'churn' ? 'bg-black text-white border-black' : 'border-gray-200 text-gray-600'}`}>
-          🚨 Зона риска ({churnRisk.length})
-        </button>
-        <button onClick={() => setTab('all')}
-          className={`flex-1 py-2 rounded-xl text-sm font-medium border transition-colors
-            ${tab === 'all' ? 'bg-black text-white border-black' : 'border-gray-200 text-gray-600'}`}>
-          📊 Все ученики
-        </button>
-      </div>
-
-      {loading ? (
-        <div className="text-center text-gray-400 py-12">Загрузка...</div>
-      ) : displayed.length === 0 ? (
-        <div className="text-center text-gray-400 py-12">
-          {tab === 'churn' ? '✅ Нет учеников в зоне риска!' : 'Нет данных'}
+        {/* ── Зона риска ── */}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          <Link href="/analytics/churn"
+            className="flex items-center justify-between px-4 pt-4 pb-3 hover:bg-gray-50 transition-colors">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">🚨</span>
+              <div>
+                <div className="font-semibold text-gray-800 text-sm">Ученики — посещаемость</div>
+                <div className="text-xs text-gray-400">Зона риска, отток, активность</div>
+              </div>
+            </div>
+            <span className="text-gray-300 text-xl">›</span>
+          </Link>
+          <div className="flex gap-2 px-4 pb-4">
+            {churnStats.loading ? (
+              <div className="text-xs text-gray-400 py-2 pl-1">Загрузка...</div>
+            ) : (
+              <>
+                <MiniStat value={churnStats.total} label="активных уч." />
+                <MiniStat
+                  value={churnStats.riskZone}
+                  label="зона риска"
+                  color={churnStats.riskZone > 0 ? 'text-red-500' : 'text-gray-800'}
+                />
+                <MiniStat value={churnStats.safe} label="посещают" color="text-green-600" />
+              </>
+            )}
+          </div>
         </div>
-      ) : (
-        <div className="space-y-2">
-          {displayed.map(s => (
-            <Link key={s.id} href={`/students/${s.id}`}
-              className="flex items-center bg-white rounded-xl px-4 py-3 border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
-              <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center font-bold text-gray-600 mr-3">
-                {s.name[0]}
+
+        {/* ── Кабинеты / Telegram ── */}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          <Link href="/analytics/cabinets"
+            className="flex items-center justify-between px-4 pt-4 pb-3 hover:bg-gray-50 transition-colors">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">📱</span>
+              <div>
+                <div className="font-semibold text-gray-800 text-sm">Кабинеты / Telegram</div>
+                <div className="text-xs text-gray-400">Подключение учеников и родителей</div>
               </div>
-              <div className="flex-1">
-                <div className="font-medium text-gray-800">{s.name}</div>
-                <div className="text-xs text-gray-400">{s.group_name || '—'}</div>
-              </div>
-              <div className="text-right">
-                <div className={`text-sm ${absentColor(s.days_absent)}`}>
-                  {absentLabel(s.days_absent)}
-                </div>
-                <div className="text-xs text-gray-400">{s.visits_30} посещ. за 30 дн.</div>
-              </div>
-            </Link>
-          ))}
+            </div>
+            <span className="text-gray-300 text-xl">›</span>
+          </Link>
+          <div className="flex gap-2 px-4 pb-4">
+            {cabinetStats.loading ? (
+              <div className="text-xs text-gray-400 py-2 pl-1">Загрузка...</div>
+            ) : (
+              <>
+                <MiniStat value={cabinetStats.studentsLinked} label="учеников в TG" color="text-green-600" />
+                <MiniStat value={cabinetStats.parentsLinked} label="родителей в TG" color="text-blue-600" />
+                <MiniStat
+                  value={cabinetStats.notLinked}
+                  label="без Telegram"
+                  color={cabinetStats.notLinked > 0 ? 'text-orange-500' : 'text-gray-800'}
+                />
+              </>
+            )}
+          </div>
         </div>
-      )}
+
+      </div>
     </main>
   )
 }
