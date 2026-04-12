@@ -114,6 +114,11 @@ function AttendanceContent() {
   useEffect(() => {
     if (!selectedGroup) return
     loadStudents()
+  }, [selectedGroup, date])
+
+  // Load log dates separately — depends on userName being available
+  useEffect(() => {
+    if (!selectedGroup) return
     loadLogDates()
   }, [selectedGroup, date, userName])
 
