@@ -301,14 +301,18 @@ function TrainerPageInner() {
 
   // Sections available to this trainer based on permissions
   const navSections = [
-    { key: 'students', label: 'Ученики', emoji: '🥋', href: '/trainer/students', sub: `${studentCount} чел.` },
-    { key: 'leads', label: 'Лиды', emoji: '📋', href: '/leads', sub: 'Заявки' },
-    { key: 'finance', label: 'Финансы', emoji: '💰', href: '/finance', sub: 'Платежи' },
-    { key: 'events', label: 'Мероприятия', emoji: '🎉', href: '/events', sub: 'Список' },
-    { key: 'schedule', label: 'Расписание', emoji: '🗓', href: '/schedule', sub: 'Просмотр' },
-    { key: 'analytics', label: 'Аналитика', emoji: '📊', href: '/analytics', sub: 'Статистика' },
-    { key: 'broadcast', label: 'Рассылка', emoji: '📣', href: '/broadcast', sub: 'Telegram' },
-    { key: 'tickets', label: 'Обращения', emoji: '📝', href: '/tickets', sub: 'Вопросы' },
+    { key: 'students',     label: 'Ученики',       emoji: '🥋', href: '/trainer/students', sub: `${studentCount} чел.` },
+    { key: 'leads',        label: 'Лиды',           emoji: '📋', href: '/leads',            sub: 'Заявки' },
+    { key: 'finance',      label: 'Финансы',        emoji: '💰', href: '/finance',          sub: 'Платежи' },
+    { key: 'installments', label: 'Рассрочки',      emoji: '🗓', href: '/installments',     sub: 'Рассрочки' },
+    { key: 'salary',       label: 'Зарплата',       emoji: '💵', href: '/salary',           sub: 'Расчёты' },
+    { key: 'events',       label: 'Мероприятия',    emoji: '🎉', href: '/events',           sub: 'Список' },
+    { key: 'schedule',     label: 'Расписание',     emoji: '🗓', href: '/schedule',         sub: 'Просмотр' },
+    { key: 'analytics',    label: 'Аналитика',      emoji: '📊', href: '/analytics',        sub: 'Статистика' },
+    { key: 'broadcast',    label: 'Рассылка',       emoji: '📣', href: '/broadcast',        sub: 'Telegram' },
+    { key: 'tickets',      label: 'Обращения',      emoji: '📝', href: '/tickets',          sub: 'Вопросы' },
+    { key: 'attestations', label: 'Аттестации',     emoji: '🏅', href: '/attestations',     sub: 'Заявки' },
+    { key: 'settings',     label: 'Настройки',      emoji: '⚙️', href: '/settings',         sub: 'Система' },
   ].filter(s => hasAccess(role!, permissions, s.key))
 
   const card = dark
