@@ -66,6 +66,7 @@ function TrainerPageInner() {
   const [profileSaved, setProfileSaved] = useState(false)
   const [needSurveyStudents, setNeedSurveyStudents] = useState<{ id: string; name: string }[]>([])
   const [showSurveyList, setShowSurveyList] = useState(false)
+  const [missingDays, setMissingDays] = useState<{ date: string; group_name: string }[]>([])
 
   const dark = theme === 'dark'
 
@@ -127,6 +128,51 @@ function TrainerPageInner() {
       const { data: studentNames } = await supabase
         .from('students').select('id, name').in('id', needSurvey.map(s => s.id))
       setNeedSurveyStudents(studentNames || [])
+    }
+
+    // Пропущенные тренировки за 14 дней (только у этого тренера)
+    if (slots && slots.length > 0) {
+      const today = localDateStr(new Date())
+      const days: string[] = []
+      for (let i = 1; i <= 14; i++) {
+        const d = new Date(); d.setDate(d.getDate() - i)
+        days.push(localDateStr(d))
+      }
+      const periodStart = days[days.length - 1]
+
+      const { data: allOverrides } = await supabase
+        .from('schedule_overrides').select('date, group_name, cancelled')
+        .gte('date', periodStart).lte('date', today)
+
+      const cancelledSet = new Set<string>()
+      for (const ov of allOverrides || []) {
+        if (ov.cancelled) cancelledSet.add(`${ov.date}|${ov.group_name}`)
+      }
+
+      const expected: { date: string; group_name: string }[] = []
+      for (const dayStr of days) {
+        const jsDay = new Date(dayStr + 'T00:00:00').getDay()
+        const dow = jsDay === 0 ? 7 : jsDay
+        for (const s of slots) {
+          if (s.day_of_week === dow && !cancelledSet.has(`${dayStr}|${s.group_name}`)) {
+            expected.push({ date: dayStr, group_name: s.group_name })
+          }
+        }
+      }
+
+      if (expected.length > 0) {
+        const dateSet = [...new Set(expected.map(e => e.date))]
+        const groupSet = [...new Set(expected.map(e => e.group_name))]
+        const { data: attData } = await supabase
+          .from('attendance').select('date, group_name')
+          .in('date', dateSet).in('group_name', groupSet)
+
+        const markedSet = new Set<string>((attData || []).map(a => `${a.date}|${a.group_name}`))
+        const missing = expected
+          .filter(e => !markedSet.has(`${e.date}|${e.group_name}`))
+          .sort((a, b) => b.date.localeCompare(a.date))
+        setMissingDays(missing)
+      }
     }
   }
 
@@ -395,6 +441,31 @@ function TrainerPageInner() {
           <div className="text-red-200 text-xs mt-0.5">Отметить сегодня</div>
         </div>
       </Link>
+
+      {/* Пропущенные тренировки */}
+      {missingDays.length > 0 && (
+        <div className="mb-4 bg-orange-50 border border-orange-200 rounded-2xl px-4 py-3">
+          <div className="flex items-start gap-2">
+            <span className="text-orange-500 text-base shrink-0 mt-0.5">⚠️</span>
+            <div className="min-w-0">
+              <div className="text-sm font-semibold text-orange-800 mb-1">
+                Не отмечено {missingDays.length} {missingDays.length === 1 ? 'тренировка' : missingDays.length <= 4 ? 'тренировки' : 'тренировок'} за 14 дней
+              </div>
+              <div className="space-y-0.5">
+                {missingDays.map(m => (
+                  <Link
+                    key={`${m.date}|${m.group_name}`}
+                    href={`/trainer/attendance?date=${m.date}&group=${encodeURIComponent(m.group_name)}`}
+                    className="block text-xs text-orange-700 hover:text-orange-900 hover:underline"
+                  >
+                    {new Date(m.date + 'T00:00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', weekday: 'short' })} — {m.group_name}
+                  </Link>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Schedule warning */}
       {schedule.length === 0 && (
