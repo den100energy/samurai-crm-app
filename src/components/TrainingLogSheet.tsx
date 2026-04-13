@@ -98,7 +98,7 @@ export function TrainingLogSheet({ isOpen, onClose, groupName, trainerName, date
     weapons: false,
   })
   const [martialArt, setMartialArt] = useState<'wushu' | 'aikido'>(
-    groupName.includes('Цигун') || groupName === 'Дети 4-9 лет' || groupName.includes('Подростки') ? 'wushu' : 'aikido'
+    groupName.toLowerCase().includes('айкидо') || groupName.toLowerCase().includes('aikido') ? 'aikido' : 'wushu'
   )
   const sheetRef = useRef<HTMLDivElement>(null)
   const startXRef = useRef(0)
