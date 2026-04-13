@@ -976,9 +976,15 @@ export default function StudentPage() {
   }
 
   async function archive() {
-    if (!confirm('Архивировать ученика?')) return
+    if (!confirm('Архивировать ученика? Он будет скрыт из основного списка и не будет учитываться при отметке посещаемости.')) return
     await supabase.from('students').update({ status: 'archived' }).eq('id', id)
     router.push('/students')
+  }
+
+  async function restore() {
+    if (!confirm('Восстановить ученика? Он снова появится в списке активных.')) return
+    await supabase.from('students').update({ status: 'active' }).eq('id', id)
+    setStudent(prev => prev ? { ...prev, status: 'active' } : null)
   }
 
   if (!student) return <div className="text-center text-gray-400 py-12">Загрузка...</div>
@@ -1013,10 +1019,23 @@ export default function StudentPage() {
             </span>
           )}
         </div>
-        <button onClick={() => setEditing(!editing)}
-          className="ml-auto text-sm text-gray-500 border border-gray-200 px-3 py-1.5 rounded-xl">
-          {editing ? 'Отмена' : 'Изменить'}
-        </button>
+        <div className="ml-auto flex items-center gap-2">
+          {student.status === 'archived' ? (
+            <button onClick={restore}
+              className="text-sm text-green-700 border border-green-200 bg-green-50 px-3 py-1.5 rounded-xl">
+              Восстановить
+            </button>
+          ) : student.status === 'active' ? (
+            <button onClick={archive}
+              className="text-sm text-gray-400 border border-gray-200 px-3 py-1.5 rounded-xl">
+              В архив
+            </button>
+          ) : null}
+          <button onClick={() => setEditing(!editing)}
+            className="text-sm text-gray-500 border border-gray-200 px-3 py-1.5 rounded-xl">
+            {editing ? 'Отмена' : 'Изменить'}
+          </button>
+        </div>
       </div>
 
       {/* Student info */}
