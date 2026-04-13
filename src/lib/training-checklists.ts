@@ -136,13 +136,82 @@ export const QIGONG_ITEMS = [
 // АЙКИДО (Айкикай) — из образовательной программы НСАР
 // ============================================================
 
-export const AIKIDO_UKEMI_ITEMS = [
-  { id: 'укэми:вперёд', label: 'Укэми вперёд (Маэ)', icon: '🔄', group: 'Страховки' },
-  { id: 'укэми:назад', label: 'Укэми назад (Усиро)', icon: '🔙', group: 'Страховки' },
-  { id: 'укэми:вбок', label: 'Укэми вбок (Ёко)', icon: '↔️', group: 'Страховки' },
-  { id: 'укэми:кайтэн', label: 'Кайтэн (кувырок через плечо)', icon: '🌀', group: 'Страховки' },
+// Разминка (dataKey: warmup_items)
+export const AIKIDO_WARMUP_ITEMS = [
+  { id: 'ак:разминка_суставная', label: 'Суставная гимнастика', icon: '🔄', group: 'Разминка' },
+  { id: 'ак:разминка_айкидо', label: 'Айкидо-разминка', icon: '🥋', group: 'Разминка' },
 ] as const
 
+// Растяжка (dataKey: fitness_items)
+export const AIKIDO_STRETCH_ITEMS = [
+  { id: 'ак:растяжка_база', label: 'Растяжка базовая', icon: '🧘', group: 'Растяжка' },
+  { id: 'ак:растяжка_расш', label: 'Растяжка расширенная', icon: '🤸', group: 'Растяжка' },
+] as const
+
+// ОФП (dataKey: basic_techniques)
+export const AIKIDO_FITNESS_ITEMS = [
+  { id: 'ак:офп_игровое', label: 'Игровое ОФП', icon: '🎮', group: 'ОФП' },
+  { id: 'ак:офп_основное', label: 'Основное ОФП', icon: '💪', group: 'ОФП' },
+  { id: 'ак:офп_расш', label: 'Расширенное ОФП', icon: '🏋️', group: 'ОФП' },
+] as const
+
+// Укэми (dataKey: aikido_ukemi)
+export const AIKIDO_UKEMI_ITEMS = [
+  { id: 'укэми:маэ', label: 'Маэ укэми (вперёд)', icon: '🔄', group: 'Страховки' },
+  { id: 'укэми:усиро', label: 'Усиро укэми (назад)', icon: '🔙', group: 'Страховки' },
+  { id: 'укэми:ёко', label: 'Ёко укэми (вбок)', icon: '↔️', group: 'Страховки' },
+  { id: 'укэми:усиро_кайтэн', label: 'Усиро кайтэн укэми', icon: '🌀', group: 'Страховки' },
+  { id: 'укэми:тоби_партнер', label: 'Тоби укэми через партнёра', icon: '🚀', group: 'Тоби' },
+  { id: 'укэми:тоби_руку', label: 'Тоби укэми через руку', icon: '🦾', group: 'Тоби' },
+  { id: 'укэми:тоби_техники', label: 'Тоби укэми при выполнении техник', icon: '⚡', group: 'Тоби' },
+] as const
+
+// Перемещения и шаги (dataKey: aikido_movement)
+export const AIKIDO_MOVEMENT_ITEMS = [
+  // Стойки
+  { id: 'движ:ханми', label: 'Ханми (стойка)', icon: '🧍', group: 'Стойки' },
+  { id: 'движ:ханми_пары', label: 'Ханми в парах', icon: '🤝', group: 'Стойки' },
+  // Шаги
+  { id: 'движ:цуги_аси', label: 'Цуги аси', icon: '👣', group: 'Шаги' },
+  { id: 'движ:аюми_аси', label: 'Аюми аси', icon: '🚶', group: 'Шаги' },
+  // Сикко
+  { id: 'движ:маэ_сикко', label: 'Маэ сикко (вперёд)', icon: '🧎', group: 'Сикко' },
+  { id: 'движ:усиро_сикко', label: 'Усиро сикко (назад)', icon: '🧎', group: 'Сикко' },
+  { id: 'движ:сикко_тенкан', label: 'Сикко тенкан', icon: '🔃', group: 'Сикко' },
+  { id: 'движ:сикко_тайсабаки', label: 'Сикко тайсабаки', icon: '🔄', group: 'Сикко' },
+  // Передвижения
+  { id: 'движ:тенкай', label: 'Тенкай', icon: '↩️', group: 'Передвижения' },
+  { id: 'движ:тенкан', label: 'Тенкан', icon: '🔃', group: 'Передвижения' },
+  { id: 'движ:тайсабаки_ирими', label: 'Тай-сабаки (ирими тенкан)', icon: '🏃', group: 'Передвижения' },
+  { id: 'движ:тайсабаки_4', label: 'Тайсабаки на 4 стороны', icon: '🧭', group: 'Передвижения' },
+  { id: 'движ:сюаригэ', label: 'Сюаригэ', icon: '⬆️', group: 'Передвижения' },
+  { id: 'движ:хаппо_2', label: 'Хаппо ундо на 2 стороны', icon: '↔️', group: 'Передвижения' },
+  { id: 'движ:хаппо_4', label: 'Хаппо ундо на 4 стороны', icon: '✳️', group: 'Передвижения' },
+  { id: 'движ:хаппо_8', label: 'Хаппо ундо на 8 сторон', icon: '🎯', group: 'Передвижения' },
+] as const
+
+// Атаки — удары и захваты (dataKey: applied_techniques)
+export const AIKIDO_ATTACKS_ITEMS = [
+  // Удары
+  { id: 'атаки:цки', label: 'Цки (прямой удар)', icon: '👊', group: 'Удары' },
+  { id: 'атаки:шомен', label: 'Шомен учи (сверху)', icon: '⬇️', group: 'Удары' },
+  { id: 'атаки:екомен', label: 'Екомен учи (наискосок)', icon: '↘️', group: 'Удары' },
+  { id: 'атаки:гири', label: 'Гири (рубящий удар)', icon: '🗡️', group: 'Удары' },
+  // Захваты
+  { id: 'атаки:коса_дори', label: 'Коса дори', icon: '✋', group: 'Захваты' },
+  { id: 'атаки:катаэ_дори', label: 'Кататэ дори', icon: '✋', group: 'Захваты' },
+  { id: 'атаки:рете_дори', label: 'Рете дори', icon: '🤲', group: 'Захваты' },
+  { id: 'атаки:ката_дори', label: 'Ката дори', icon: '🫴', group: 'Захваты' },
+  { id: 'атаки:катаэ_рете_дори', label: 'Кататэ рете дори', icon: '🤝', group: 'Захваты' },
+  { id: 'атаки:усиро_рете_дори', label: 'Уширо рете дори', icon: '🔙', group: 'Захваты' },
+  { id: 'атаки:ката_дори_мен', label: 'Ката дори мен учи', icon: '🫱', group: 'Захваты' },
+  { id: 'атаки:мунэ_дори', label: 'Мунэ дори', icon: '👕', group: 'Захваты' },
+  { id: 'атаки:эри_дори', label: 'Эри дори', icon: '🪢', group: 'Захваты' },
+  { id: 'атаки:сувате_дори', label: 'Сувате дори', icon: '🧎', group: 'Захваты' },
+  { id: 'атаки:уватэ_дори', label: 'Уватэ дори', icon: '💪', group: 'Захваты' },
+] as const
+
+// Техники (dataKey: aikido_techniques)
 export const AIKIDO_TECHNIQUE_ITEMS = [
   // Осаэки-ваза (удержания)
   { id: 'техники:иккё', label: 'Иккё (первый принцип)', icon: '✋', group: 'Осаэки-ваза' },
@@ -150,6 +219,7 @@ export const AIKIDO_TECHNIQUE_ITEMS = [
   { id: 'техники:санкё', label: 'Санкё (третий принцип)', icon: '🤟', group: 'Осаэки-ваза' },
   { id: 'техники:йонкё', label: 'Йонкё (четвёртый принцип)', icon: '🖖', group: 'Осаэки-ваза' },
   { id: 'техники:гокё', label: 'Гокё (пятый принцип)', icon: '🖐️', group: 'Осаэки-ваза' },
+  // Нагэ-ваза (броски)
   { id: 'техники:ирими_нагэ', label: 'Ирими-нагэ (бросок входа)', icon: '🚀', group: 'Нагэ-ваза' },
   { id: 'техники:тэнчи_нагэ', label: 'Тенчи-нагэ (небо-земля)', icon: '🌍', group: 'Нагэ-ваза' },
   { id: 'техники:кото_гаэси', label: 'Котэ-гаэси (выворот кисти)', icon: '🔄', group: 'Нагэ-ваза' },
@@ -157,13 +227,12 @@ export const AIKIDO_TECHNIQUE_ITEMS = [
   { id: 'техники:кайтэн_нагэ', label: 'Кайтэн-нагэ (вращающий бросок)', icon: '🌀', group: 'Нагэ-ваза' },
   { id: 'техники:коки_нагэ', label: 'Коки-нагэ (бросок духа)', icon: '💨', group: 'Нагэ-ваза' },
   { id: 'техники:суми_отоши', label: 'Суми-отоши (сброс в угол)', icon: '⬇️', group: 'Нагэ-ваза' },
-  // Атеми-ваза (удары)
-  { id: 'техники:атеми', label: 'Атеми-ваза (удары)', icon: '👊', group: 'Атеми-ваза' },
   // Дзию-ваза (свободная техника)
   { id: 'техники:джию_ваза', label: 'Дзию-ваза (свободная техника)', icon: '🥋', group: 'Дзию-ваза' },
   { id: 'техники:рандори', label: 'Рандори (множественные атаки)', icon: '⚔️', group: 'Дзию-ваза' },
 ] as const
 
+// Оружие (dataKey: aikido_weapons)
 export const AIKIDO_WEAPONS_ITEMS = [
   { id: 'оружие:боккен', label: 'Боккен (деревянный меч)', icon: '🗡️', group: 'Боккен' },
   { id: 'оружие:боккен_ката', label: 'Боккен-ката', icon: '📜', group: 'Боккен' },
@@ -171,15 +240,6 @@ export const AIKIDO_WEAPONS_ITEMS = [
   { id: 'оружие:дзё_ката', label: 'Дзё-ката', icon: '📜', group: 'Дзё' },
   { id: 'оружие:танто_дори', label: 'Танто-дори (защита от ножа)', icon: '🔪', group: 'Танто' },
   { id: 'оружие:рандо_дори', label: 'Ранто-дори (работа с ножом)', icon: '🗡️', group: 'Танто' },
-] as const
-
-export const AIKIDO_MOVEMENT_ITEMS = [
-  { id: 'движения:сикко', label: 'Сикко (перемещение на коленях)', icon: '🧎', group: 'Перемещения' },
-  { id: 'движения:танкен', label: 'Танкен (шаговый вход)', icon: '🚶', group: 'Перемещения' },
-  { id: 'движения:хэнко', label: 'Хэнко (поворот на 180°)', icon: '🔄', group: 'Перемещения' },
-  { id: 'движения:тай_сабаки', label: 'Тай-сабаки (работа тела)', icon: '🏃', group: 'Перемещения' },
-  { id: 'движения:тэнкан', label: 'Тэнкан (разворот)', icon: '🔃', group: 'Перемещения' },
-  { id: 'движения:ирими', label: 'Ирими (вход)', icon: '➡️', group: 'Перемещения' },
 ] as const
 
 // ============================================================
@@ -274,18 +334,46 @@ export const WUSHU_SECTIONS: ChecklistSection[] = [
 
 export const AIKIDO_SECTIONS: ChecklistSection[] = [
   {
+    id: 'aikido_warmup',
+    title: 'Разминка',
+    icon: '🔄',
+    items: AIKIDO_WARMUP_ITEMS,
+    dataKey: 'warmup_items',
+  },
+  {
+    id: 'aikido_stretch',
+    title: 'Растяжка',
+    icon: '🤸',
+    items: AIKIDO_STRETCH_ITEMS,
+    dataKey: 'fitness_items',
+  },
+  {
+    id: 'aikido_fitness',
+    title: 'ОФП',
+    icon: '💪',
+    items: AIKIDO_FITNESS_ITEMS,
+    dataKey: 'basic_techniques',
+  },
+  {
     id: 'ukemi',
     title: 'Укэми (страховки)',
-    icon: '🔄',
+    icon: '🛡️',
     items: AIKIDO_UKEMI_ITEMS,
     dataKey: 'aikido_ukemi',
   },
   {
     id: 'movement',
-    title: 'Перемещения и Рэйги',
+    title: 'Перемещения и шаги',
     icon: '🚶',
     items: AIKIDO_MOVEMENT_ITEMS,
     dataKey: 'aikido_movement',
+  },
+  {
+    id: 'attacks',
+    title: 'Атаки (удары и захваты)',
+    icon: '⚔️',
+    items: AIKIDO_ATTACKS_ITEMS,
+    dataKey: 'applied_techniques',
   },
   {
     id: 'techniques',

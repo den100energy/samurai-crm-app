@@ -27,14 +27,20 @@ export function TrainingLogSheet({ isOpen, onClose, groupName, trainerName, date
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
+    // Ушу
     warmup: true,
     fitness: false,
     basic: false,
     applied: false,
     taolu: false,
     qigong: false,
-    ukemi: true,
+    // Айкидо
+    aikido_warmup: true,
+    aikido_stretch: false,
+    aikido_fitness: false,
+    ukemi: false,
     movement: false,
+    attacks: false,
     techniques: false,
     weapons: false,
   })
