@@ -252,6 +252,7 @@ export const AIKIDO_VARIANTS = [
   { id: '', label: '—' },
   { id: 'омотэ', label: 'Омотэ' },
   { id: 'ура', label: 'Ура' },
+  { id: 'оба', label: 'Оба' },
 ] as const
 
 // Оружие (dataKey: aikido_weapons)
