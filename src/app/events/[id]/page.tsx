@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
+import { TrainingLogSheet } from '@/components/TrainingLogSheet'
+import { TrainingLogData } from '@/lib/training-checklists'
 
 type Participant = {
   id: string
@@ -66,6 +68,11 @@ export default function EventDetailPage() {
   const [notifying, setNotifying] = useState(false)
   const [notifyResult, setNotifyResult] = useState<string | null>(null)
 
+  // Training log state
+  const [showLogSheet, setShowLogSheet] = useState(false)
+  const [existingLog, setExistingLog] = useState<{ id: string; data: TrainingLogData } | null>(null)
+  const [hasLog, setHasLog] = useState(false)
+
   async function load() {
     const [{ data: ev }, { data: parts }, { data: students }, { data: subs }, { data: tr }] = await Promise.all([
       supabase.from('events').select('*').eq('id', id).single(),
@@ -92,6 +99,7 @@ export default function EventDetailPage() {
   }
 
   useEffect(() => { load() }, [id])
+  useEffect(() => { if (event) checkLogExists() }, [event?.id])
 
   function startEdit() {
     if (!event) return
@@ -146,6 +154,57 @@ export default function EventDetailPage() {
     } finally {
       setNotifying(false)
     }
+  }
+
+  async function openLogSheet() {
+    if (!event) return
+    const { data } = await supabase
+      .from('training_logs')
+      .select('id, warmup_items, fitness_items, basic_techniques, applied_techniques, taolu_items, qigong_items, aikido_ukemi, aikido_techniques, aikido_weapons, aikido_etiquette, aikido_movement, notes')
+      .eq('group_name', event.name)
+      .eq('trainer_name', event.trainer_name || '')
+      .eq('date', event.date)
+      .maybeSingle()
+
+    if (data) {
+      setExistingLog({
+        id: data.id,
+        data: {
+          warmup_items: data.warmup_items || [],
+          fitness_items: data.fitness_items || [],
+          basic_techniques: data.basic_techniques || [],
+          applied_techniques: data.applied_techniques || [],
+          taolu_items: data.taolu_items || [],
+          qigong_items: data.qigong_items || [],
+          aikido_ukemi: data.aikido_ukemi || [],
+          aikido_techniques: data.aikido_techniques || [],
+          aikido_weapons: data.aikido_weapons || [],
+          aikido_etiquette: data.aikido_etiquette || false,
+          aikido_movement: data.aikido_movement || [],
+          notes: data.notes || '',
+        },
+      })
+    } else {
+      setExistingLog(null)
+    }
+    setShowLogSheet(true)
+  }
+
+  async function checkLogExists() {
+    if (!event) return
+    const { data } = await supabase
+      .from('training_logs')
+      .select('id')
+      .eq('group_name', event.name)
+      .eq('trainer_name', event.trainer_name || '')
+      .eq('date', event.date)
+      .maybeSingle()
+    setHasLog(!!data)
+  }
+
+  function handleLogSheetClose() {
+    setShowLogSheet(false)
+    checkLogExists()
   }
 
   function getBonusUsedCount(bonusesUsed: Record<string, number | string[]> | null, key: string): number {
@@ -348,6 +407,20 @@ export default function EventDetailPage() {
           </button>
           {notifyResult && <div className="text-xs text-center mt-2 text-gray-500">{notifyResult}</div>}
         </div>
+
+        {/* Training Log button — only for weapon training */}
+        {isWeaponTraining && (
+          <div className="mt-2">
+            <button
+              onClick={openLogSheet}
+              className={`w-full flex items-center justify-center gap-2 py-2 rounded-xl text-sm font-medium border transition-colors
+                ${hasLog
+                  ? 'bg-blue-50 border-blue-200 text-blue-700'
+                  : 'bg-gray-50 border-gray-200 text-gray-600 hover:border-gray-300'}`}>
+              {hasLog ? '📝 Редактировать журнал тренировки' : '📝 Журнал тренировки'}
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Stats */}
@@ -504,6 +577,15 @@ export default function EventDetailPage() {
           })}
         </div>
       )}
+
+      <TrainingLogSheet
+        isOpen={showLogSheet}
+        onClose={handleLogSheetClose}
+        groupName={event.name}
+        trainerName={event.trainer_name || ''}
+        date={event.date}
+        existingLog={existingLog}
+      />
     </main>
   )
 }
