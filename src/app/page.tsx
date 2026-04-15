@@ -71,7 +71,7 @@ export default function Home() {
         // Если нет активного абонемента, но есть pending — добавляем в "ожидают активации"
         const hasActiveSub2 = sub && (sub.sessions_left === null || sub.sessions_left > 0) && (!sub.end_date || sub.end_date >= today)
         if (!hasActiveSub2 && hasPending) pendingReadyArr.push({ id: student.id, name: student.name })
-        if (sub?.end_date && sub.end_date >= today && sub.end_date <= in7days) expiringArr.push({ id: student.id, name: student.name })
+        if (sub?.end_date && sub.end_date >= today && sub.end_date <= in7days && (sub.sessions_left === null || sub.sessions_left > 0)) expiringArr.push({ id: student.id, name: student.name })
         const hasActiveSub = sub && (sub.sessions_left ?? 0) > 0 && (!sub.end_date || sub.end_date >= today)
         if (hasActiveSub) {
           const lastDate = lastDateMap.get(student.id)
