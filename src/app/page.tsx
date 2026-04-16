@@ -19,9 +19,10 @@ export default function Home() {
   const [noSessions, setNoSessions] = useState<{ id: string; name: string }[]>([])
   const [churn, setChurn] = useState<{ id: string; name: string; daysSince: number | null }[]>([])
   const [totalStudents, setTotalStudents] = useState(0)
+  const [activeStudents, setActiveStudents] = useState<{ id: string; name: string }[]>([])
   const [notifying, setNotifying] = useState(false)
   const [pendingReady, setPendingReady] = useState<{ id: string; name: string }[]>([])
-  const [modal, setModal] = useState<'noSessions' | 'expiring' | 'churn' | 'pendingReady' | null>(null)
+  const [modal, setModal] = useState<'noSessions' | 'expiring' | 'churn' | 'pendingReady' | 'activeStudents' | null>(null)
   const [loaded, setLoaded] = useState(false)
   type SurveyStage = 'needSurvey' | 'notified' | 'trainerDone' | 'filled'
   const [surveyFunnel, setSurveyFunnel] = useState<Record<SurveyStage, { id: string; name: string }[]> | null>(null)
@@ -81,7 +82,16 @@ export default function Home() {
       }
 
       churnArr.sort((a, b) => (b.daysSince ?? 999) - (a.daysSince ?? 999))
+
+      const activeStudentsArr: { id: string; name: string }[] = []
+      for (const student of students) {
+        const sub = subMap.get(student.id)
+        const hasActiveSub = sub && (sub.sessions_left === null || sub.sessions_left > 0) && (!sub.end_date || sub.end_date >= today)
+        if (hasActiveSub) activeStudentsArr.push({ id: student.id, name: student.name })
+      }
+
       setTotalStudents(students.length)
+      setActiveStudents(activeStudentsArr)
       setNoSessions(noSessArr)
       setExpiring(expiringArr)
       setChurn(churnArr)
@@ -149,11 +159,21 @@ export default function Home() {
       value: totalStudents,
       label: 'Учеников',
       kanji: '侍',
-      sub: 'активных',
+      sub: 'всего в школе',
       glow: '',
       border: theme === 'dark' ? 'border-[#3A3A3C]' : 'border-[#E5E4E0]',
       numColor: theme === 'dark' ? 'text-white' : 'text-[#1C1C1E]',
-      onClick: null as (() => void) | null,
+      onClick: (() => router.push('/students')) as (() => void) | null,
+    },
+    {
+      value: activeStudents.length,
+      label: 'С абонементом',
+      kanji: '活',
+      sub: 'активный абонемент',
+      glow: activeStudents.length > 0 ? 'glow-green' : '',
+      border: activeStudents.length > 0 ? 'border-green-500/40' : theme === 'dark' ? 'border-[#3A3A3C]' : 'border-[#E5E4E0]',
+      numColor: activeStudents.length > 0 ? 'text-green-500' : theme === 'dark' ? 'text-[#48484A]' : 'text-[#C0BFBB]',
+      onClick: activeStudents.length > 0 ? () => setModal('activeStudents') : null,
     },
     {
       value: noSessions.length,
@@ -428,10 +448,11 @@ export default function Home() {
             </div>
             <div className="flex items-center justify-between px-5 pt-2 pb-3 border-b" style={{ borderColor: 'var(--border)' }}>
               <div className="font-semibold text-sm" style={{ color: 'var(--text-1)' }}>
-                {modal === 'noSessions'    && `Без занятий · ${noSessions.length} чел.`}
-                {modal === 'expiring'     && `Истекает абонемент · ${expiring.length} чел.`}
-                {modal === 'churn'        && `Не приходили 7+ дней · ${churn.length} чел.`}
-                {modal === 'pendingReady' && `Ждут активации · ${pendingReady.length} чел.`}
+                {modal === 'noSessions'      && `Без занятий · ${noSessions.length} чел.`}
+                {modal === 'expiring'        && `Истекает абонемент · ${expiring.length} чел.`}
+                {modal === 'churn'           && `Не приходили 7+ дней · ${churn.length} чел.`}
+                {modal === 'pendingReady'    && `Ждут активации · ${pendingReady.length} чел.`}
+                {modal === 'activeStudents'  && `С активным абонементом · ${activeStudents.length} чел.`}
               </div>
               <button onClick={() => setModal(null)}
                 className="w-8 h-8 rounded-full bg-[#2C2C2E] flex items-center justify-center text-[#8E8E93] text-lg border border-[#3A3A3C]">
@@ -465,6 +486,13 @@ export default function Home() {
                   className="flex items-center justify-between py-3 border-b border-[#2C2C2E] hover:text-amber-500 transition-colors">
                   <span className="text-sm text-[#E5E5E7]">{s.name}</span>
                   <span className="text-amber-500 text-xs font-medium">⏳ активировать</span>
+                </Link>
+              ))}
+              {modal === 'activeStudents' && activeStudents.map(s => (
+                <Link key={s.id} href={`/students/${s.id}`} onClick={() => setModal(null)}
+                  className="flex items-center justify-between py-3 border-b border-[#2C2C2E] hover:text-green-500 transition-colors">
+                  <span className="text-sm text-[#E5E5E7]">{s.name}</span>
+                  <span className="text-[#48484A] text-sm">›</span>
                 </Link>
               ))}
             </div>
