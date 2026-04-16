@@ -419,7 +419,7 @@ export default function AttestationEventPage() {
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="text-xs text-gray-500 block mb-1">Текущий кю/степень</label>
-              <select required value={addForm.current_grade} onChange={e => setAddForm(p => ({ ...p, current_grade: e.target.value }))} className="w-full border rounded-xl px-3 py-2 text-sm">
+              <select value={addForm.current_grade} onChange={e => setAddForm(p => ({ ...p, current_grade: e.target.value }))} className="w-full border rounded-xl px-3 py-2 text-sm">
                 <option value="">—</option>
                 {gradeOptions.map(g => <option key={g} value={g}>{g}</option>)}
               </select>
