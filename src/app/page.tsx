@@ -68,7 +68,8 @@ export default function Home() {
       for (const student of students) {
         const sub = subMap.get(student.id)
         const hasPending = pendingMap.has(student.id)
-        if (!sub || sub.sessions_left === 0) noSessArr.push({ id: student.id, name: student.name })
+        const subExpired = sub && sub.end_date && sub.end_date < today
+        if (!sub || sub.sessions_left === 0 || subExpired) noSessArr.push({ id: student.id, name: student.name })
         // Если нет активного абонемента, но есть pending — добавляем в "ожидают активации"
         const hasActiveSub2 = sub && (sub.sessions_left === null || sub.sessions_left > 0) && (!sub.end_date || sub.end_date >= today)
         if (!hasActiveSub2 && hasPending) pendingReadyArr.push({ id: student.id, name: student.name })
