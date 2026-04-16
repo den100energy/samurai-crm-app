@@ -172,7 +172,7 @@ export default function AttestationEventPage() {
 
   async function addApplication(e: { preventDefault(): void }) {
     e.preventDefault()
-    if (!addForm.student_id || !addForm.current_grade || !addForm.target_grade) return
+    if (!addForm.student_id || !addForm.target_grade) return
     setSaving(true)
     const price = calcPrice(addForm.discipline, addForm.target_grade)
     await supabase.from('attestation_applications').insert({
