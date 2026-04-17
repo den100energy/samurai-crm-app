@@ -62,6 +62,7 @@ export default function AttendancePage() {
   const [selectedSubs, setSelectedSubs] = useState<Record<string, string>>({}) // studentId → subId
   const [missingDays, setMissingDays] = useState<MissingDay[]>([])
   const [showAllMissing, setShowAllMissing] = useState(false)
+  const [missingLogs, setMissingLogs] = useState<MissingDay[]>([])
 
   // Training log state
   const [showLogSheet, setShowLogSheet] = useState(false)
@@ -192,6 +193,23 @@ export default function AttendancePage() {
       // Сортируем: сначала самые свежие
       missing.sort((a, b) => b.date.localeCompare(a.date))
       setMissingDays(missing)
+
+      // Незаполненные журналы тренировок (с 16.04.2026)
+      const LOG_START = '2026-04-16'
+      const expectedLogs = expected.filter(e => e.date >= LOG_START)
+      if (expectedLogs.length > 0) {
+        const logDateSet = [...new Set(expectedLogs.map(e => e.date))]
+        const logGroupSet = [...new Set(expectedLogs.map(e => e.group_name))]
+        const { data: logsData } = await supabase
+          .from('training_logs').select('date, group_name')
+          .in('date', logDateSet).in('group_name', logGroupSet)
+
+        const logsSet = new Set<string>((logsData || []).map(l => `${l.date}|${l.group_name}`))
+        const missingL = expectedLogs
+          .filter(e => !logsSet.has(`${e.date}|${e.group_name}`))
+          .sort((a, b) => b.date.localeCompare(a.date))
+        setMissingLogs(missingL)
+      }
     }
     loadMissingDays()
   }, [])
@@ -355,6 +373,30 @@ export default function AttendancePage() {
                     </button>
                   )}
                 </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {missingLogs.length > 0 && (
+        <div className="mb-4 bg-orange-50 border border-orange-200 rounded-2xl px-4 py-3">
+          <div className="flex items-start gap-2">
+            <span className="text-orange-500 text-base shrink-0 mt-0.5">⚠️</span>
+            <div className="min-w-0">
+              <div className="text-sm font-semibold text-orange-800 mb-1">
+                Не заполнен журнал {missingLogs.length} {missingLogs.length === 1 ? 'тренировки' : 'тренировок'} за 14 дней
+              </div>
+              <div className="space-y-0.5">
+                {missingLogs.map(m => (
+                  <button
+                    key={`log|${m.date}|${m.group_name}`}
+                    onClick={() => { setDate(m.date); setGroup(m.group_name) }}
+                    className="block text-xs text-orange-700 hover:text-orange-900 hover:underline text-left"
+                  >
+                    {new Date(m.date + 'T00:00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', weekday: 'short' })} — {m.group_name}{m.trainer_name ? ` · ${m.trainer_name}` : ''}
+                  </button>
+                ))}
               </div>
             </div>
           </div>
