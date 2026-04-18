@@ -13,6 +13,7 @@ type Participant = {
   paid: boolean
   amount: number | null
   attendance_type: string | null
+  participant_name: string | null
   students: { name: string; group_name: string | null } | null
 }
 
@@ -76,7 +77,7 @@ export default function EventDetailPage() {
   async function load() {
     const [{ data: ev }, { data: parts }, { data: students }, { data: subs }, { data: tr }] = await Promise.all([
       supabase.from('events').select('*').eq('id', id).single(),
-      supabase.from('event_participants').select('*, students(name, group_name)').eq('event_id', id),
+      supabase.from('event_participants').select('*, participant_name, students(name, group_name)').eq('event_id', id),
       supabase.from('students').select('id, name, group_name').eq('status', 'active').order('name'),
       supabase.from('subscriptions').select('id, student_id, bonuses, bonuses_used, sessions_left').order('created_at', { ascending: false }),
       supabase.from('trainers').select('name').order('name'),
@@ -564,7 +565,7 @@ export default function EventDetailPage() {
             return (
               <div key={p.id} className="flex items-center bg-white rounded-xl px-4 py-3 border border-gray-100 shadow-sm gap-3">
                 <div className="flex-1 min-w-0">
-                  <div className="font-medium text-gray-800 text-sm">{p.students?.name}</div>
+                  <div className="font-medium text-gray-800 text-sm">{p.students?.name || p.participant_name || '—'}</div>
                   {p.students?.group_name && <div className="text-xs text-gray-400">{p.students.group_name}</div>}
                 </div>
                 <span className={`text-xs px-2 py-1 rounded-full font-medium shrink-0 ${typeInfo.color}`}>
