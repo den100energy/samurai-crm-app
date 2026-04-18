@@ -62,6 +62,7 @@ export default function EventDetailPage() {
   const [showAdd, setShowAdd] = useState(false)
   const [selectedId, setSelectedId] = useState('')
   const [addGroup, setAddGroup] = useState('Все')
+  const [editingTypeFor, setEditingTypeFor] = useState<string | null>(null)
   const [trainers, setTrainers] = useState<string[]>([])
 
   // Edit state
@@ -272,6 +273,13 @@ export default function EventDetailPage() {
   async function togglePaid(partId: string, paid: boolean) {
     await supabase.from('event_participants').update({ paid }).eq('id', partId)
     setParticipants(prev => prev.map(p => p.id === partId ? { ...p, paid } : p))
+  }
+
+  async function updateAttendanceType(partId: string, type: string) {
+    const autoPaid = type === 'free' || type === 'paid'
+    await supabase.from('event_participants').update({ attendance_type: type, paid: autoPaid }).eq('id', partId)
+    setParticipants(prev => prev.map(p => p.id === partId ? { ...p, attendance_type: type, paid: autoPaid } : p))
+    setEditingTypeFor(null)
   }
 
   if (!event) return <div className="text-center text-gray-400 py-12">Загрузка...</div>
@@ -629,47 +637,68 @@ export default function EventDetailPage() {
             const pStatus = p.status || 'registered'
             const isPaidEvent = event.price != null && event.price > 0
             const isFreeType = p.attendance_type === 'free'
+            const isEditingType = editingTypeFor === p.id
             return (
               <div key={p.id} className="bg-white rounded-xl px-4 py-3 border border-gray-100 shadow-sm">
+                {/* Top row: name + type badge + remove */}
                 <div className="flex items-center gap-3">
                   <div className="flex-1 min-w-0">
                     <div className="font-medium text-gray-800 text-sm">{p.students?.name || p.participant_name || '—'}</div>
                     {p.students?.group_name && <div className="text-xs text-gray-400">{p.students.group_name}</div>}
                   </div>
-                  <span className={`text-xs px-2 py-1 rounded-full font-medium shrink-0 ${typeInfo.color}`}>
-                    {typeInfo.label}
-                  </span>
+                  <button
+                    onClick={() => setEditingTypeFor(isEditingType ? null : p.id)}
+                    className={`text-xs px-2 py-1 rounded-full font-medium shrink-0 ${typeInfo.color} ${isEditingType ? 'ring-2 ring-offset-1 ring-gray-300' : ''}`}>
+                    {typeInfo.label} ✎
+                  </button>
                   {p.amount && <div className="text-xs text-gray-500 shrink-0">{p.amount} ₽</div>}
                   <button onClick={() => removeParticipant(p.id)} className="text-gray-300 hover:text-red-400 text-lg shrink-0">×</button>
                 </div>
+
+                {/* Type editor */}
+                {isEditingType && (
+                  <div className="flex flex-wrap gap-1.5 mt-2 pt-2 border-t border-gray-100">
+                    {Object.entries(ATTENDANCE_LABELS).map(([key, info]) => (
+                      <button key={key}
+                        onClick={() => updateAttendanceType(p.id, key)}
+                        className={`text-xs px-2 py-1 rounded-full font-medium border transition-colors ${p.attendance_type === key ? info.color + ' ring-2 ring-offset-1 ring-gray-300' : 'bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100'}`}>
+                        {info.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* Status row */}
                 <div className="flex items-center gap-2 mt-2 flex-wrap">
-                  {pStatus === 'registered' && (
+                  {/* Confirm button — only when registered */}
+                  {pStatus === 'registered' ? (
                     <button onClick={() => updateParticipantStatus(p.id, 'confirmed')}
                       className="text-xs px-2 py-1 rounded-lg bg-yellow-50 text-yellow-700 border border-yellow-200 hover:bg-yellow-100">
                       Подтвердить
                     </button>
+                  ) : (
+                    <button onClick={() => updateParticipantStatus(p.id, 'registered')}
+                      className="text-xs px-2 py-1 rounded-lg bg-gray-50 text-gray-400 border border-gray-200 hover:bg-gray-100"
+                      title="Сбросить статус">
+                      ↩
+                    </button>
                   )}
+
                   {pStatus === 'confirmed' && (
                     <span className="text-xs px-2 py-1 rounded-lg bg-yellow-50 text-yellow-700 border border-yellow-200">✓ Подтверждён</span>
                   )}
-                  {(pStatus === 'registered' || pStatus === 'confirmed') && (
-                    <>
-                      <button onClick={() => updateParticipantStatus(p.id, 'attended')}
-                        className="text-xs px-2 py-1 rounded-lg bg-green-50 text-green-700 border border-green-200 hover:bg-green-100">
-                        ✓ Пришёл
-                      </button>
-                      <button onClick={() => updateParticipantStatus(p.id, 'no_show')}
-                        className="text-xs px-2 py-1 rounded-lg bg-red-50 text-red-500 border border-red-100 hover:bg-red-100">
-                        ✗ Не пришёл
-                      </button>
-                    </>
-                  )}
-                  {pStatus === 'attended' && (
-                    <span className="text-xs px-2 py-1 rounded-lg bg-green-100 text-green-700 font-medium">✓ Пришёл</span>
-                  )}
-                  {pStatus === 'no_show' && (
-                    <span className="text-xs px-2 py-1 rounded-lg bg-red-50 text-red-500 font-medium">✗ Не пришёл</span>
-                  )}
+
+                  {/* Attended / No-show — always shown, current highlighted */}
+                  <button onClick={() => updateParticipantStatus(p.id, 'attended')}
+                    className={`text-xs px-2 py-1 rounded-lg border transition-colors ${pStatus === 'attended' ? 'bg-green-100 text-green-700 border-green-300 font-medium' : 'bg-green-50 text-green-600 border-green-200 hover:bg-green-100'}`}>
+                    ✓ Пришёл
+                  </button>
+                  <button onClick={() => updateParticipantStatus(p.id, 'no_show')}
+                    className={`text-xs px-2 py-1 rounded-lg border transition-colors ${pStatus === 'no_show' ? 'bg-red-100 text-red-600 border-red-300 font-medium' : 'bg-red-50 text-red-400 border-red-100 hover:bg-red-100'}`}>
+                    ✗ Не пришёл
+                  </button>
+
+                  {/* Paid toggle */}
                   {isPaidEvent && !isFreeType && (
                     <button onClick={() => togglePaid(p.id, !p.paid)}
                       className={`text-xs px-2 py-1 rounded-lg border ml-auto ${p.paid ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100'}`}>
