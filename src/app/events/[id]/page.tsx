@@ -15,6 +15,7 @@ type Participant = {
   attendance_type: string | null
   participant_name: string | null
   status: string | null
+  payment_status: string | null
   students: { name: string; group_name: string | null } | null
 }
 
@@ -80,7 +81,7 @@ export default function EventDetailPage() {
   async function load() {
     const [{ data: ev }, { data: parts }, { data: students }, { data: subs }, { data: tr }] = await Promise.all([
       supabase.from('events').select('*').eq('id', id).single(),
-      supabase.from('event_participants').select('*, participant_name, students(name, group_name)').eq('event_id', id),
+      supabase.from('event_participants').select('*, participant_name, payment_status, students(name, group_name)').eq('event_id', id),
       supabase.from('students').select('id, name, group_name').eq('status', 'active').order('name'),
       supabase.from('subscriptions').select('id, student_id, bonuses, bonuses_used, sessions_left').order('created_at', { ascending: false }),
       supabase.from('trainers').select('name').order('name'),
@@ -275,6 +276,13 @@ export default function EventDetailPage() {
     setParticipants(prev => prev.map(p => p.id === partId ? { ...p, paid } : p))
   }
 
+  async function cyclePaymentStatus(partId: string, current: string | null) {
+    const next = current === 'none' || !current ? 'prepaid' : current === 'prepaid' ? 'paid' : 'none'
+    const paid = next === 'paid'
+    await supabase.from('event_participants').update({ payment_status: next, paid }).eq('id', partId)
+    setParticipants(prev => prev.map(p => p.id === partId ? { ...p, payment_status: next, paid } : p))
+  }
+
   async function updateAttendanceType(partId: string, type: string) {
     const autoPaid = type === 'free' || type === 'paid'
     await supabase.from('event_participants').update({ attendance_type: type, paid: autoPaid }).eq('id', partId)
@@ -305,7 +313,8 @@ export default function EventDetailPage() {
   const confirmedCnt = participants.filter(p => p.status === 'confirmed').length
   const attendedCnt = participants.filter(p => p.status === 'attended').length
   const noShowCnt = participants.filter(p => p.status === 'no_show').length
-  const paidCnt = participants.filter(p => p.paid).length
+  const paidCnt = participants.filter(p => p.payment_status === 'paid').length
+  const prepaidCnt = participants.filter(p => p.payment_status === 'prepaid').length
   const totalCollected = participants.filter(p => p.paid).reduce((sum, p) => sum + (p.amount || event.price || 0), 0)
   const isPaidEvent = event.price != null && event.price > 0
 
@@ -503,9 +512,18 @@ export default function EventDetailPage() {
         {/* Payment row — only for paid events */}
         {isPaidEvent && (
           <div className="flex items-center justify-between pt-2 border-t border-gray-100">
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs text-gray-400">Оплатили:</span>
-              <span className="text-sm font-semibold text-gray-700">{paidCnt} из {participants.length}</span>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-1">
+                <span className="text-xs text-gray-400">Оплатили:</span>
+                <span className="text-sm font-semibold text-green-600">{paidCnt}</span>
+              </div>
+              {prepaidCnt > 0 && (
+                <div className="flex items-center gap-1">
+                  <span className="text-xs text-gray-400">Предоплата:</span>
+                  <span className="text-sm font-semibold text-orange-500">{prepaidCnt}</span>
+                </div>
+              )}
+              <span className="text-xs text-gray-300">/ {participants.length}</span>
             </div>
             {totalCollected > 0 && (
               <div className="text-sm font-bold text-green-600">{totalCollected.toLocaleString()} ₽</div>
@@ -698,13 +716,21 @@ export default function EventDetailPage() {
                     ✗ Не пришёл
                   </button>
 
-                  {/* Paid toggle */}
-                  {isPaidEvent && !isFreeType && (
-                    <button onClick={() => togglePaid(p.id, !p.paid)}
-                      className={`text-xs px-2 py-1 rounded-lg border ml-auto ${p.paid ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100'}`}>
-                      {p.paid ? '✓ Оплачено' : 'Не оплачено'}
-                    </button>
-                  )}
+                  {/* Payment status cycle */}
+                  {isPaidEvent && !isFreeType && (() => {
+                    const ps = p.payment_status || 'none'
+                    const cfg = ps === 'paid'
+                      ? { label: '✓ Оплачено', cls: 'bg-green-50 text-green-700 border-green-200' }
+                      : ps === 'prepaid'
+                      ? { label: '½ Предоплата', cls: 'bg-orange-50 text-orange-600 border-orange-200' }
+                      : { label: 'Не оплачено', cls: 'bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100' }
+                    return (
+                      <button onClick={() => cyclePaymentStatus(p.id, ps)}
+                        className={`text-xs px-2 py-1 rounded-lg border ml-auto ${cfg.cls}`}>
+                        {cfg.label}
+                      </button>
+                    )
+                  })()}
                   {isFreeType && (
                     <span className="text-xs px-2 py-1 rounded-lg bg-blue-50 text-blue-600 ml-auto">✓ Льгота</span>
                   )}
