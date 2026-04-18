@@ -240,9 +240,25 @@ export default function EventsPage() {
             {BONUS_TYPES.map(b => <option key={b} value={b}>{b}</option>)}
           </select>
           {eventForm.bonus_type !== 'тренировка с оружием' && (
-            <input value={eventForm.price} onChange={e => setEventForm({ ...eventForm, price: e.target.value })}
-              placeholder="Стоимость (₽, 0 = бесплатно)" type="number" min="0"
-              className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none" />
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                <button type="button"
+                  onClick={() => setEventForm({ ...eventForm, price: '0' })}
+                  className={`flex-1 py-2 rounded-xl text-sm font-medium border transition-colors ${eventForm.price === '0' ? 'bg-green-50 border-green-300 text-green-700' : 'bg-white border-gray-200 text-gray-500'}`}>
+                  Бесплатное
+                </button>
+                <button type="button"
+                  onClick={() => setEventForm({ ...eventForm, price: eventForm.price === '0' ? '' : eventForm.price })}
+                  className={`flex-1 py-2 rounded-xl text-sm font-medium border transition-colors ${eventForm.price !== '0' ? 'bg-black text-white border-black' : 'bg-white border-gray-200 text-gray-500'}`}>
+                  Платное
+                </button>
+              </div>
+              {eventForm.price !== '0' && (
+                <input value={eventForm.price} onChange={e => setEventForm({ ...eventForm, price: e.target.value })}
+                  placeholder="Стоимость (₽)" type="number" min="1"
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none" />
+              )}
+            </div>
           )}
           <div className="border border-gray-200 rounded-xl px-3 py-2.5">
             <div className="text-xs text-gray-400 mb-2">Группы (пусто = все)</div>

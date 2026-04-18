@@ -294,6 +294,7 @@ export default function StudentPage() {
     id: string
     paid: boolean
     attendance_type: string | null
+    status: string | null
     events: { name: string; date: string; bonus_type: string | null } | null
   }[]>([])
 
@@ -367,7 +368,7 @@ export default function StudentPage() {
       // Load event history
       const { data: evParts } = await supabase
         .from('event_participants')
-        .select('id, paid, attendance_type, events(name, date, bonus_type)')
+        .select('id, paid, attendance_type, status, events(name, date, bonus_type)')
         .eq('student_id', id)
         .order('id', { ascending: false })
       setEventHistory((evParts || []) as any)
@@ -1763,6 +1764,13 @@ export default function StudentPage() {
                         <div className="text-xs text-gray-400 mt-0.5">
                           {ev.date && new Date(ev.date).toLocaleDateString('ru', { day: 'numeric', month: 'long', year: 'numeric' })}
                           {ev.bonus_type && <span className="ml-1">· {ev.bonus_type}</span>}
+                        </div>
+                        <div className="flex items-center gap-2 mt-1">
+                          {ep.status === 'attended' && <span className="text-xs text-green-600">✓ Пришёл</span>}
+                          {ep.status === 'no_show' && <span className="text-xs text-red-400">✗ Не пришёл</span>}
+                          {ep.status === 'confirmed' && <span className="text-xs text-yellow-600">✓ Подтверждён</span>}
+                          {ep.attendance_type === 'free' && <span className="text-xs text-blue-500">Льготный</span>}
+                          {ep.paid && ep.attendance_type !== 'free' && <span className="text-xs text-green-600">Оплачено</span>}
                         </div>
                       </div>
                     </div>
