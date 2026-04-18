@@ -91,14 +91,23 @@ export default function EventRegisterPage() {
     if (!event) return
     setSubmitting(true)
 
-    // Используем выбранного ученика или ищем по телефону
+    // Используем выбранного ученика или ищем по телефону / имени
     let matchedStudentId: string | null = selectedStudentId
-    if (!matchedStudentId && form.participant_phone) {
-      const phone = form.participant_phone.replace(/\D/g, '')
+    if (!matchedStudentId) {
       const { data: students } = await supabase
-        .from('students').select('id, phone').eq('status', 'active')
-      const match = (students || []).find(s => s.phone && s.phone.replace(/\D/g, '') === phone)
-      if (match) matchedStudentId = match.id
+        .from('students').select('id, name, phone').eq('status', 'active')
+
+      if (form.participant_phone) {
+        const phone = form.participant_phone.replace(/\D/g, '')
+        const match = (students || []).find(s => s.phone && s.phone.replace(/\D/g, '') === phone)
+        if (match) matchedStudentId = match.id
+      }
+
+      if (!matchedStudentId && form.participant_name) {
+        const normalizedName = form.participant_name.trim().toLowerCase()
+        const nameMatches = (students || []).filter(s => s.name.trim().toLowerCase() === normalizedName)
+        if (nameMatches.length === 1) matchedStudentId = nameMatches[0].id
+      }
     }
 
     await supabase.from('event_participants').insert({
