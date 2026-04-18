@@ -294,8 +294,12 @@ export default function EventDetailPage() {
 
   const bonusCnt = participants.filter(p => p.attendance_type === 'bonus').length
   const sessionCnt = participants.filter(p => p.attendance_type === 'session').length
-  const paidCnt = participants.filter(p => p.attendance_type === 'paid').length
+  const confirmedCnt = participants.filter(p => p.status === 'confirmed').length
+  const attendedCnt = participants.filter(p => p.status === 'attended').length
+  const noShowCnt = participants.filter(p => p.status === 'no_show').length
+  const paidCnt = participants.filter(p => p.paid).length
   const totalCollected = participants.filter(p => p.paid).reduce((sum, p) => sum + (p.amount || event.price || 0), 0)
+  const isPaidEvent = event.price != null && event.price > 0
 
   return (
     <main className="max-w-lg mx-auto p-4">
@@ -450,32 +454,62 @@ export default function EventDetailPage() {
         )}
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-4 gap-2 mb-4">
-        <div className="bg-white rounded-xl p-3 border border-gray-100 shadow-sm text-center">
-          <div className="text-xl font-bold text-gray-800">{participants.length}</div>
-          <div className="text-xs text-gray-400">всего</div>
+      {/* Funnel dashboard */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm mb-4 p-4">
+        {/* Funnel row */}
+        <div className="grid grid-cols-4 gap-2 mb-3">
+          <div className="text-center">
+            <div className="text-2xl font-bold text-gray-800">{participants.length}</div>
+            <div className="text-xs text-gray-400 mt-0.5">записались</div>
+          </div>
+          <div className="text-center">
+            <div className="text-2xl font-bold text-yellow-500">{confirmedCnt}</div>
+            <div className="text-xs text-gray-400 mt-0.5">подтвержд.</div>
+          </div>
+          <div className="text-center">
+            <div className="text-2xl font-bold text-green-500">{attendedCnt}</div>
+            <div className="text-xs text-gray-400 mt-0.5">пришли</div>
+          </div>
+          <div className="text-center">
+            <div className="text-2xl font-bold text-red-400">{noShowCnt}</div>
+            <div className="text-xs text-gray-400 mt-0.5">не пришли</div>
+          </div>
         </div>
-        {isBonusEvent && (
-          <div className="bg-white rounded-xl p-3 border border-gray-100 shadow-sm text-center">
-            <div className="text-xl font-bold text-purple-600">{bonusCnt}</div>
-            <div className="text-xs text-gray-400">бонус</div>
+
+        {/* Progress bar */}
+        {participants.length > 0 && (
+          <div className="flex h-1.5 rounded-full overflow-hidden gap-0.5 mb-3">
+            {attendedCnt > 0 && (
+              <div className="bg-green-400 rounded-full transition-all" style={{ width: `${attendedCnt / participants.length * 100}%` }} />
+            )}
+            {confirmedCnt > 0 && (
+              <div className="bg-yellow-400 rounded-full transition-all" style={{ width: `${confirmedCnt / participants.length * 100}%` }} />
+            )}
+            {noShowCnt > 0 && (
+              <div className="bg-red-300 rounded-full transition-all" style={{ width: `${noShowCnt / participants.length * 100}%` }} />
+            )}
+            <div className="bg-gray-200 flex-1 rounded-full" />
           </div>
         )}
-        {!isMasterClass && (
-          <div className="bg-white rounded-xl p-3 border border-gray-100 shadow-sm text-center">
-            <div className="text-xl font-bold text-gray-600">{sessionCnt}</div>
-            <div className="text-xs text-gray-400">занятие</div>
+
+        {/* Payment row — only for paid events */}
+        {isPaidEvent && (
+          <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-gray-400">Оплатили:</span>
+              <span className="text-sm font-semibold text-gray-700">{paidCnt} из {participants.length}</span>
+            </div>
+            {totalCollected > 0 && (
+              <div className="text-sm font-bold text-green-600">{totalCollected.toLocaleString()} ₽</div>
+            )}
           </div>
         )}
-        <div className="bg-white rounded-xl p-3 border border-gray-100 shadow-sm text-center">
-          <div className="text-xl font-bold text-green-600">{paidCnt}</div>
-          <div className="text-xs text-gray-400">платных</div>
-        </div>
-        {totalCollected > 0 && (
-          <div className="bg-white rounded-xl p-3 border border-gray-100 shadow-sm text-center">
-            <div className="text-sm font-bold text-gray-800">{totalCollected.toLocaleString()} ₽</div>
-            <div className="text-xs text-gray-400">собрано</div>
+
+        {/* Bonus/session breakdown — only for weapon training */}
+        {isWeaponTraining && (bonusCnt > 0 || sessionCnt > 0) && (
+          <div className="flex gap-3 pt-2 border-t border-gray-100 mt-2">
+            {bonusCnt > 0 && <span className="text-xs text-purple-600">🎁 Бонусов: {bonusCnt}</span>}
+            {sessionCnt > 0 && <span className="text-xs text-gray-500">✅ Занятий: {sessionCnt}</span>}
           </div>
         )}
       </div>
