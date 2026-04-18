@@ -93,10 +93,7 @@ export default function EventDetailPage() {
     }
     setSubMap(map)
 
-    const filtered = ev?.group_restriction && ev.group_restriction.length > 0
-      ? (students || []).filter(s => s.group_name && ev.group_restriction!.includes(s.group_name))
-      : (students || [])
-    setAllStudents(filtered)
+    setAllStudents(students || [])
   }
 
   useEffect(() => { load() }, [id])
