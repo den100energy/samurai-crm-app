@@ -1,0 +1,41 @@
+# Samurai CRM — crontab для Beget VPS
+# Установить:  crontab /path/to/this/file   (или  crontab -e  и вставить содержимое)
+#
+# Расписание скопировано 1-в-1 из vercel.json (который больше не используется).
+# Все задачи дергают /api/cron/* endpoint с Bearer-токеном CRON_SECRET.
+#
+# ПЕРЕД УСТАНОВКОЙ:
+#   1. Замени APP_URL на твой домен (https://crm.samurai.ru)
+#   2. Замени CRON_SECRET на значение из .env.local
+#   3. MAILTO — на твой email для получения ошибок cron
+
+SHELL=/bin/bash
+MAILTO=aikidokadj@gmail.com
+APP_URL=https://crm.samurai.ru
+CRON_SECRET=REPLACE_WITH_VALUE_FROM_ENV
+
+# m h dom mon dow command
+
+# 09:00 MSK ежедневно — отправка анкет прогресса через 28 дней после первого занятия
+0 9 * * *  curl -fsS -H "Authorization: Bearer $CRON_SECRET" "$APP_URL/api/cron/send-survey2" > /var/log/samurai-cron/send-survey2.log 2>&1
+
+# 09:00 MSK по субботам — напоминание тренерам о расписании
+0 9 * * 6  curl -fsS -H "Authorization: Bearer $CRON_SECRET" "$APP_URL/api/cron/weekly-schedule-reminder" > /var/log/samurai-cron/weekly-schedule-reminder.log 2>&1
+
+# 10:00 MSK по понедельникам — уведомление о повторной анкете
+0 10 * * 1  curl -fsS -H "Authorization: Bearer $CRON_SECRET" "$APP_URL/api/cron/notify-repeat-survey" > /var/log/samurai-cron/notify-repeat-survey.log 2>&1
+
+# 08:00 MSK ежедневно — пересчёт CRM-статусов учеников (активный/спящий/ушёл)
+0 8 * * *  curl -fsS -H "Authorization: Bearer $CRON_SECRET" "$APP_URL/api/cron/update-crm-status" > /var/log/samurai-cron/update-crm-status.log 2>&1
+
+# 09:00 MSK ежедневно — lifecycle touchpoints (возврат ушедших)
+0 9 * * *  curl -fsS -H "Authorization: Bearer $CRON_SECRET" "$APP_URL/api/cron/lifecycle-touchpoints" > /var/log/samurai-cron/lifecycle-touchpoints.log 2>&1
+
+# 00:00 MSK ежедневно — обновление статуса рассрочек (просрочки)
+0 0 * * *  curl -fsS -H "Authorization: Bearer $CRON_SECRET" "$APP_URL/api/cron/installment-status" > /var/log/samurai-cron/installment-status.log 2>&1
+
+# 08:00 MSK ежедневно — напоминания о платежах по рассрочкам
+0 8 * * *  curl -fsS -H "Authorization: Bearer $CRON_SECRET" "$APP_URL/api/cron/installment-reminders" > /var/log/samurai-cron/installment-reminders.log 2>&1
+
+# 10:00 MSK ежедневно — уведомление тренеров о неотмеченной посещаемости
+0 10 * * *  curl -fsS -H "Authorization: Bearer $CRON_SECRET" "$APP_URL/api/cron/notify-untracked-attendance" > /var/log/samurai-cron/notify-untracked-attendance.log 2>&1

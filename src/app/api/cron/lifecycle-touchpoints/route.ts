@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN!
 const OWNER_CHAT_ID = process.env.FOUNDER_TELEGRAM_CHAT_ID || process.env.TELEGRAM_OWNER_CHAT_ID!
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://samurai-crm-app.vercel.app'
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
 
 const admin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,

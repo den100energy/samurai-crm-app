@@ -224,7 +224,7 @@ export async function POST(req: NextRequest) {
 
   // ── Клиентский бот ───────────────────────────────────────────────────────────
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://samurai-crm-app.vercel.app'
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
 
   function cabinetButton(url: string, label = '🎒 Открыть личный кабинет') {
     return { inline_keyboard: [[{ text: label, url }]] }

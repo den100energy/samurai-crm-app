@@ -260,7 +260,7 @@ ${hasManySlices ? `**Общий путь за всё время**
       headers: {
         'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
         'Content-Type': 'application/json',
-        'HTTP-Referer': 'https://samurai-crm-app.vercel.app',
+        'HTTP-Referer': process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
         'X-Title': 'Samurai School CRM',
       },
       body: JSON.stringify({
