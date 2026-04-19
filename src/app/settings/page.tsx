@@ -182,7 +182,11 @@ export default function SettingsPage() {
     <main className="max-w-lg mx-auto p-4">
       <div className="flex items-center gap-3 mb-6">
         <Link href="/" className="text-gray-500 hover:text-black text-xl font-bold leading-none">←</Link>
-        <h1 className="text-xl font-bold text-gray-800">Настройки</h1>
+        <h1 className="text-xl font-bold text-gray-800 flex-1">Настройки</h1>
+        <Link href="/admin/errors"
+          className="text-sm text-gray-500 border border-gray-200 px-3 py-1.5 rounded-xl hover:border-gray-400">
+          🐛 Ошибки
+        </Link>
       </div>
 
       <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm mb-4">

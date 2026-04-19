@@ -5,6 +5,7 @@ import FloatingBack from '@/components/FloatingBack'
 import { AuthProvider } from '@/components/AuthProvider'
 import { ThemeProvider } from '@/components/ThemeProvider'
 import { InstallPrompt } from '@/components/InstallPrompt'
+import { ErrorCatcher } from '@/components/ErrorCatcher'
 
 const robotoSlab = Roboto_Slab({
   subsets: ['latin', 'cyrillic'],
@@ -41,11 +42,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="ru" className={robotoSlab.variable} data-theme="dark">
       <body className="app-bg min-h-screen" style={{ fontFamily: 'var(--font-roboto-slab), serif' }}>
         <ThemeProvider>
-          <AuthProvider>
-            {children}
-            <FloatingBack />
-            <InstallPrompt />
-          </AuthProvider>
+          <ErrorCatcher>
+            <AuthProvider>
+              {children}
+              <FloatingBack />
+              <InstallPrompt />
+            </AuthProvider>
+          </ErrorCatcher>
         </ThemeProvider>
       </body>
     </html>
