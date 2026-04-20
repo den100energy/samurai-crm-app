@@ -1996,18 +1996,35 @@ export default function StudentPage() {
               </div>
             )}
             <div className="space-y-1 max-h-80 overflow-y-auto pr-1">
-              {rows.map((row, idx) => {
-                if (row.kind === 'bonus') {
-                  return (
-                    <div key={`bonus-${idx}`} className="flex items-center justify-between text-sm gap-2">
-                      <span className="text-gray-600">{row.date}</span>
-                      <span className="text-purple-600">🎁 {row.label}</span>
+              {(() => {
+                const subStarts = [...new Set(subs.map(s => s.start_date).filter(Boolean) as string[])].sort()
+                const formatStart = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' })
+                return rows.map((row, idx) => {
+                  const prev = rows[idx - 1]
+                  const crossedStart = prev ? subStarts.find(s => prev.date >= s && row.date < s) : null
+                  const separator = crossedStart ? (
+                    <div key={`sep-${crossedStart}-${idx}`} className="flex items-center gap-2 py-1.5 my-1">
+                      <div className="flex-1 h-px bg-red-400" />
+                      <span className="text-[10px] text-red-500 font-medium whitespace-nowrap">Абонемент с {formatStart(crossedStart)}</span>
+                      <div className="flex-1 h-px bg-red-400" />
                     </div>
-                  )
-                }
-                const a = row.a
-                return (
-                  <div key={a.id} className="flex items-center justify-between text-sm gap-2">
+                  ) : null
+                  if (row.kind === 'bonus') {
+                    return (
+                      <div key={`bonus-group-${idx}`}>
+                        {separator}
+                        <div className="flex items-center justify-between text-sm gap-2">
+                          <span className="text-gray-600">{row.date}</span>
+                          <span className="text-purple-600">🎁 {row.label}</span>
+                        </div>
+                      </div>
+                    )
+                  }
+                  const a = row.a
+                  return (
+                    <div key={`att-group-${a.id}`}>
+                      {separator}
+                      <div className="flex items-center justify-between text-sm gap-2">
                     {editingAttId === a.id ? (
                       <input
                         type="date"
@@ -2030,9 +2047,11 @@ export default function StudentPage() {
                       <button onClick={() => deleteAttendance(a)}
                         className="text-red-400 hover:text-red-600 text-xs px-1">✕</button>
                     </div>
-                  </div>
-                )
-              })}
+                      </div>
+                    </div>
+                  )
+                })
+              })()}
             </div>
             </>
           )
