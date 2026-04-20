@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
+import { formatDate } from '@/lib/dates'
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN!
 const OWNER_CHAT_ID = process.env.TELEGRAM_OWNER_CHAT_ID!
@@ -62,7 +63,7 @@ export async function POST() {
     report += `📅 <b>Абонемент истекает через 3 дня (${expiringSoon.length}):</b>\n`
     for (const s of expiringSoon) {
       const st = s.students as any
-      report += `• ${st?.name} — до ${s.end_date}\n`
+      report += `• ${st?.name} — до ${formatDate(s.end_date!)}\n`
       totalSent++
     }
   }

@@ -5,13 +5,13 @@
 # Все задачи дергают /api/cron/* endpoint с Bearer-токеном CRON_SECRET.
 #
 # ПЕРЕД УСТАНОВКОЙ:
-#   1. Замени APP_URL на твой домен (https://crm.samurai.ru)
+#   1. Замени APP_URL на твой домен (https://crm.samu-rai.ru)
 #   2. Замени CRON_SECRET на значение из .env.local
 #   3. MAILTO — на твой email для получения ошибок cron
 
 SHELL=/bin/bash
 MAILTO=aikidokadj@gmail.com
-APP_URL=https://crm.samurai.ru
+APP_URL=https://crm.samu-rai.ru
 CRON_SECRET=REPLACE_WITH_VALUE_FROM_ENV
 
 # m h dom mon dow command
@@ -39,3 +39,6 @@ CRON_SECRET=REPLACE_WITH_VALUE_FROM_ENV
 
 # 10:00 MSK ежедневно — уведомление тренеров о неотмеченной посещаемости
 0 10 * * *  curl -fsS -H "Authorization: Bearer $CRON_SECRET" "$APP_URL/api/cron/notify-untracked-attendance" > /var/log/samurai-cron/notify-untracked-attendance.log 2>&1
+
+# 09:30 MSK ежедневно — уведомления ученикам/родителям об окончании абонементов
+30 9 * * *  curl -fsS -H "Authorization: Bearer $CRON_SECRET" "$APP_URL/api/cron/notify-expiring-subscriptions" > /var/log/samurai-cron/notify-expiring-subscriptions.log 2>&1

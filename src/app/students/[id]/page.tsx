@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { QRCodeSVG } from 'qrcode.react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/components/AuthProvider'
-import { localDateStr } from '@/lib/dates'
+import { localDateStr, formatDate } from '@/lib/dates'
 
 type Student = {
   id: string
@@ -774,7 +774,7 @@ export default function StudentPage() {
     const activeSub = subs[0]
     const subInfo = activeSub?.sessions_left != null
       ? `Осталось занятий: ${activeSub.sessions_left}`
-      : activeSub?.end_date ? `Абонемент до: ${activeSub.end_date}` : 'Абонемент не найден'
+      : activeSub?.end_date ? `Абонемент до: ${formatDate(activeSub.end_date)}` : 'Абонемент не найден'
     const message = `👋 Школа Самурая\n\nУченик: <b>${student.name}</b>\nГруппа: ${student.group_name || '—'}\n${subInfo}`
     await fetch('/api/notify', {
       method: 'POST',
@@ -970,7 +970,7 @@ export default function StudentPage() {
     const subInfo = activeSub?.sessions_left != null
       ? `Осталось занятий: ${activeSub.sessions_left}`
       : activeSub?.end_date
-      ? `Абонемент до: ${activeSub.end_date}`
+      ? `Абонемент до: ${formatDate(activeSub.end_date)}`
       : ''
     const text = encodeURIComponent(`Здравствуйте! Напоминаем о занятиях в Школе Самурая.\n${subInfo}`)
     window.open(`https://wa.me/${phone}?text=${text}`, '_blank')
@@ -1360,12 +1360,12 @@ export default function StudentPage() {
                       </div>
                       <div className="text-xs text-gray-400 mt-0.5">
                         {s.sessions_left != null ? `${s.sessions_left}/${s.sessions_total} занятий` : ''}
-                        {s.end_date ? ` · до ${s.end_date}` : ''}
+                        {(s.start_date || s.end_date) ? ` · ${s.start_date ? formatDate(s.start_date) : '?'} – ${s.end_date ? formatDate(s.end_date) : '?'}` : ''}
                         {s.amount ? ` · ${s.amount.toLocaleString()} ₽` : ''}
                         {matchedType?.price_per_session ? ` · ${matchedType.price_per_session} ₽/трен.` : ''}
                       </div>
                       {s.is_frozen && s.freeze_end && (
-                        <div className="text-xs text-blue-500 mt-0.5">Заморозка до {s.freeze_end} · {s.freeze_days_used} дн.</div>
+                        <div className="text-xs text-blue-500 mt-0.5">Заморозка до {formatDate(s.freeze_end)} · {s.freeze_days_used} дн.</div>
                       )}
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">

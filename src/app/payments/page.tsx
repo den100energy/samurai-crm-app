@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
+import { formatDate } from '@/lib/dates'
 
 type Sub = {
   id: string
@@ -51,7 +52,7 @@ export default function PaymentsPage() {
           <div className="font-medium text-yellow-800 mb-2">⚠️ Истекают через 7 дней</div>
           {expiringSoon.map(s => (
             <div key={s.id} className="text-sm text-yellow-700">
-              {s.students?.name} — до {s.end_date}
+              {s.students?.name} — до {formatDate(s.end_date!)}
             </div>
           ))}
         </div>
@@ -88,7 +89,7 @@ export default function PaymentsPage() {
                   {s.sessions_left != null && (
                     <div className="text-sm text-gray-500 mt-1">{s.sessions_left}/{s.sessions_total} занятий</div>
                   )}
-                  {s.end_date && <div className="text-xs text-gray-400">до {s.end_date}</div>}
+                  {s.end_date && <div className="text-xs text-gray-400">до {formatDate(s.end_date)}</div>}
                 </div>
               </div>
             </div>

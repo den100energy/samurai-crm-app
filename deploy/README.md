@@ -49,12 +49,12 @@ pm2 logs samurai-crm  # убедиться, что Next.js слушает пор
 
 ### 4. nginx reverse-proxy
 
-Конфиг для `crm.samurai.ru` (положить в `/etc/nginx/sites-available/crm.samurai.ru`):
+Конфиг для `crm.samu-rai.ru` (положить в `/etc/nginx/sites-available/crm.samu-rai.ru`):
 
 ```nginx
 server {
   listen 80;
-  server_name crm.samurai.ru;
+  server_name crm.samu-rai.ru;
 
   location / {
     proxy_pass http://127.0.0.1:3000;
@@ -70,9 +70,9 @@ server {
 ```
 
 ```bash
-ln -s /etc/nginx/sites-available/crm.samurai.ru /etc/nginx/sites-enabled/
+ln -s /etc/nginx/sites-available/crm.samu-rai.ru /etc/nginx/sites-enabled/
 nginx -t && systemctl reload nginx
-certbot --nginx -d crm.samurai.ru   # Let's Encrypt SSL
+certbot --nginx -d crm.samu-rai.ru   # Let's Encrypt SSL
 ```
 
 ### 5. Crontab
@@ -112,7 +112,7 @@ pm2 reload samurai-crm
 
 ## Откат на Vercel (если что-то пошло не так)
 
-1. В DNS-панели Beget переключить A-запись `crm.samurai.ru` обратно на IP Vercel (либо на CNAME `cname.vercel-dns.com`).
+1. В DNS-панели Beget переключить A-запись `crm.samu-rai.ru` обратно на IP Vercel (либо на CNAME `cname.vercel-dns.com`).
 2. В Telegram вернуть вебхуки на старый URL:
    ```bash
    NEXT_PUBLIC_APP_URL=https://samurai-crm-app.vercel.app bash deploy/set-telegram-webhook.sh
