@@ -25,7 +25,7 @@ const QUALITY_LABELS: Record<string,string> = {
   goal_orientation:'Целеустремлённость', activity:'Активность', self_defense:'Самозащита',
 }
 
-type Student = { id: string; name: string; group_name: string | null; birth_date: string | null; photo_url: string | null; created_at: string; phone: string | null }
+type Student = { id: string; name: string; group_name: string | null; birth_date: string | null; photo_url: string | null; created_at: string; phone: string | null; invite_token: string | null; telegram_chat_id: number | null }
 type TrainerInfo = { name: string; phone: string | null; telegram_username: string | null; vk_url: string | null; days: string[] }
 type Subscription = { id: string; sessions_left: number | null; sessions_total: number | null; start_date: string | null; end_date: string | null; type: string; amount: number | null; bonuses: Record<string, number> | null; bonuses_used: Record<string, number | string[]> | null }
 type InstallmentPlan = { id: string; total_amount: number; deposit_amount: number; deposit_paid_at: string | null; installment_payments: { id: string; amount: number; due_date: string; status: string; paid_at: string | null; actual_amount: number | null }[] }
@@ -347,16 +347,28 @@ export default function CabinetPage() {
     attestation_events: { title: string; event_date: string } | null
   }[]>([])
   const [togglingTask, setTogglingTask] = useState<string | null>(null)
+  const [tgBannerDismissed, setTgBannerDismissed] = useState(false)
 
   useEffect(() => {
     if (token) loadAll()
   }, [token])
 
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setTgBannerDismissed(localStorage.getItem(`tg_banner_dismissed_${token}`) === '1')
+    }
+  }, [token])
+
+  function dismissTgBanner() {
+    localStorage.setItem(`tg_banner_dismissed_${token}`, '1')
+    setTgBannerDismissed(true)
+  }
+
   async function loadAll() {
     // Найти ученика по токену
     const { data: studentData } = await supabase
       .from('students')
-      .select('id, name, group_name, birth_date, photo_url, created_at, phone')
+      .select('id, name, group_name, birth_date, photo_url, created_at, phone, invite_token, telegram_chat_id')
       .eq('cabinet_token', token)
       .single()
 
@@ -788,6 +800,37 @@ export default function CabinetPage() {
       </div>
 
       <div className="max-w-lg mx-auto p-4 space-y-4">
+
+        {/* Баннер подключения Telegram */}
+        {!student.telegram_chat_id && student.invite_token && !tgBannerDismissed && (
+          <div className="bg-gradient-to-br from-sky-50 to-blue-50 border border-sky-200 rounded-2xl p-4">
+            <div className="flex items-start gap-3">
+              <div className="text-2xl">🔔</div>
+              <div className="flex-1 min-w-0">
+                <div className="font-bold text-gray-900 mb-1">Подключи уведомления</div>
+                <div className="text-sm text-gray-600 mb-3">
+                  Получай в Telegram напоминания об абонементе, изменения в расписании и задания от тренера.
+                </div>
+                <div className="flex gap-2 flex-wrap">
+                  <a
+                    href={`https://t.me/${process.env.NEXT_PUBLIC_TELEGRAM_CLIENT_BOT_USERNAME}?start=${student.invite_token}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 bg-sky-500 hover:bg-sky-600 text-white text-sm font-medium px-4 py-2 rounded-xl"
+                  >
+                    Подключить Telegram
+                  </a>
+                  <button
+                    onClick={dismissTgBanner}
+                    className="text-sm text-gray-500 hover:text-gray-700 px-3 py-2"
+                  >
+                    Не сейчас
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* ── ГЛАВНАЯ ── */}
         {tab === 'home' && (

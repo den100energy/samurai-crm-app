@@ -432,6 +432,16 @@ export default function Home() {
             <div className="text-sm font-medium" style={{ color: 'var(--text-1)' }}>Сотрудники</div>
           </Link>
         )}
+        {(role === 'founder' || role === 'admin') && (
+          <Link href="/admin/qr-cards"
+            style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border)' }}
+            className="group relative border rounded-2xl p-4
+              active:scale-95 transition-all duration-200 overflow-hidden">
+            <div className="absolute top-0 left-0 right-0 h-0.5 bg-[#E8121E] scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-left rounded-t-2xl" />
+            <div className="text-3xl mb-2">🔳</div>
+            <div className="text-sm font-medium" style={{ color: 'var(--text-1)' }}>QR-карточки</div>
+          </Link>
+        )}
       </div>
 
       {/* Нижний декор */}

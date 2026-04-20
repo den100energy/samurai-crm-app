@@ -10,6 +10,7 @@ import { PARENT_TOUR_SLIDES } from '@/lib/onboarding'
 import { SubscriptionQuiz } from '@/components/SubscriptionQuiz'
 
 type Student = { id: string; name: string; group_name: string | null; birth_date: string | null; photo_url: string | null }
+type ParentContact = { id: string; name: string; role: string; invite_token: string | null; telegram_chat_id: number | null }
 type ScheduleSlot = { day_of_week: number; time_start: string | null; trainer_name: string | null }
 type ScheduleOverride = { date: string; trainer_name: string | null; cancelled: boolean }
 
@@ -193,6 +194,19 @@ export default function ParentPage() {
   const [showAppForm, setShowAppForm] = useState(false)
   const [appSubmitting, setAppSubmitting] = useState(false)
   const [appForm, setAppForm] = useState({ event_id: '', discipline: 'aikido' as 'aikido' | 'wushu', current_grade: '', target_grade: '', last_attestation_date: '' })
+  const [parentContacts, setParentContacts] = useState<ParentContact[]>([])
+  const [tgBannerDismissed, setTgBannerDismissed] = useState(false)
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setTgBannerDismissed(localStorage.getItem(`tg_parent_banner_dismissed_${token}`) === '1')
+    }
+  }, [token])
+
+  function dismissParentTgBanner() {
+    localStorage.setItem(`tg_parent_banner_dismissed_${token}`, '1')
+    setTgBannerDismissed(true)
+  }
 
   useEffect(() => {
     async function load() {
@@ -234,6 +248,12 @@ export default function ParentPage() {
         supabase.from('seminar_registrations').select('id, seminar_events(title, starts_at)').eq('student_id', s.id).eq('attended', true).order('created_at', { ascending: false }),
         supabase.from('events').select('id, name, date, time_start, bonus_type, group_restriction').gte('date', localDateStr(new Date())).order('date'),
       ])
+
+      const { data: contactsData } = await supabase
+        .from('student_contacts')
+        .select('id, name, role, invite_token, telegram_chat_id')
+        .eq('student_id', s.id)
+      setParentContacts(contactsData ?? [])
       const evVisits = ((evParts || []) as any[])
         .filter(ep => ep.events?.date && ep.events?.name)
         .map(ep => ({
@@ -515,6 +535,51 @@ export default function ParentPage() {
         </div>
 
         <div className="p-4 space-y-3">
+
+          {/* Баннер подключения Telegram родителям */}
+          {!tgBannerDismissed && parentContacts.some(c => !c.telegram_chat_id && c.invite_token) && (
+            <div className="bg-gradient-to-br from-sky-50 to-blue-50 border border-sky-200 rounded-2xl p-4">
+              <div className="flex items-start gap-3">
+                <div className="text-2xl">🔔</div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-bold text-gray-900 mb-1">Подключите уведомления</div>
+                  <div className="text-sm text-gray-600 mb-3">
+                    Получайте в Telegram напоминания об абонементе, изменения в расписании и программу тренировок.
+                  </div>
+                  <div className="space-y-2 mb-2">
+                    {parentContacts
+                      .filter(c => !c.telegram_chat_id && c.invite_token)
+                      .map(c => (
+                        <a
+                          key={c.id}
+                          href={`https://t.me/${process.env.NEXT_PUBLIC_TELEGRAM_CLIENT_BOT_USERNAME}?start=${c.invite_token}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center justify-between bg-white border border-sky-200 hover:bg-sky-50 rounded-xl px-3 py-2 text-sm"
+                        >
+                          <span className="text-gray-700">
+                            Я — <b>{c.name}</b>
+                            {c.role && <span className="text-gray-400 text-xs ml-1">({c.role})</span>}
+                          </span>
+                          <span className="text-sky-600 font-medium">Подключить →</span>
+                        </a>
+                      ))}
+                  </div>
+                  {parentContacts.some(c => c.telegram_chat_id) && (
+                    <div className="text-xs text-gray-500 mb-2">
+                      ✅ Уже подключены: {parentContacts.filter(c => c.telegram_chat_id).map(c => c.name).join(', ')}
+                    </div>
+                  )}
+                  <button
+                    onClick={dismissParentTgBanner}
+                    className="text-sm text-gray-500 hover:text-gray-700"
+                  >
+                    Не сейчас
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* ── АБОНЕМЕНТ ── */}
           {tab === 'sub' && (
