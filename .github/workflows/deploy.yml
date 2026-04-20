@@ -1,0 +1,22 @@
+name: Deploy to Beget VPS
+
+on:
+  push:
+    branches:
+      - migration/beget
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd /opt/samurai-crm-app
+            git pull
+            npm run build
+            pm2 reload samurai-crm
