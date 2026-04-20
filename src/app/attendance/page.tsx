@@ -17,6 +17,7 @@ type Student = {
   subs: Sub[]
   sub_id: string | null
   sessions_left: number | null
+  has_pending: boolean
 }
 
 const GROUPS = ['Старт', 'Основная (нач.)', 'Основная (оп.)', 'Цигун', 'Индивидуальные']
@@ -39,8 +40,9 @@ async function loadWithSub(students: { id: string; name: string; group_name: str
       (sub.sessions_left === null || sub.sessions_left > 0) &&
       (!sub.end_date || sub.end_date >= today)
     )
+    const hasPending = (data || []).some(sub => sub.is_pending)
     const first = activeSubs[0] ?? null
-    return { ...s, subs: activeSubs, sub_id: first?.id ?? null, sessions_left: first?.sessions_left ?? null }
+    return { ...s, subs: activeSubs, sub_id: first?.id ?? null, sessions_left: first?.sessions_left ?? null, has_pending: hasPending }
   }))
 }
 
@@ -285,7 +287,7 @@ export default function AttendancePage() {
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
 
-    const noSubPresent = allStudents.filter(s => present.has(s.id) && !originalPresent.has(s.id) && s.subs.length === 0)
+    const noSubPresent = allStudents.filter(s => present.has(s.id) && !originalPresent.has(s.id) && s.subs.length === 0 && !s.has_pending)
     if (noSubPresent.length > 0) {
       alert(`⚠️ Не забудь внести абонемент!\n\nПрисутствовали без абонемента:\n${noSubPresent.map(s => `• ${s.name}`).join('\n')}`)
     }
@@ -433,7 +435,11 @@ export default function AttendancePage() {
                     <Link href={`/students/${s.id}`} onClick={e => e.stopPropagation()}
                       className="flex items-center gap-1 pr-4 py-3 shrink-0">
                       {s.subs.length === 0 ? (
-                        <span className="text-xs bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full">Нет абонемента</span>
+                        s.has_pending ? (
+                          <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">⏳ Ожидает активации</span>
+                        ) : (
+                          <span className="text-xs bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full">Нет абонемента</span>
+                        )
                       ) : chosenSub && (
                         <span className={`text-sm ${sessionsColor(chosenSub.sessions_left)}`}>
                           {chosenSub.sessions_left === 0 ? '❗ 0 зан.' : `${chosenSub.sessions_left} зан.`}

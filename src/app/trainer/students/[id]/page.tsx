@@ -47,6 +47,7 @@ export default function TrainerStudentCard() {
   const { theme } = useTheme()
   const [student, setStudent] = useState<Student | null>(null)
   const [sub, setSub] = useState<Subscription | null>(null)
+  const [pendingSub, setPendingSub] = useState<Subscription | null>(null)
   const [attendance, setAttendance] = useState<Attendance[]>([])
   const [loading, setLoading] = useState(true)
   const [bonusDatePicker, setBonusDatePicker] = useState<string | null>(null)
@@ -73,6 +74,7 @@ export default function TrainerStudentCard() {
     ])
     setStudent(s)
     setSub(subData?.is_pending ? null : subData)
+    setPendingSub(subData?.is_pending ? subData : null)
     setAttendance(attData || [])
     setLoading(false)
   }
@@ -256,6 +258,19 @@ export default function TrainerStudentCard() {
                         )
                       })}
                     </div>
+                  </div>
+                )}
+              </div>
+            ) : pendingSub ? (
+              <div className="space-y-2">
+                <div className="bg-amber-500/20 text-amber-500 text-xs font-medium text-center py-1.5 rounded-xl">
+                  ⏳ Абонемент ожидает активации
+                </div>
+                <div className={`text-sm ${textPrimary}`}>{pendingSub.type}</div>
+                {pendingSub.sessions_total !== null && (
+                  <div className={`flex items-center justify-between border-t pt-2 ${divider}`}>
+                    <span className={`text-sm ${textSecondary}`}>Занятий</span>
+                    <span className={`text-sm ${textPrimary}`}>{pendingSub.sessions_total}</span>
                   </div>
                 )}
               </div>

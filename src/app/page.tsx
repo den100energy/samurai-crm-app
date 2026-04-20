@@ -69,7 +69,8 @@ export default function Home() {
         const sub = subMap.get(student.id)
         const hasPending = pendingMap.has(student.id)
         const subExpired = sub && sub.end_date && sub.end_date < today
-        if (!sub || sub.sessions_left === 0 || subExpired) noSessArr.push({ id: student.id, name: student.name })
+        // Ожидающий активации абонемент считаем как "с абонементом" — в "Без занятий" не попадает
+        if ((!sub || sub.sessions_left === 0 || subExpired) && !hasPending) noSessArr.push({ id: student.id, name: student.name })
         // Если нет активного абонемента, но есть pending — добавляем в "ожидают активации"
         const hasActiveSub2 = sub && (sub.sessions_left === null || sub.sessions_left > 0) && (!sub.end_date || sub.end_date >= today)
         if (!hasActiveSub2 && hasPending) pendingReadyArr.push({ id: student.id, name: student.name })
@@ -87,8 +88,10 @@ export default function Home() {
       const activeStudentsArr: { id: string; name: string }[] = []
       for (const student of students) {
         const sub = subMap.get(student.id)
+        const hasPending = pendingMap.has(student.id)
         const hasActiveSub = sub && (sub.sessions_left === null || sub.sessions_left > 0) && (!sub.end_date || sub.end_date >= today)
-        if (hasActiveSub) activeStudentsArr.push({ id: student.id, name: student.name })
+        // Pending-абонемент тоже считаем как "с абонементом"
+        if (hasActiveSub || hasPending) activeStudentsArr.push({ id: student.id, name: student.name })
       }
 
       setTotalStudents(students.length)
