@@ -70,6 +70,7 @@ export default function BroadcastPage() {
   const [history, setHistory] = useState<BroadcastHistory[]>([])
   const [showHistory, setShowHistory] = useState(false)
   const [loadingStudents, setLoadingStudents] = useState(true)
+  const [studentsWithBot, setStudentsWithBot] = useState<Set<string>>(new Set())
 
   // Загрузить всех учеников один раз
   useEffect(() => {
@@ -88,6 +89,12 @@ export default function BroadcastPage() {
     fetch('/api/broadcast')
       .then(r => r.json())
       .then(d => Array.isArray(d) && setHistory(d))
+      .catch(() => {})
+
+    // id учеников «с ботом» (учитывает TG + VK + Макс и контакты-родителей)
+    fetch('/api/broadcast/student-channels')
+      .then(r => r.json())
+      .then(arr => Array.isArray(arr) && setStudentsWithBot(new Set(arr)))
       .catch(() => {})
   }, [])
 
@@ -116,7 +123,7 @@ export default function BroadcastPage() {
     return list
   }, [audience, group, allStudents, selectedIds])
 
-  const withBot = recipients.filter(s => s.telegram_chat_id).length
+  const withBot = recipients.filter(s => studentsWithBot.has(s.id)).length
   const withoutBot = recipients.length - withBot
 
   const showGroupFilter = ['active', 'inactive', 'parents'].includes(audience)
@@ -313,7 +320,7 @@ export default function BroadcastPage() {
                     />
                     <span className="text-sm text-gray-700 flex-1">{s.name}</span>
                     <span className="text-xs text-gray-400">{s.group_name || '—'}</span>
-                    <span className="text-xs">{s.telegram_chat_id ? '🟢' : '⚫'}</span>
+                    <span className="text-xs">{studentsWithBot.has(s.id) ? '🟢' : '⚫'}</span>
                   </label>
                 ))
               )}
@@ -329,7 +336,7 @@ export default function BroadcastPage() {
             <div className="max-h-52 overflow-y-auto divide-y divide-gray-50">
               {recipients.map(s => (
                 <div key={s.id} className="flex items-center gap-3 px-4 py-2">
-                  <span className="text-xs">{s.telegram_chat_id ? '🟢' : '⚫'}</span>
+                  <span className="text-xs">{studentsWithBot.has(s.id) ? '🟢' : '⚫'}</span>
                   <span className="text-sm text-gray-700 flex-1">{s.name}</span>
                   <span className="text-xs text-gray-400">{s.group_name || '—'}</span>
                 </div>
