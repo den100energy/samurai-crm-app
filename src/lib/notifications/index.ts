@@ -23,19 +23,30 @@ const adapters: Record<Provider, (chatId: string, text: string) => Promise<boole
 // Отправить сообщение пользователю через все его привязанные каналы.
 // Возвращает true если хотя бы один канал был найден и отправка выполнена.
 export async function sendToUser(userId: string, userType: UserType, text: string): Promise<boolean> {
-  const { data: channels } = await admin
+  const { data: channels, error } = await admin
     .from('user_channels')
     .select('provider, chat_id')
     .eq('user_id', userId)
     .eq('user_type', userType)
 
-  if (!channels?.length) return false
+  if (error) {
+    console.error('[sendToUser] query error:', error.message)
+    return false
+  }
+  if (!channels?.length) {
+    console.log('[sendToUser] no channels for', userType, userId)
+    return false
+  }
+
+  console.log('[sendToUser] found', channels.length, 'channels for', userType, userId, ':',
+    channels.map(c => `${c.provider}:${c.chat_id}`).join(','))
 
   let anySent = false
   for (const ch of channels) {
     const adapter = adapters[ch.provider as Provider]
     if (!adapter) continue
     const ok = await adapter(ch.chat_id, text)
+    console.log('[sendToUser]', ch.provider, 'send →', ok ? 'OK' : 'FAIL')
     if (ok) anySent = true
   }
   return anySent
