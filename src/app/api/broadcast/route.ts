@@ -31,14 +31,14 @@ export async function POST(req: NextRequest) {
     if (ids.length > 0) {
       const { data: contacts } = await admin
         .from('student_contacts')
-        .select('id, telegram_chat_id, contact_name')
+        .select('id, telegram_chat_id, name')
         .in('student_id', ids)
 
       for (const c of contacts || []) {
         recipients.push({
           user_id: c.id,
           user_type: 'contact',
-          display_name: c.contact_name || 'Родитель',
+          display_name: c.name || 'Родитель',
           fallback_chat_id: c.telegram_chat_id,
         })
       }
@@ -82,13 +82,13 @@ export async function POST(req: NextRequest) {
     if (studIds.length > 0) {
       const { data: contacts } = await admin
         .from('student_contacts')
-        .select('id, student_id, telegram_chat_id, contact_name')
+        .select('id, student_id, telegram_chat_id, name')
         .in('student_id', studIds)
       for (const c of contacts || []) {
         recipients.push({
           user_id: c.id,
           user_type: 'contact',
-          display_name: c.contact_name || 'Родитель',
+          display_name: c.name || 'Родитель',
           fallback_chat_id: c.telegram_chat_id,
         })
       }
