@@ -1,7 +1,7 @@
 # Омниканальные уведомления: Telegram + VK + Макс
 
-> Статус: 🟢 Этап 1 готов в коде, ожидает применения миграции в Supabase
-> Последнее обновление: 2026-04-20
+> Статус: 🟢 Этап 1 и 2 (VK) завершены и протестированы в проде. Этап 3 (Макс) ждёт регистрации бота
+> Последнее обновление: 2026-04-21
 
 ## Зачем это нужно
 
@@ -128,58 +128,61 @@ src/lib/notifications/
 ---
 
 ### ЭТАП 2 — ВКонтакте
-**Статус: ⬜ Не начат**
-**Предварительно: зарегистрировать бота в VK**
+**Статус: 🟢 Готово, протестировано в проде 2026-04-21**
 
-#### Что нужно сделать вручную перед кодом:
-- [ ] Создать/использовать существующее сообщество VK школы
-- [ ] В настройках сообщества: Сообщения → Включить
-- [ ] Настройки → Работа с API → Ключи доступа → Создать ключ с правами на сообщения
-- [ ] Настройки → Работа с API → Callback API:
-  - Указать URL: `https://crm.samurai.school/api/vk`
-  - Сохранить строку подтверждения (`VK_CONFIRMATION_CODE`)
-- [ ] Включить события: `message_new`
-- [ ] Получить `VK_GROUP_TOKEN` и `VK_GROUP_ID`
+#### Настройка сообщества VK (сделано):
+- [x] Сообщество клуба с включёнными сообщениями
+- [x] Callback API → URL `https://crm.samu-rai.ru/api/vk` (ВАЖНО: домен `crm.samu-rai.ru`, не корень)
+- [x] Секретный ключ (`VK_CONFIRMATION_CODE`) + строка подтверждения
+- [x] События: `message_new`
+- [x] `VK_GROUP_TOKEN` (права «Сообщения сообщества») и `VK_GROUP_ID` = 19630823
 
-#### Код:
+#### Код (сделано):
 
-**Шаг 2.1 — Реализовать VkAdapter**
-- [ ] Заполнить `src/lib/notifications/adapters/vk.ts`
-- [ ] Использовать `messages.send` через fetch (не vk-io, чтобы не тянуть зависимость)
-- [ ] VK не поддерживает HTML-теги → стриппить или заменять на plain text
+**Шаг 2.1 — VkAdapter** — `src/lib/notifications/adapters/vk.ts`
+- [x] `messages.send` через fetch, plain text (VK не любит HTML)
+- [x] Логирование ошибок API: `console.error('[vk] API error: ...')` — оставлено на будущее
 
-**Шаг 2.2 — Создать VK webhook**
-- [ ] Создать `src/app/api/vk/route.ts`
-- [ ] Обработать подтверждение (VK шлёт GET/POST с type=confirmation → ответить строкой)
-- [ ] Обработать `message_new`:
-  - Извлечь `ref` из payload (инвайт-токен)
-  - Найти запись по токену в students/leads/contacts
-  - Записать `vk_user_id` в `user_channels`
-  - Ответить приветственным сообщением
+**Шаг 2.2 — VK webhook** — `src/app/api/vk/route.ts`
+- [x] Подтверждение (type=confirmation → отдаём VK_CONFIRMATION_CODE)
+- [x] Поиск токена: сначала `ref`, потом `payload`, потом `/start TOKEN` в тексте
+  (VK присылает `ref` только в первом сообщении)
+- [x] Перебор lead → student → contact → trainer
+- [x] `linkUserChannel()` и приветствие
 
-**Шаг 2.3 — Добавить env-переменные**
+**Шаг 2.3 — Env-переменные** (в `.env.local` на Beget):
 ```
-VK_GROUP_TOKEN=
-VK_GROUP_ID=
-VK_CONFIRMATION_CODE=
+VK_GROUP_TOKEN=<ключ сообщества>
+VK_GROUP_ID=19630823
+VK_CONFIRMATION_CODE=<строка подтверждения>
 ```
 
-**Шаг 2.4 — Обновить страницу /invite/[token]**
-- [ ] Кнопка VK становится активной с реальной ссылкой
+**Шаг 2.4 — Страница `/invite/[token]`** — кнопка VK активна с ref-ссылкой.
 
 #### Формат invite-ссылки VK:
-`https://vk.com/im?sel=-{GROUP_ID}&ref={TOKEN}`
-или через короткий адрес сообщества: `https://vk.me/{club_short_name}?ref={TOKEN}`
+`https://vk.com/club19630823?ref={TOKEN}` (используется `vk.com/club<ID>`, не `vk.me`)
 
 > ⚠️ VK-бот не может написать первым. Клиент должен сам написать в группу по ссылке.
 > После первого сообщения webhook получает ref и привязывает аккаунт.
 
-**Шаг 2.5 — Проверка Этапа 2**
-- [ ] Ученик открывает `/invite/TOKEN`, нажимает «ВКонтакте»
-- [ ] Переходит в VK, пишет боту любое сообщение
-- [ ] Webhook получает сообщение, извлекает TOKEN из ref, записывает в user_channels
-- [ ] Ученик получает приветствие
-- [ ] Запустить рассылку — ученик с VK получает в VK
+**Шаг 2.5 — UI-интеграция (добавлено по фидбеку):**
+- [x] Счётчик «с ботом / без» в рассылке учитывает user_channels, а не только `telegram_chat_id`.
+  Новый эндпоинт: `src/app/api/broadcast/student-channels/route.ts`
+- [x] Универсальный эндпоинт для чтения `user_channels` с service_role: `src/app/api/user-channels/route.ts`
+  (RLS не даёт клиенту читать напрямую)
+- [x] Карточка ученика `src/app/students/[id]/page.tsx`: бейджи TG/VK/Макс для каждого контакта
+  и для самого ученика (вместо отдельной кнопки «Подключить Telegram»)
+
+#### Подводные камни, на которых потеряли время:
+1. **Домен в URL Callback API**: указали `samu-rai.ru` (старый Bitrix) вместо `crm.samu-rai.ru` → webhook не доходил
+2. **VK_CONFIRMATION_CODE меняется при смене URL** — VK генерирует новый код, старый перестаёт работать
+3. **Пустой токен** (placeholder `"здесь ключ сообщества"`) → VK API ошибка 5 «invalid access_token»
+4. **Миграция применялась в Supabase Cloud, а прод — self-hosted на Beget**. После применения нужно:
+   ```bash
+   docker exec -i <supabase-db-container> psql -U postgres -d postgres < user-channels-migration.sql
+   docker exec -i <supabase-db-container> psql -U postgres -d postgres -c "NOTIFY pgrst, 'reload schema';"
+   ```
+5. **broadcast возвращал 0 получателей** для «Родители»: SQL запрашивал `contact_name`, а колонка называется `name` — PostgREST молча отдавал `null`
 
 ---
 

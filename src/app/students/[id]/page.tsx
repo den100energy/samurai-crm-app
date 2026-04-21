@@ -248,6 +248,7 @@ export default function StudentPage() {
   const [bulkSaving, setBulkSaving] = useState(false)
   const [bulkMonth, setBulkMonth] = useState(() => { const n = new Date(); return { year: n.getFullYear(), month: n.getMonth() } })
   const [contacts, setContacts] = useState<Contact[]>([])
+  const [channels, setChannels] = useState<Record<string, string[]>>({})
   const [showAddContact, setShowAddContact] = useState(false)
   const [contactForm, setContactForm] = useState({ name: '', role: 'мама', phone: '' })
   const [editingContactId, setEditingContactId] = useState<string | null>(null)
@@ -380,6 +381,15 @@ export default function StudentPage() {
     }
     load()
   }, [id])
+
+  useEffect(() => {
+    const ids = [id, ...contacts.map(c => c.id)].filter(Boolean)
+    if (ids.length === 0) return
+    fetch(`/api/user-channels?user_ids=${ids.join(',')}`)
+      .then(r => r.ok ? r.json() : {})
+      .then(setChannels)
+      .catch(() => {})
+  }, [id, contacts])
 
   async function saveStudent() {
     setSaving(true)
@@ -2119,10 +2129,19 @@ export default function StudentPage() {
                       <div className="flex items-center gap-2">
                         <span className="font-medium text-sm text-gray-800">{c.name}</span>
                         <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">{c.role}</span>
-                        {c.telegram_chat_id
-                          ? <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">✓ Telegram</span>
-                          : <span className="text-xs bg-gray-100 text-gray-400 px-2 py-0.5 rounded-full">Нет Telegram</span>
-                        }
+                        {(() => {
+                          const hasTG = !!c.telegram_chat_id || (channels[c.id] || []).includes('telegram')
+                          const hasVK = (channels[c.id] || []).includes('vk')
+                          const hasMax = (channels[c.id] || []).includes('max')
+                          if (!hasTG && !hasVK && !hasMax) {
+                            return <span className="text-xs bg-gray-100 text-gray-400 px-2 py-0.5 rounded-full">Нет бота</span>
+                          }
+                          return <>
+                            {hasTG && <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">✓ Telegram</span>}
+                            {hasVK && <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">✓ VK</span>}
+                            {hasMax && <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full">✓ Макс</span>}
+                          </>
+                        })()}
                       </div>
                       <div className="flex items-center gap-2">
                         <button onClick={() => startEditContact(c)} className="text-gray-300 hover:text-blue-400 text-sm" title="Редактировать">✎</button>
@@ -2169,17 +2188,32 @@ export default function StudentPage() {
         </div>
       )}
 
-      {/* Telegram ученика */}
-      <div className="flex gap-2 mb-4">
-        <button onClick={copyStudentTelegramLink}
-          className={`flex-1 text-sm py-2.5 rounded-xl border flex items-center justify-center gap-2
-            ${student.telegram_chat_id
-              ? 'border-green-200 bg-green-50 text-green-700'
-              : 'border-blue-200 bg-blue-50 text-blue-700'
-            }`}>
-          {student.telegram_chat_id ? '✓ Telegram подключён' : '📱 Подключить Telegram ученика'}
-        </button>
-      </div>
+      {/* Мессенджеры ученика */}
+      {(() => {
+        const hasTG = !!student.telegram_chat_id || (channels[student.id] || []).includes('telegram')
+        const hasVK = (channels[student.id] || []).includes('vk')
+        const hasMax = (channels[student.id] || []).includes('max')
+        const anyConnected = hasTG || hasVK || hasMax
+        return (
+          <div className="mb-4">
+            <button onClick={copyStudentTelegramLink}
+              className={`w-full text-sm py-2.5 rounded-xl border flex items-center justify-center gap-2
+                ${anyConnected
+                  ? 'border-green-200 bg-green-50 text-green-700'
+                  : 'border-blue-200 bg-blue-50 text-blue-700'
+                }`}>
+              {anyConnected
+                ? <>
+                    <span>✓ Подключено:</span>
+                    {hasTG && <span className="text-xs bg-green-100 px-2 py-0.5 rounded-full">Telegram</span>}
+                    {hasVK && <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">VK</span>}
+                    {hasMax && <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full">Макс</span>}
+                  </>
+                : '📱 Подключить мессенджер ученика'}
+            </button>
+          </div>
+        )
+      })()}
 
       {survey?.filled_at && (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm mb-2">
