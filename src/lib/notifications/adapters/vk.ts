@@ -18,7 +18,10 @@ function stripHtml(html: string): string {
 
 export async function sendVkMessage(userId: string, text: string): Promise<boolean> {
   const token = process.env.VK_GROUP_TOKEN
-  if (!token) return false
+  if (!token) {
+    console.error('[vk] VK_GROUP_TOKEN not set')
+    return false
+  }
 
   try {
     const res = await fetch('https://api.vk.com/method/messages.send', {
@@ -33,8 +36,13 @@ export async function sendVkMessage(userId: string, text: string): Promise<boole
       }),
     })
     const json = await res.json()
-    return !json.error
-  } catch {
+    if (json.error) {
+      console.error('[vk] API error:', json.error.error_code, json.error.error_msg)
+      return false
+    }
+    return true
+  } catch (e) {
+    console.error('[vk] fetch failed:', e)
     return false
   }
 }
