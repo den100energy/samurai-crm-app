@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { linkUserChannel } from '@/lib/notifications'
 
 const CLIENT_BOT_TOKEN = process.env.TELEGRAM_CLIENT_BOT_TOKEN!
 const FINANCE_CHAT_ID = process.env.TELEGRAM_FINANCE_CHAT_ID || ''
@@ -273,6 +274,7 @@ export async function POST(req: NextRequest) {
     const { data: lead } = await supabase.from('leads').select('id, full_name').eq('invite_token', token).single()
     if (lead) {
       await supabase.from('leads').update({ telegram_chat_id: chat_id }).eq('id', lead.id)
+      await linkUserChannel(lead.id, 'lead', 'telegram', chat_id)
       await sendMessage(chat_id,
         `Привет, ${firstName}! 👋\n\nВы успешно подключены к карточке <b>${lead.full_name}</b>.\n\nТеперь вы будете получать уведомления о занятиях, абонементе и программах развития.`
       )
@@ -283,6 +285,7 @@ export async function POST(req: NextRequest) {
       .from('students').select('id, name, cabinet_token').eq('invite_token', token).single()
     if (student) {
       await supabase.from('students').update({ telegram_chat_id: chat_id }).eq('id', student.id)
+      await linkUserChannel(student.id, 'student', 'telegram', chat_id)
       const markup = student.cabinet_token
         ? cabinetButton(`${appUrl}/cabinet/${student.cabinet_token}`)
         : undefined
@@ -297,6 +300,7 @@ export async function POST(req: NextRequest) {
       .from('student_contacts').select('id, name, student_id, students(name, cabinet_token)').eq('invite_token', token).single()
     if (contact) {
       await supabase.from('student_contacts').update({ telegram_chat_id: chat_id }).eq('id', contact.id)
+      await linkUserChannel(contact.id, 'contact', 'telegram', chat_id)
       const s = (contact.students as any)
       const studentName = s?.name || 'ученика'
       const markup = s?.cabinet_token
@@ -317,6 +321,7 @@ export async function POST(req: NextRequest) {
         await supabase.from('trainers')
           .update({ telegram_chat_id: chat_id, telegram_invite_token: null })
           .eq('id', trainer.id)
+        await linkUserChannel(trainer.id, 'trainer', 'telegram', chat_id)
         await sendMessage(chat_id,
           `Привет, ${firstName}! 👋\n\nTelegram успешно привязан к профилю тренера <b>${trainer.name}</b>.\n\nТеперь вы будете получать уведомления о пропущенных отметках посещаемости. 🥋`,
           cabinetButton(`${appUrl}/trainer`, '🎒 Открыть кабинет тренера')

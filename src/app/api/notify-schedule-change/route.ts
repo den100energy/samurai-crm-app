@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { sendToUser } from '@/lib/notifications'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -38,27 +39,22 @@ export async function POST(req: NextRequest) {
 
   if (!override) return NextResponse.json({ error: 'Override not found' }, { status: 404 })
 
-  // Find all active students in the group with telegram_chat_id
   const { data: students } = await supabase
     .from('students')
     .select('id, name, telegram_chat_id')
     .eq('group_name', override.group_name)
     .eq('status', 'active')
-    .not('telegram_chat_id', 'is', null)
 
-  // Find contacts (parents) of students in this group
   const studentIds = (students || []).map(s => s.id)
-  let contacts: { telegram_chat_id: string }[] = []
+  let contacts: { id: string; telegram_chat_id: string | null }[] = []
   if (studentIds.length > 0) {
     const { data: c } = await supabase
       .from('student_contacts')
-      .select('telegram_chat_id')
+      .select('id, telegram_chat_id')
       .in('student_id', studentIds)
-      .not('telegram_chat_id', 'is', null)
     contacts = c || []
   }
 
-  // Build message
   const dateFormatted = formatDate(override.date)
   let text = `📅 <b>Изменение расписания</b>\n\n`
   text += `Группа: <b>${override.group_name}</b>\n`
@@ -72,25 +68,37 @@ export async function POST(req: NextRequest) {
     text += `\n💬 ${override.note}`
   }
 
-  // Collect unique chat IDs (students + parents)
-  const chatIds = new Set<string>()
-  ;(students || []).forEach(s => { if (s.telegram_chat_id) chatIds.add(s.telegram_chat_id) })
-  contacts.forEach(c => { if (c.telegram_chat_id) chatIds.add(c.telegram_chat_id) })
+  // Отправка через NotificationService с fallback на старый telegram_chat_id
+  const fallbackChatIds = new Set<string>()
+  let sentCount = 0
 
-  // Всегда дублируем в админский чат
+  for (const s of students || []) {
+    const sent = await sendToUser(s.id, 'student', text)
+    if (sent) sentCount++
+    else if (s.telegram_chat_id) fallbackChatIds.add(s.telegram_chat_id)
+  }
+
+  for (const c of contacts) {
+    const sent = await sendToUser(c.id, 'contact', text)
+    if (sent) sentCount++
+    else if (c.telegram_chat_id) fallbackChatIds.add(c.telegram_chat_id)
+  }
+
+  for (const chatId of fallbackChatIds) {
+    await sendTelegram(chatId, text)
+    sentCount++
+  }
+
   const adminChatId = process.env.ADMIN_CHAT_ID
-  const adminText = `📅 <b>Изменение расписания отправлено ученикам</b>\n\nГруппа: <b>${override.group_name}</b>\nДата: ${formatDate(override.date)}\n${override.cancelled ? '❌ Тренировка отменена' : override.trainer_name ? `Тренер: ${override.trainer_name}` : ''}\nОтправлено: ${chatIds.size} чел.`
+  if (adminChatId) {
+    const adminText = `📅 <b>Изменение расписания отправлено ученикам</b>\n\nГруппа: <b>${override.group_name}</b>\nДата: ${formatDate(override.date)}\n${override.cancelled ? '❌ Тренировка отменена' : override.trainer_name ? `Тренер: ${override.trainer_name}` : ''}\nОтправлено: ${sentCount} чел.`
+    await sendTelegram(adminChatId, adminText)
+  }
 
-  await Promise.all([
-    ...[...chatIds].map(chatId => sendTelegram(chatId, text)),
-    adminChatId ? sendTelegram(adminChatId, adminText) : Promise.resolve(),
-  ])
-
-  // Mark as notified
   await supabase
     .from('schedule_overrides')
     .update({ notified_at: new Date().toISOString() })
     .eq('id', override_id)
 
-  return NextResponse.json({ sent: chatIds.size })
+  return NextResponse.json({ sent: sentCount })
 }

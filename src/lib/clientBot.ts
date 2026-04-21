@@ -12,8 +12,14 @@ export async function sendClientMessage(chat_id: number | string, text: string) 
   return res.json()
 }
 
-// Генерирует ссылку-приглашение для родителя
+// Генерирует универсальную ссылку-приглашение — ведёт на страницу выбора мессенджера
 export function getInviteLink(token: string) {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || ''
+  return `${appUrl}/invite/${token}`
+}
+
+// Прямая Telegram-ссылка (используется на странице выбора мессенджера)
+export function getTelegramInviteLink(token: string) {
   return `https://t.me/${CLIENT_BOT_USERNAME}?start=${token}`
 }
 

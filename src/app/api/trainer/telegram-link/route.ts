@@ -31,8 +31,8 @@ export async function POST() {
 
   await admin.from('trainers').update({ telegram_invite_token: token }).eq('id', trainer.id)
 
-  const botUsername = process.env.TELEGRAM_CLIENT_BOT_USERNAME || process.env.NEXT_PUBLIC_TELEGRAM_CLIENT_BOT_USERNAME || ''
-  const link = `https://t.me/${botUsername}?start=${token}`
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || ''
+  const link = `${appUrl}/invite/${token}`
 
   return NextResponse.json({ link, already_linked: !!trainer.telegram_chat_id })
 }

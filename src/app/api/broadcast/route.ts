@@ -1,13 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { sendClientMessage } from '@/lib/clientBot'
+import { sendToUser, UserType } from '@/lib/notifications'
 
 const admin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-type Recipient = { name: string; chat_ids: (number | string)[] }
+// Получатель = одна сущность БД (ученик или контакт), с её user_type, id и старым telegram_chat_id для fallback
+type Recipient = {
+  user_id: string
+  user_type: UserType
+  display_name: string
+  fallback_chat_id: number | string | null
+}
 
 export async function POST(req: NextRequest) {
   const { audience, group, student_ids, text } = await req.json()
@@ -16,8 +23,7 @@ export async function POST(req: NextRequest) {
   const recipients: Recipient[] = []
 
   if (audience === 'parents') {
-    // Только родительские контакты активных учеников — дедупликация по chat_id
-    let sq = admin.from('students').select('id, name').eq('status', 'active')
+    let sq = admin.from('students').select('id').eq('status', 'active')
     if (group && group !== 'Все') sq = sq.eq('group_name', group)
     const { data: studs } = await sq
 
@@ -25,23 +31,19 @@ export async function POST(req: NextRequest) {
     if (ids.length > 0) {
       const { data: contacts } = await admin
         .from('student_contacts')
-        .select('telegram_chat_id, student_id, contact_name')
+        .select('id, telegram_chat_id, contact_name')
         .in('student_id', ids)
-        .not('telegram_chat_id', 'is', null)
 
-      // Дедупликация: один chat_id — одно сообщение
-      const seen = new Set<string | number>()
       for (const c of contacts || []) {
-        if (!c.telegram_chat_id || seen.has(c.telegram_chat_id)) continue
-        seen.add(c.telegram_chat_id)
         recipients.push({
-          name: c.contact_name || 'Родитель',
-          chat_ids: [c.telegram_chat_id],
+          user_id: c.id,
+          user_type: 'contact',
+          display_name: c.contact_name || 'Родитель',
+          fallback_chat_id: c.telegram_chat_id,
         })
       }
     }
   } else {
-    // Ученики: active / inactive / expiring / manual
     let q = admin.from('students').select('id, name, telegram_chat_id, status')
 
     if (audience === 'active') {
@@ -64,53 +66,60 @@ export async function POST(req: NextRequest) {
     }
 
     const { data: studs } = await q.order('name')
-
-    // Родительские контакты (дополнительные получатели)
     const studIds = (studs || []).map(s => s.id)
-    let contactMap = new Map<string, (number | string)[]>()
+
+    // Сам ученик
+    for (const s of studs || []) {
+      recipients.push({
+        user_id: s.id,
+        user_type: 'student',
+        display_name: s.name,
+        fallback_chat_id: s.telegram_chat_id,
+      })
+    }
+
+    // Контакты учеников (могут быть несколько контактов на ученика)
     if (studIds.length > 0) {
       const { data: contacts } = await admin
         .from('student_contacts')
-        .select('student_id, telegram_chat_id')
+        .select('id, student_id, telegram_chat_id, contact_name')
         .in('student_id', studIds)
-        .not('telegram_chat_id', 'is', null)
       for (const c of contacts || []) {
-        if (!c.telegram_chat_id) continue
-        const arr = contactMap.get(c.student_id) || []
-        arr.push(c.telegram_chat_id)
-        contactMap.set(c.student_id, arr)
+        recipients.push({
+          user_id: c.id,
+          user_type: 'contact',
+          display_name: c.contact_name || 'Родитель',
+          fallback_chat_id: c.telegram_chat_id,
+        })
       }
-    }
-
-    for (const s of studs || []) {
-      const chatIds = new Set<number | string>()
-      if (s.telegram_chat_id) chatIds.add(s.telegram_chat_id)
-      for (const cid of contactMap.get(s.id) || []) chatIds.add(cid)
-      recipients.push({ name: s.name, chat_ids: [...chatIds] })
     }
   }
 
-  // Отправка сообщений с персонализацией {имя}
-  // Глобальная дедупликация chat_id — чтобы родитель с двумя детьми не получил дубли
+  // Отправка с персонализацией {имя}.
+  // Дедупликация fallback chat_id (чтобы родитель с двумя детьми не получил дубли в Telegram).
   let sent = 0
   const no_telegram_names: string[] = []
-  const globalSentChatIds = new Set<string | number>()
+  const fallbackSentChatIds = new Set<string | number>()
 
   for (const r of recipients) {
-    if (r.chat_ids.length === 0) {
-      no_telegram_names.push(r.name)
+    const firstName = r.display_name.split(' ').slice(-1)[0]
+    const personalText = text.replace(/\{имя\}/gi, firstName)
+
+    const sentViaService = await sendToUser(r.user_id, r.user_type, personalText)
+    if (sentViaService) {
+      sent++
       continue
     }
-    const firstName = r.name.split(' ').slice(-1)[0] // последнее слово = имя (Иванов Иван → Иван)
-    const personalText = text.replace(/\{имя\}/gi, firstName)
-    let sentForRecipient = false
-    for (const chat_id of r.chat_ids) {
-      if (globalSentChatIds.has(chat_id)) continue
-      globalSentChatIds.add(chat_id)
-      await sendClientMessage(chat_id, personalText)
-      sentForRecipient = true
+
+    if (r.fallback_chat_id) {
+      if (!fallbackSentChatIds.has(r.fallback_chat_id)) {
+        fallbackSentChatIds.add(r.fallback_chat_id)
+        await sendClientMessage(r.fallback_chat_id, personalText)
+        sent++
+      }
+    } else {
+      no_telegram_names.push(r.display_name)
     }
-    if (sentForRecipient) sent++
   }
 
   const no_telegram = no_telegram_names.length

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { sendToUser } from '@/lib/notifications'
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN!
 const OWNER_CHAT_ID = process.env.FOUNDER_TELEGRAM_CHAT_ID || process.env.TELEGRAM_OWNER_CHAT_ID!
@@ -104,25 +105,29 @@ export async function GET(req: NextRequest) {
     if (!firstVisitMap.has(a.student_id)) firstVisitMap.set(a.student_id, a.date)
   }
 
-  // Контакты (родители) для Telegram-уведомлений
+  // Контакты (родители) — нужны и для NotificationService (по contact.id), и для fallback (по chat_id)
   const { data: contacts } = await admin
     .from('student_contacts')
-    .select('student_id, telegram_chat_id')
+    .select('id, student_id, telegram_chat_id')
     .in('student_id', studentIds)
-    .not('telegram_chat_id', 'is', null)
 
-  const parentIds = new Map<string, number[]>()
+  const parentContacts = new Map<string, { id: string; telegram_chat_id: number | null }[]>()
   for (const c of (contacts || [])) {
-    if (!parentIds.has(c.student_id)) parentIds.set(c.student_id, [])
-    parentIds.get(c.student_id)!.push(c.telegram_chat_id)
+    if (!parentContacts.has(c.student_id)) parentContacts.set(c.student_id, [])
+    parentContacts.get(c.student_id)!.push({ id: c.id, telegram_chat_id: c.telegram_chat_id })
   }
 
+  // Отправляет родителям и самому ученику. Сначала через user_channels, затем fallback на старый telegram_chat_id.
   async function notifyParents(studentId: string, text: string) {
-    const ids = parentIds.get(studentId) ?? []
-    for (const chatId of ids) await tgSend(chatId, text)
-    // Также самому ученику, если есть
     const student = students!.find(s => s.id === studentId)
-    if (student?.telegram_chat_id) await tgSend(student.telegram_chat_id, text)
+    if (student) {
+      const sent = await sendToUser(student.id, 'student', text)
+      if (!sent && student.telegram_chat_id) await tgSend(student.telegram_chat_id, text)
+    }
+    for (const c of parentContacts.get(studentId) ?? []) {
+      const sent = await sendToUser(c.id, 'contact', text)
+      if (!sent && c.telegram_chat_id) await tgSend(c.telegram_chat_id, text)
+    }
   }
 
   let actions = 0

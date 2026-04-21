@@ -763,8 +763,8 @@ export default function StudentPage() {
   }
 
   function copyContactInviteLink(contact: Contact) {
-    const botUsername = process.env.NEXT_PUBLIC_TELEGRAM_CLIENT_BOT_USERNAME
-    const link = `https://t.me/${botUsername}?start=${contact.invite_token}`
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || window.location.origin
+    const link = `${appUrl}/invite/${contact.invite_token}`
     navigator.clipboard.writeText(link)
     alert(`Ссылка для ${contact.name} скопирована!\n\n${link}`)
   }
@@ -957,10 +957,10 @@ export default function StudentPage() {
 
   function copyStudentTelegramLink() {
     if (!student?.invite_token) return alert('Токен не найден')
-    const botUsername = process.env.NEXT_PUBLIC_TELEGRAM_CLIENT_BOT_USERNAME
-    const link = `https://t.me/${botUsername}?start=${student.invite_token}`
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || window.location.origin
+    const link = `${appUrl}/invite/${student.invite_token}`
     navigator.clipboard.writeText(link)
-    alert(`Ссылка скопирована!\n\nОтправьте ученику:\n${link}\n\nПосле нажатия Telegram-бот автоматически привяжет его аккаунт.`)
+    alert(`Ссылка скопирована!\n\nОтправьте ученику:\n${link}\n\nОн сможет выбрать удобный мессенджер для получения уведомлений.`)
   }
 
   function openWhatsApp() {

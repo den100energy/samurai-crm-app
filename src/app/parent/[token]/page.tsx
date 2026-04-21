@@ -552,7 +552,7 @@ export default function ParentPage() {
                       .map(c => (
                         <a
                           key={c.id}
-                          href={`https://t.me/${process.env.NEXT_PUBLIC_TELEGRAM_CLIENT_BOT_USERNAME}?start=${c.invite_token}`}
+                          href={`/invite/${c.invite_token}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="flex items-center justify-between bg-white border border-sky-200 hover:bg-sky-50 rounded-xl px-3 py-2 text-sm"

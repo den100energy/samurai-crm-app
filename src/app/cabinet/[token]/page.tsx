@@ -813,12 +813,12 @@ export default function CabinetPage() {
                 </div>
                 <div className="flex gap-2 flex-wrap">
                   <a
-                    href={`https://t.me/${process.env.NEXT_PUBLIC_TELEGRAM_CLIENT_BOT_USERNAME}?start=${student.invite_token}`}
+                    href={`/invite/${student.invite_token}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-1.5 bg-sky-500 hover:bg-sky-600 text-white text-sm font-medium px-4 py-2 rounded-xl"
                   >
-                    Подключить Telegram
+                    Подключить уведомления
                   </a>
                   <button
                     onClick={dismissTgBanner}

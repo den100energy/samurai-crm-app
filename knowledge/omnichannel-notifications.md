@@ -1,6 +1,6 @@
 # Омниканальные уведомления: Telegram + VK + Макс
 
-> Статус: 🟡 Планирование
+> Статус: 🟢 Этап 1 готов в коде, ожидает применения миграции в Supabase
 > Последнее обновление: 2026-04-20
 
 ## Зачем это нужно
@@ -81,56 +81,49 @@ src/lib/notifications/
 ---
 
 ### ЭТАП 1 — Фундамент (не зависит от ботов)
-**Статус: ⬜ Не начат**
-
-Этот этап можно делать до регистрации ботов VK и Макс.
+**Статус: 🟢 Код готов, нужно применить миграцию в Supabase и протестировать**
 
 **Шаг 1.1 — БД: создать таблицу user_channels**
-- [ ] Выполнить SQL миграцию в Supabase (SQL выше)
-- [ ] Проверить что таблица появилась
+- [x] SQL-файл создан: `user-channels-migration.sql` (корень проекта)
+- [ ] **TODO:** запустить файл в Supabase SQL Editor
 
 **Шаг 1.2 — Адаптеры: создать notification service**
-- [ ] Создать `src/lib/notifications/adapters/telegram.ts`
-- [ ] Создать `src/lib/notifications/adapters/vk.ts` (заглушка — логика позже)
-- [ ] Создать `src/lib/notifications/adapters/max.ts` (заглушка — логика позже)
-- [ ] Создать `src/lib/notifications/index.ts` с `sendToUser()`
+- [x] `src/lib/notifications/adapters/telegram.ts`
+- [x] `src/lib/notifications/adapters/vk.ts` (готов, требует VK_GROUP_TOKEN)
+- [x] `src/lib/notifications/adapters/max.ts` (готов, требует MAX_BOT_TOKEN)
+- [x] `src/lib/notifications/index.ts` — `sendToUser`, `linkUserChannel`, `sendDirect`
 
 **Шаг 1.3 — Страница выбора мессенджера**
-- [ ] Создать `src/app/invite/[token]/page.tsx`
-- [ ] Дизайн: тёмный фон, оранжевые кнопки, адаптивная вёрстка
-- [ ] Кнопка Telegram — рабочая (ссылка уже известна)
-- [ ] Кнопки VK и Макс — серые с надписью "Скоро" пока боты не зарегистрированы
+- [x] `src/app/invite/[token]/page.tsx`
+- [x] Кнопка Telegram активна, VK/Макс — «Скоро» пока нет env-переменных
 
 **Шаг 1.4 — Обновить getInviteLink**
-- [ ] В `src/lib/clientBot.ts` изменить `getInviteLink(token)`:
-  - Было: `https://t.me/${BOT_USERNAME}?start=${token}`
-  - Стало: `${APP_URL}/invite/${token}`
-- [ ] Проверить что все места где вызывается `getInviteLink` корректно работают
+- [x] `src/lib/clientBot.ts` — `getInviteLink` теперь возвращает `/invite/TOKEN`
+- [x] Обновлены 4 места с прямыми Telegram-ссылками:
+  - `src/app/students/[id]/page.tsx` (copyContactInviteLink, copyStudentTelegramLink)
+  - `src/app/cabinet/[token]/page.tsx` (баннер «Подключить уведомления»)
+  - `src/app/parent/[token]/page.tsx` (кнопки контактов)
+  - `src/app/api/trainer/telegram-link/route.ts` (ссылка для тренера)
 
 **Шаг 1.5 — Fallback-логика в notification-роутах**
-- [ ] Обновить `src/app/api/broadcast/route.ts`
-- [ ] Обновить `src/app/api/notify-event/route.ts`
-- [ ] Обновить `src/app/api/notify-schedule-change/route.ts`
-- [ ] Обновить `src/app/api/cron/lifecycle-touchpoints/route.ts`
-- [ ] Обновить `src/app/api/auto-send-survey/route.ts`
-
-Паттерн для каждого роута:
-```typescript
-// Было:
-if (student.telegram_chat_id) await sendClientMessage(student.telegram_chat_id, text)
-
-// Стало:
-const sent = await sendToUser(student.id, 'student', text)
-if (!sent && student.telegram_chat_id) await sendClientMessage(student.telegram_chat_id, text)
-```
+- [x] `src/app/api/broadcast/route.ts` (переписан под Recipient с user_id/user_type)
+- [x] `src/app/api/notify-event/route.ts`
+- [x] `src/app/api/notify-schedule-change/route.ts`
+- [x] `src/app/api/cron/lifecycle-touchpoints/route.ts`
+- [x] `src/app/api/auto-send-survey/route.ts`
 
 **Шаг 1.6 — Обновить Telegram webhook**
-- [ ] В `/api/telegram/route.ts` при успешной привязке через /start TOKEN — дополнительно записать в `user_channels`
+- [x] `/api/telegram/route.ts` — при привязке `/start TOKEN` теперь вызывается `linkUserChannel`
+  для всех 4 типов: lead, student, contact, trainer
 
-**Шаг 1.7 — Проверка Этапа 1**
-- [ ] Старый ученик с telegram_chat_id получает уведомления (fallback работает)
-- [ ] Новый ученик: открывает `/invite/TOKEN`, нажимает Telegram → бот привязывается → запись в user_channels
-- [ ] Уведомления идут через user_channels, а не напрямую
+**Шаг 1.7 — TypeScript-проверка**
+- [x] `npx tsc --noEmit` проходит без ошибок
+
+**Шаг 1.8 — Ручная проверка после миграции (TODO)**
+- [ ] Применить SQL-миграцию в Supabase
+- [ ] Открыть `/invite/TOKEN` существующего ученика → видны 3 кнопки
+- [ ] Нажать «Telegram» → бот привязывает → проверить запись в user_channels
+- [ ] Запустить `/api/notify-event` или `/api/broadcast` — старый ученик получает через fallback, новый через user_channels
 
 ---
 

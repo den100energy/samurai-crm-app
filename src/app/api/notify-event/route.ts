@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { sendToUser } from '@/lib/notifications'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -28,12 +29,11 @@ export async function POST(req: NextRequest) {
 
   if (!event) return NextResponse.json({ error: 'Event not found' }, { status: 404 })
 
-  // Find students with telegram_chat_id (filtered by group if restricted)
+  // Find active students (filtered by group if restricted)
   let query = supabase
     .from('students')
     .select('id, name, telegram_chat_id, group_name')
     .eq('status', 'active')
-    .not('telegram_chat_id', 'is', null)
 
   if (event.group_restriction && event.group_restriction.length > 0) {
     query = query.in('group_name', event.group_restriction)
@@ -41,17 +41,14 @@ export async function POST(req: NextRequest) {
 
   const { data: students } = await query
 
-  // Also get contacts with telegram_chat_id
   const studentIds = (students || []).map(s => s.id)
   const { data: contacts } = studentIds.length > 0
     ? await supabase
         .from('student_contacts')
-        .select('telegram_chat_id')
+        .select('id, student_id, telegram_chat_id')
         .in('student_id', studentIds)
-        .not('telegram_chat_id', 'is', null)
     : { data: [] }
 
-  // Build message
   const dateFormatted = new Date(event.date + 'T00:00:00').toLocaleDateString('ru-RU', {
     weekday: 'long', day: 'numeric', month: 'long'
   })
@@ -65,23 +62,32 @@ export async function POST(req: NextRequest) {
   if (event.bonus_type) text += `🎁 Тип: ${event.bonus_type}\n`
   if (event.description) text += `\n${event.description}`
 
-  // Collect unique chat IDs
-  const chatIds = new Set<number>()
+  // Отправляем через NotificationService (новый путь) с fallback на старый telegram_chat_id.
+  // Дедупликация telegram fallback — через Set, чтобы родитель с двумя детьми не получил 2 сообщения.
+  const fallbackChatIds = new Set<number | string>()
+  let sentCount = 0
+
   for (const s of students || []) {
-    if (s.telegram_chat_id) chatIds.add(s.telegram_chat_id)
+    const sent = await sendToUser(s.id, 'student', text)
+    if (sent) sentCount++
+    else if (s.telegram_chat_id) fallbackChatIds.add(s.telegram_chat_id)
   }
+
   for (const c of contacts || []) {
-    if (c.telegram_chat_id) chatIds.add(c.telegram_chat_id)
+    const sent = await sendToUser(c.id, 'contact', text)
+    if (sent) sentCount++
+    else if (c.telegram_chat_id) fallbackChatIds.add(c.telegram_chat_id)
   }
 
-  // Admin chat message
+  for (const chatId of fallbackChatIds) {
+    await sendTelegram(chatId, text)
+    sentCount++
+  }
+
   const adminChatId = process.env.ADMIN_CHAT_ID
-  const adminText = `📨 Уведомление о мероприятии отправлено\n\n${text}\n\n✅ Отправлено: ${chatIds.size} получателей`
+  if (adminChatId) {
+    await sendTelegram(adminChatId, `📨 Уведомление о мероприятии отправлено\n\n${text}\n\n✅ Отправлено: ${sentCount} получателей`)
+  }
 
-  await Promise.all([
-    ...[...chatIds].map(chatId => sendTelegram(chatId, text)),
-    adminChatId ? sendTelegram(adminChatId, adminText) : Promise.resolve(),
-  ])
-
-  return NextResponse.json({ sent: chatIds.size })
+  return NextResponse.json({ sent: sentCount })
 }
