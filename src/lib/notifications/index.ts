@@ -49,7 +49,7 @@ export async function linkUserChannel(
   provider: Provider,
   chatId: string | number,
 ): Promise<void> {
-  await admin.from('user_channels').upsert(
+  const { error } = await admin.from('user_channels').upsert(
     {
       user_id: userId,
       user_type: userType,
@@ -58,6 +58,11 @@ export async function linkUserChannel(
     },
     { onConflict: 'user_id,user_type,provider' },
   )
+  if (error) {
+    console.error('[linkUserChannel] upsert failed:', error.message, error.details, error.hint)
+  } else {
+    console.log('[linkUserChannel] linked', userType, userId, '→', provider, chatId)
+  }
 }
 
 // Получить уникальные chat_id всех указанных получателей для массовых рассылок.
