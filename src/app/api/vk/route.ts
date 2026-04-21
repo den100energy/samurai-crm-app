@@ -51,7 +51,6 @@ export async function POST(req: NextRequest) {
     const fromId = message.from_id
     const text: string = message.text || ''
     if (!fromId) return ok()
-    console.log('[vk] message_new from', fromId, 'text:', text, 'ref:', message.ref)
 
     // Ищем токен в трёх местах:
     //  1) message.ref — приходит когда пользователь перешёл по vk.me/group?ref=TOKEN
@@ -102,13 +101,11 @@ export async function POST(req: NextRequest) {
 async function handleStart(fromId: number, token: string) {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || ''
   const chatId = String(fromId)
-  console.log('[vk] handleStart token:', token)
 
   // Лид
   const { data: lead } = await supabase
     .from('leads').select('id, full_name').eq('invite_token', token).maybeSingle()
   if (lead) {
-    console.log('[vk] matched lead:', lead.id)
     await linkUserChannel(lead.id, 'lead', 'vk', chatId)
     await sendVkMessage(chatId,
       `Привет! Вы успешно подключены к карточке ${lead.full_name}.\n\n` +
@@ -120,7 +117,6 @@ async function handleStart(fromId: number, token: string) {
   const { data: student } = await supabase
     .from('students').select('id, name, cabinet_token').eq('invite_token', token).maybeSingle()
   if (student) {
-    console.log('[vk] matched student:', student.id)
     await linkUserChannel(student.id, 'student', 'vk', chatId)
     const cabinetLine = student.cabinet_token && appUrl
       ? `\n\nЛичный кабинет: ${appUrl}/cabinet/${student.cabinet_token}`
@@ -137,7 +133,6 @@ async function handleStart(fromId: number, token: string) {
     .select('id, name, students(name, cabinet_token)')
     .eq('invite_token', token).maybeSingle()
   if (contact) {
-    console.log('[vk] matched contact:', contact.id)
     await linkUserChannel(contact.id, 'contact', 'vk', chatId)
     const s = contact.students as any
     const studentName = s?.name || 'ученика'
@@ -155,7 +150,6 @@ async function handleStart(fromId: number, token: string) {
     const { data: trainer } = await supabase
       .from('trainers').select('id, name').eq('telegram_invite_token', token).maybeSingle()
     if (trainer) {
-      console.log('[vk] matched trainer:', trainer.id)
       await linkUserChannel(trainer.id, 'trainer', 'vk', chatId)
       await sendVkMessage(chatId,
         `Привет! VK успешно привязан к профилю тренера ${trainer.name}.\n\n` +
@@ -164,7 +158,6 @@ async function handleStart(fromId: number, token: string) {
     }
   }
 
-  console.log('[vk] no match for token')
   await sendVkMessage(chatId,
     'Ссылка не распознана или устарела. Попросите тренера отправить новую invite-ссылку.')
 }

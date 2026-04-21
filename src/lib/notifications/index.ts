@@ -33,20 +33,13 @@ export async function sendToUser(userId: string, userType: UserType, text: strin
     console.error('[sendToUser] query error:', error.message)
     return false
   }
-  if (!channels?.length) {
-    console.log('[sendToUser] no channels for', userType, userId)
-    return false
-  }
-
-  console.log('[sendToUser] found', channels.length, 'channels for', userType, userId, ':',
-    channels.map(c => `${c.provider}:${c.chat_id}`).join(','))
+  if (!channels?.length) return false
 
   let anySent = false
   for (const ch of channels) {
     const adapter = adapters[ch.provider as Provider]
     if (!adapter) continue
     const ok = await adapter(ch.chat_id, text)
-    console.log('[sendToUser]', ch.provider, 'send →', ok ? 'OK' : 'FAIL')
     if (ok) anySent = true
   }
   return anySent
@@ -71,8 +64,6 @@ export async function linkUserChannel(
   )
   if (error) {
     console.error('[linkUserChannel] upsert failed:', error.message, error.details, error.hint)
-  } else {
-    console.log('[linkUserChannel] linked', userType, userId, '→', provider, chatId)
   }
 }
 

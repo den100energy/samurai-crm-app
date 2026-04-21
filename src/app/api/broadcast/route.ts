@@ -101,8 +101,6 @@ export async function POST(req: NextRequest) {
   const no_telegram_names: string[] = []
   const fallbackSentChatIds = new Set<string | number>()
 
-  console.log('[broadcast] recipients:', recipients.length, recipients.map(r => `${r.user_type}:${r.user_id}`).join(','))
-
   for (const r of recipients) {
     const firstName = r.display_name.split(' ').slice(-1)[0]
     const personalText = text.replace(/\{имя\}/gi, firstName)
