@@ -1,7 +1,7 @@
 # Омниканальные уведомления: Telegram + VK + Макс
 
-> Статус: 🟢 Этап 1 и 2 (VK) завершены и протестированы в проде. Этап 3 (Макс) ждёт регистрации бота
-> Последнее обновление: 2026-04-21
+> Статус: 🟢 Этапы 1, 2 (VK) и 3 (Макс — код) готовы. Макс ждёт регистрации webhook на проде
+> Последнее обновление: 2026-04-22
 
 ## Зачем это нужно
 
@@ -187,39 +187,61 @@ VK_CONFIRMATION_CODE=<строка подтверждения>
 ---
 
 ### ЭТАП 3 — Мессенджер Макс
-**Статус: ⬜ Не начат**
-**Предварительно: зарегистрировать бота в Макс**
+**Статус: 🟢 Код готов, ждёт env на Beget + регистрацию webhook**
 
-#### Что нужно сделать вручную перед кодом:
-- [ ] Зайти на https://dev.max.ru (или аналог — уточнить актуальный адрес)
-- [ ] Создать бота, получить `MAX_BOT_TOKEN`
-- [ ] Настроить webhook URL: `https://crm.samurai.school/api/max`
-- [ ] Уточнить формат invite-ссылки (аналог `t.me/bot?start=TOKEN`)
+#### Бот:
+- [x] Зарегистрирован на dev.max.ru
+- [x] Ник: `id615518110903_bot` (автогенерируется по шаблону `id<INN>_bot`)
+- [x] Токен получен (хранится у владельца, в `.env.local` на Beget)
 
-#### Код:
+#### Код (готов):
 
-**Шаг 3.1 — Реализовать MaxAdapter**
-- [ ] Заполнить `src/lib/notifications/adapters/max.ts`
-- [ ] Эндпоинт: `https://platform-api.max.ru/messages` (уточнить по документации)
-- [ ] Авторизация: Bearer token
+**Шаг 3.1 — MaxAdapter** — `src/lib/notifications/adapters/max.ts`
+- [x] `POST https://platform-api.max.ru/messages?user_id={ID}`
+- [x] Заголовок `Authorization: <token>` (БЕЗ слова Bearer — важно!)
+- [x] Body: `{text, format: "html", notify: true}`
 
-**Шаг 3.2 — Создать Макс webhook**
-- [ ] Создать `src/app/api/max/route.ts`
-- [ ] Обработать входящие сообщения (формат похож на Telegram)
-- [ ] Извлечь токен из команды `/start TOKEN`
-- [ ] Привязать max_user_id → записать в user_channels
+**Шаг 3.2 — Макс webhook** — `src/app/api/max/route.ts`
+- [x] Проверка `X-Max-Bot-Api-Secret`
+- [x] `bot_started`: `payload` = наш TOKEN, `user.user_id` = chat_id → автопривязка через диплинк
+- [x] `message_created`: fallback на `/start TOKEN` в тексте
+- [x] Перебор lead → student → contact → trainer
+- [x] Приветствие через `sendMaxMessage`
 
-**Шаг 3.3 — Добавить env-переменные**
+**Шаг 3.3 — Регистрация webhook** — `src/app/api/max/register/route.ts`
+- [x] Защищённый роут (`Authorization: Bearer $CRON_SECRET`)
+- [x] POST → подписка, GET → текущие подписки, DELETE → отписаться
+
+**Шаг 3.4 — Страница `/invite/[token]`** — кнопка Макс уже была подготовлена под `NEXT_PUBLIC_MAX_BOT_USERNAME`, активируется автоматически когда env появится.
+
+#### Формат invite-ссылки Макс:
+`https://max.ru/id615518110903_bot?start={TOKEN}` (payload до 128 символов)
+
+#### Env на Beget (`.env.local`):
 ```
-MAX_BOT_TOKEN=
-MAX_BOT_USERNAME=
+MAX_BOT_TOKEN=<токен из Чат-боты → Интеграция → Получить токен>
+NEXT_PUBLIC_MAX_BOT_USERNAME=id615518110903_bot
+MAX_WEBHOOK_SECRET=P8N5B7jBUfi5ewMtKlLhpNJGayh6xzWZ
 ```
 
-**Шаг 3.4 — Обновить страницу /invite/[token]**
-- [ ] Кнопка Макс становится активной
+#### Что осталось сделать на Beget после `git pull`:
+1. Добавить 3 env-переменные в `.env.local`
+2. Перезапустить приложение (`pm2 restart all` или как настроено)
+3. Зарегистрировать webhook:
+   ```bash
+   curl -X POST https://crm.samu-rai.ru/api/max/register \
+        -H "Authorization: Bearer $CRON_SECRET"
+   ```
+4. Проверить: `curl -H "Authorization: Bearer $CRON_SECRET" https://crm.samu-rai.ru/api/max/register` → должен вернуть наш URL в списке подписок
+5. Тест: открыть `/invite/<TOKEN>` существующего ученика → нажать «Макс» → попасть в бот → автопривязка + приветствие
 
-**Шаг 3.5 — Проверка Этапа 3**
-- [ ] Аналогично VK — пройти весь флоу привязки и уведомления
+#### Подводные камни (на которых можем потерять время):
+1. **Authorization БЕЗ слова Bearer** — у MAX просто `Authorization: <token>`, отличается от Telegram
+2. **user_id передаётся как query-параметр**, не в body — `?user_id={ID}`
+3. **Webhook требует HTTPS на 443** + сертификат от доверенного CA (у нас Let's Encrypt — ок). Самоподписанные не работают
+4. **Webhook должен ответить 200 за 30 секунд**, иначе MAX повторяет запрос с экспоненциальной задержкой
+5. **Если в течение 8 часов webhook не отвечает 200** — MAX автоматически отписывает бота, придётся регистрировать заново
+6. **payload в диплинке до 128 символов** — наши TOKEN-ы укладываются, но если когда-то решим закодировать несколько параметров — формат `?start=param1_value1__param2_value2`
 
 ---
 
@@ -256,7 +278,8 @@ VK_CONFIRMATION_CODE=
 ### Добавить (Этап 3)
 ```
 MAX_BOT_TOKEN=
-MAX_BOT_USERNAME=
+NEXT_PUBLIC_MAX_BOT_USERNAME=id615518110903_bot
+MAX_WEBHOOK_SECRET=
 ```
 
 ---
