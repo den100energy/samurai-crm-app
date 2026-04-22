@@ -137,6 +137,7 @@ const RESULT_STATUSES = [
   { value: 'passed', label: 'Сдал' },
   { value: 'passed_remarks', label: 'Сдал с замечаниями' },
   { value: 'failed', label: 'Не сдал' },
+  { value: 'not_admitted', label: 'Не допущен' },
 ]
 
 const PAYMENT_METHODS = [
@@ -458,7 +459,7 @@ export default function ApplicationDetailPage() {
     await supabase.from('attestation_applications').update(patch).eq('id', appId)
 
     // Auto-update belts if passed
-    if (resultForm.result !== 'failed' && resultForm.grade && app) {
+    if (resultForm.result !== 'failed' && resultForm.result !== 'not_admitted' && resultForm.grade && app) {
       await supabase.from('belts').insert({
         student_id: app.student_id,
         belt_name: resultForm.grade,
@@ -470,7 +471,7 @@ export default function ApplicationDetailPage() {
 
     // Notify student + parents
     const emoji = resultForm.result === 'passed' ? '🎉' : resultForm.result === 'passed_remarks' ? '✅' : '😔'
-    const label = resultForm.result === 'passed' ? 'Поздравляем, аттестация пройдена!' : resultForm.result === 'passed_remarks' ? 'Аттестация пройдена с замечаниями' : 'Аттестация не сдана'
+    const label = resultForm.result === 'passed' ? 'Поздравляем, аттестация пройдена!' : resultForm.result === 'passed_remarks' ? 'Аттестация пройдена с замечаниями' : resultForm.result === 'not_admitted' ? 'К аттестации не допущен' : 'Аттестация не сдана'
     const resultMsg = [
       `${emoji} ${label}`,
       resultForm.grade ? `Присвоено: ${resultForm.grade}` : '',
@@ -1031,7 +1032,7 @@ export default function ApplicationDetailPage() {
               {RESULT_STATUSES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
             </select>
 
-            {resultForm.result && resultForm.result !== 'failed' && (
+            {resultForm.result && resultForm.result !== 'failed' && resultForm.result !== 'not_admitted' && (
               <div>
                 <label className="text-xs text-gray-500 block mb-1">Присвоенный кю / степень</label>
                 <select
@@ -1071,7 +1072,7 @@ export default function ApplicationDetailPage() {
               {saving === 'result' ? 'Сохранение...' : 'Внести результат'}
             </button>
 
-            {resultForm.result !== 'failed' && (
+            {resultForm.result !== 'failed' && resultForm.result !== 'not_admitted' && (
               <p className="text-xs text-gray-400 text-center">При сохранении кю автоматически добавится в карточку ученика</p>
             )}
           </>
