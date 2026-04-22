@@ -93,6 +93,9 @@ type Application = {
   sensei_notes: string | null
   result_date: string | null
   status: string
+  prepaid_amount: number | null
+  prepaid_at: string | null
+  prepaid_method: string | null
 }
 
 type Student = {
@@ -176,6 +179,10 @@ export default function ApplicationDetailPage() {
   const [resultForm, setResultForm] = useState({ result: '', grade: '', sensei_notes: '', date: new Date().toISOString().split('T')[0] })
   const [trainers, setTrainers] = useState<string[]>([])
   const [contactChatIds, setContactChatIds] = useState<number[]>([])
+  const [paymentMode, setPaymentMode] = useState<'full' | 'installment'>('full')
+  const [editingPayment, setEditingPayment] = useState(false)
+  const [legacyPayment, setLegacyPayment] = useState(false)
+  const [prepaidForm, setPrepaidForm] = useState({ amount: '', method: 'cash', paid_at: new Date().toISOString().split('T')[0] })
 
   async function load() {
     const [{ data: ap }, { data: ev }, { data: tr }] = await Promise.all([
@@ -212,6 +219,12 @@ export default function ApplicationDetailPage() {
         price: application.price?.toString() || '',
         method: application.payment_method || 'cash',
         paid_at: application.paid_at || p.paid_at,
+      }))
+      setPrepaidForm(p => ({
+        ...p,
+        amount: application.prepaid_amount?.toString() || '',
+        method: application.prepaid_method || 'cash',
+        paid_at: application.prepaid_at || p.paid_at,
       }))
       setResultForm({
         result: application.result || '',
@@ -349,9 +362,71 @@ export default function ApplicationDetailPage() {
       paid_at: paymentForm.paid_at,
       student_id: app?.student_id,
       status: 'paid',
+      attestation_application_id: appId,
     })
     // Notify student + parents
     await notifyAll(`✅ Оплата аттестации принята — ${amount} ₽\n${app?.target_grade} (${app?.discipline === 'aikido' ? 'айкидо' : 'ушу'})`)
+    setApp(prev => prev ? { ...prev, ...patch } : prev)
+    setSaving(null)
+  }
+
+  async function saveEditPayment() {
+    setSaving('editpayment')
+    const amount = parseFloat(paymentForm.price) || app?.price || 0
+    const patch = { price: amount, payment_method: paymentForm.method, paid_at: paymentForm.paid_at }
+    await supabase.from('attestation_applications').update(patch).eq('id', appId)
+    const { data: updated } = await supabase
+      .from('payments')
+      .update({ amount, payment_type: paymentForm.method, paid_at: paymentForm.paid_at })
+      .eq('attestation_application_id', appId)
+      .select('id')
+    if (!updated || updated.length === 0) setLegacyPayment(true)
+    setApp(prev => prev ? { ...prev, ...patch } : prev)
+    setEditingPayment(false)
+    setSaving(null)
+  }
+
+  async function savePrepayment() {
+    const amount = parseFloat(prepaidForm.amount)
+    if (!amount) return
+    setSaving('prepayment')
+    const patch = { prepaid_amount: amount, prepaid_at: prepaidForm.paid_at, prepaid_method: prepaidForm.method }
+    await supabase.from('attestation_applications').update(patch).eq('id', appId)
+    await supabase.from('payments').insert({
+      amount,
+      direction: 'income',
+      category: 'Аттестация (предоплата)',
+      payment_type: prepaidForm.method,
+      description: `Предоплата аттестации: ${app?.target_grade} (${app?.discipline === 'aikido' ? 'айкидо' : 'ушу'})`,
+      paid_at: prepaidForm.paid_at,
+      student_id: app?.student_id,
+      status: 'paid',
+      attestation_application_id: appId,
+    })
+    await notifyAll(`⚡ Предоплата аттестации принята — ${amount} ₽\n${app?.target_grade} (${app?.discipline === 'aikido' ? 'айкидо' : 'ушу'})`)
+    setApp(prev => prev ? { ...prev, ...patch } : prev)
+    setSaving(null)
+  }
+
+  async function saveRemaining() {
+    setSaving('remaining')
+    const total = app?.price || 0
+    const prepaid = app?.prepaid_amount || 0
+    const remaining = total > 0 ? total - prepaid : prepaid
+    const patch = { paid: true, paid_at: paymentForm.paid_at, payment_method: paymentForm.method }
+    await supabase.from('attestation_applications').update(patch).eq('id', appId)
+    await supabase.from('payments').insert({
+      amount: remaining,
+      direction: 'income',
+      category: 'Аттестация (остаток)',
+      payment_type: paymentForm.method,
+      description: `Остаток за аттестацию: ${app?.target_grade} (${app?.discipline === 'aikido' ? 'айкидо' : 'ушу'})`,
+      paid_at: paymentForm.paid_at,
+      student_id: app?.student_id,
+      status: 'paid',
+      attestation_application_id: appId,
+    })
+    await notifyAll(`✅ Оплата аттестации завершена — итого ${total} ₽\n${app?.target_grade}`)
     setApp(prev => prev ? { ...prev, ...patch } : prev)
     setSaving(null)
   }
@@ -654,20 +729,47 @@ export default function ApplicationDetailPage() {
       </div>
 
       {/* Payment */}
-      <div className={`border rounded-2xl p-4 space-y-3 ${app.paid ? 'bg-green-50 border-green-200' : 'bg-white border-gray-200'}`}>
+      <div className={`border rounded-2xl p-4 space-y-3 ${
+        app.paid ? 'bg-green-50 border-green-200'
+        : app.prepaid_amount ? 'bg-amber-50 border-amber-200'
+        : 'bg-white border-gray-200'
+      }`}>
         <div className="flex items-center justify-between">
           <h2 className="font-semibold text-gray-800">Оплата</h2>
           {app.paid && <span className="text-green-600 text-sm font-medium">✓ Оплачено</span>}
+          {!app.paid && app.prepaid_amount && <span className="text-amber-600 text-sm font-medium">⚡ Предоплата</span>}
         </div>
 
-        {app.paid ? (
+        {/* Состояние 3: полностью оплачено, просмотр */}
+        {app.paid && !editingPayment && (
           <div className="text-sm text-gray-600 space-y-0.5">
             <p>Сумма: <strong>{app.price} ₽</strong></p>
             <p>Способ: <strong>{app.payment_method === 'cash' ? 'Наличные' : app.payment_method === 'card' ? 'Карта' : 'Перевод'}</strong></p>
             {app.paid_at && <p>Дата: <strong>{app.paid_at}</strong></p>}
+            {app.prepaid_amount && (
+              <p className="text-xs text-gray-400">Предоплата: {app.prepaid_amount} ₽ · Остаток: {(app.price || 0) - app.prepaid_amount} ₽</p>
+            )}
+            <button
+              onClick={() => {
+                setPaymentForm({ price: app.price?.toString() || '', method: app.payment_method || 'cash', paid_at: app.paid_at || today })
+                setLegacyPayment(false)
+                setEditingPayment(true)
+              }}
+              className="text-xs text-blue-600 hover:underline mt-1"
+            >
+              Изменить оплату
+            </button>
           </div>
-        ) : (
+        )}
+
+        {/* Состояние 4: редактирование существующей оплаты */}
+        {app.paid && editingPayment && (
           <>
+            {legacyPayment && (
+              <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5">
+                ⚠️ Запись в кассе создана до обновления — скорректируйте вручную в разделе Финансы
+              </p>
+            )}
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className="text-xs text-gray-500 block mb-1">Сумма (₽)</label>
@@ -675,7 +777,6 @@ export default function ApplicationDetailPage() {
                   type="number"
                   value={paymentForm.price}
                   onChange={e => setPaymentForm(p => ({ ...p, price: e.target.value }))}
-                  placeholder={app.price?.toString() || '1500'}
                   className="w-full border rounded-xl px-3 py-2 text-sm"
                 />
               </div>
@@ -699,15 +800,182 @@ export default function ApplicationDetailPage() {
                 className="w-full border rounded-xl px-3 py-2 text-sm"
               />
             </div>
-            <button
-              onClick={savePayment}
-              disabled={saving === 'payment'}
-              className="w-full bg-green-600 text-white py-2 rounded-xl text-sm font-medium disabled:opacity-60"
-            >
-              {saving === 'payment' ? 'Сохранение...' : 'Отметить как оплачено'}
-            </button>
-            {app.price && (
-              <p className="text-xs text-gray-400 text-center">Рекомендованная цена: {app.price} ₽</p>
+            <div className="flex gap-2">
+              <button
+                onClick={saveEditPayment}
+                disabled={saving === 'editpayment'}
+                className="flex-1 bg-green-600 text-white py-2 rounded-xl text-sm font-medium disabled:opacity-60"
+              >
+                {saving === 'editpayment' ? 'Сохранение...' : 'Сохранить'}
+              </button>
+              <button
+                onClick={() => { setEditingPayment(false); setLegacyPayment(false) }}
+                className="px-4 py-2 rounded-xl text-sm border border-gray-200 text-gray-600"
+              >
+                Отмена
+              </button>
+            </div>
+          </>
+        )}
+
+        {/* Состояние 2: принята предоплата, ждём остаток */}
+        {!app.paid && app.prepaid_amount && (
+          <>
+            <div className="text-sm text-amber-800 space-y-0.5">
+              <p>Предоплата: <strong>{app.prepaid_amount} ₽</strong></p>
+              {app.price && <p>Остаток: <strong>{app.price - app.prepaid_amount} ₽</strong></p>}
+              {app.prepaid_at && <p className="text-xs text-amber-600">Дата предоплаты: {app.prepaid_at}</p>}
+            </div>
+            <div className="border-t border-amber-200 pt-3 space-y-2">
+              <p className="text-xs font-medium text-gray-700">
+                Принять остаток{app.price ? ` — ${app.price - app.prepaid_amount} ₽` : ''}:
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs text-gray-500 block mb-1">Способ</label>
+                  <select
+                    value={paymentForm.method}
+                    onChange={e => setPaymentForm(p => ({ ...p, method: e.target.value }))}
+                    className="w-full border rounded-xl px-3 py-2 text-sm"
+                  >
+                    {PAYMENT_METHODS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 block mb-1">Дата</label>
+                  <input
+                    type="date"
+                    value={paymentForm.paid_at}
+                    onChange={e => setPaymentForm(p => ({ ...p, paid_at: e.target.value }))}
+                    className="w-full border rounded-xl px-3 py-2 text-sm"
+                  />
+                </div>
+              </div>
+              <button
+                onClick={saveRemaining}
+                disabled={saving === 'remaining'}
+                className="w-full bg-green-600 text-white py-2 rounded-xl text-sm font-medium disabled:opacity-60"
+              >
+                {saving === 'remaining'
+                  ? 'Сохранение...'
+                  : `Принять остаток${app.price ? ` (${app.price - app.prepaid_amount} ₽)` : ''}`}
+              </button>
+            </div>
+          </>
+        )}
+
+        {/* Состояние 1: ещё не оплачено */}
+        {!app.paid && !app.prepaid_amount && (
+          <>
+            {/* Переключатель режима */}
+            <div className="flex rounded-xl overflow-hidden border border-gray-200 text-sm">
+              <button
+                onClick={() => setPaymentMode('full')}
+                className={`flex-1 py-2 font-medium transition-colors ${paymentMode === 'full' ? 'bg-gray-900 text-white' : 'bg-white text-gray-500'}`}
+              >
+                Полная оплата
+              </button>
+              <button
+                onClick={() => setPaymentMode('installment')}
+                className={`flex-1 py-2 font-medium transition-colors ${paymentMode === 'installment' ? 'bg-amber-500 text-white' : 'bg-white text-gray-500'}`}
+              >
+                Рассрочка
+              </button>
+            </div>
+
+            {paymentMode === 'full' && (
+              <>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-xs text-gray-500 block mb-1">Сумма (₽)</label>
+                    <input
+                      type="number"
+                      value={paymentForm.price}
+                      onChange={e => setPaymentForm(p => ({ ...p, price: e.target.value }))}
+                      placeholder={app.price?.toString() || '1500'}
+                      className="w-full border rounded-xl px-3 py-2 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500 block mb-1">Способ оплаты</label>
+                    <select
+                      value={paymentForm.method}
+                      onChange={e => setPaymentForm(p => ({ ...p, method: e.target.value }))}
+                      className="w-full border rounded-xl px-3 py-2 text-sm"
+                    >
+                      {PAYMENT_METHODS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 block mb-1">Дата оплаты</label>
+                  <input
+                    type="date"
+                    value={paymentForm.paid_at}
+                    onChange={e => setPaymentForm(p => ({ ...p, paid_at: e.target.value }))}
+                    className="w-full border rounded-xl px-3 py-2 text-sm"
+                  />
+                </div>
+                <button
+                  onClick={savePayment}
+                  disabled={saving === 'payment'}
+                  className="w-full bg-green-600 text-white py-2 rounded-xl text-sm font-medium disabled:opacity-60"
+                >
+                  {saving === 'payment' ? 'Сохранение...' : 'Отметить как оплачено'}
+                </button>
+                {app.price && (
+                  <p className="text-xs text-gray-400 text-center">Рекомендованная цена: {app.price} ₽</p>
+                )}
+              </>
+            )}
+
+            {paymentMode === 'installment' && (
+              <>
+                <p className="text-xs text-gray-500">Введите сумму предоплаты. Остаток примете позже.</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-xs text-gray-500 block mb-1">Предоплата (₽)</label>
+                    <input
+                      type="number"
+                      value={prepaidForm.amount}
+                      onChange={e => setPrepaidForm(p => ({ ...p, amount: e.target.value }))}
+                      placeholder="500"
+                      className="w-full border rounded-xl px-3 py-2 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500 block mb-1">Способ</label>
+                    <select
+                      value={prepaidForm.method}
+                      onChange={e => setPrepaidForm(p => ({ ...p, method: e.target.value }))}
+                      className="w-full border rounded-xl px-3 py-2 text-sm"
+                    >
+                      {PAYMENT_METHODS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 block mb-1">Дата</label>
+                  <input
+                    type="date"
+                    value={prepaidForm.paid_at}
+                    onChange={e => setPrepaidForm(p => ({ ...p, paid_at: e.target.value }))}
+                    className="w-full border rounded-xl px-3 py-2 text-sm"
+                  />
+                </div>
+                {app.price && prepaidForm.amount && (
+                  <p className="text-xs text-gray-400">
+                    Полная стоимость: {app.price} ₽ · Остаток: {app.price - (parseFloat(prepaidForm.amount) || 0)} ₽
+                  </p>
+                )}
+                <button
+                  onClick={savePrepayment}
+                  disabled={!prepaidForm.amount || saving === 'prepayment'}
+                  className="w-full bg-amber-500 text-white py-2 rounded-xl text-sm font-medium disabled:opacity-60"
+                >
+                  {saving === 'prepayment' ? 'Сохранение...' : 'Записать предоплату'}
+                </button>
+              </>
             )}
           </>
         )}
