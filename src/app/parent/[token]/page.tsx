@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { useParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { FujiScene } from '@/components/FujiScene'
@@ -8,6 +8,7 @@ import { localDateStr } from '@/lib/dates'
 import { CabinetTour } from '@/components/CabinetTour'
 import { PARENT_TOUR_SLIDES } from '@/lib/onboarding'
 import { SubscriptionQuiz } from '@/components/SubscriptionQuiz'
+import { TelegramIcon, VkIcon, MaxIcon } from '@/components/MessengerIcon'
 
 type Student = { id: string; name: string; group_name: string | null; birth_date: string | null; photo_url: string | null }
 type ParentContact = { id: string; name: string; role: string; invite_token: string | null; telegram_chat_id: number | null }
@@ -38,6 +39,12 @@ type AttestationApp = {
   sensei_notes: string | null
   status: string
   attestation_events: { title: string; event_date: string } | null
+}
+
+const PROVIDER_LABELS: Record<string, string> = {
+  telegram: 'Telegram',
+  vk: 'ВКонтакте',
+  max: 'Макс',
 }
 
 const TICKET_TYPE_LABELS: Record<string, string> = {
@@ -195,13 +202,65 @@ export default function ParentPage() {
   const [appSubmitting, setAppSubmitting] = useState(false)
   const [appForm, setAppForm] = useState({ event_id: '', discipline: 'aikido' as 'aikido' | 'wushu', current_grade: '', target_grade: '', last_attestation_date: '' })
   const [parentContacts, setParentContacts] = useState<ParentContact[]>([])
+  const [channels, setChannels] = useState<Record<string, string[]>>({})
+  const [disconnecting, setDisconnecting] = useState<string | null>(null)
   const [tgBannerDismissed, setTgBannerDismissed] = useState(false)
+
+  async function loadChannels(ids: string[]) {
+    if (ids.length === 0) { setChannels({}); return }
+    try {
+      const res = await fetch(`/api/user-channels?user_ids=${ids.join(',')}`, { cache: 'no-store' })
+      if (res.ok) setChannels(await res.json())
+    } catch {}
+  }
+
+  async function disconnectChannel(contactId: string, contactToken: string, provider: string) {
+    const current = channels[contactId] || []
+    if (current.length <= 1) {
+      const ok = window.confirm('Вы останетесь без уведомлений о занятиях, абонементе и расписании. Точно отключить?')
+      if (!ok) return
+    } else {
+      const ok = window.confirm(`Отключить ${PROVIDER_LABELS[provider] || provider}?`)
+      if (!ok) return
+    }
+    const key = `${contactId}:${provider}`
+    setDisconnecting(key)
+    try {
+      const res = await fetch('/api/user-channels', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: contactToken, provider }),
+      })
+      if (res.ok) {
+        setChannels(prev => ({
+          ...prev,
+          [contactId]: (prev[contactId] || []).filter(p => p !== provider),
+        }))
+      } else {
+        alert('Не удалось отключить. Попробуйте ещё раз.')
+      }
+    } catch {
+      alert('Не удалось отключить. Проверьте связь.')
+    } finally {
+      setDisconnecting(null)
+    }
+  }
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
       setTgBannerDismissed(localStorage.getItem(`tg_parent_banner_dismissed_${token}`) === '1')
     }
   }, [token])
+
+  useEffect(() => {
+    function onVisible() {
+      if (document.visibilityState !== 'visible') return
+      const ids = parentContacts.map(c => c.id)
+      if (ids.length > 0) loadChannels(ids)
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+  }, [parentContacts])
 
   function dismissParentTgBanner() {
     localStorage.setItem(`tg_parent_banner_dismissed_${token}`, '1')
@@ -254,6 +313,7 @@ export default function ParentPage() {
         .select('id, name, role, invite_token, telegram_chat_id')
         .eq('student_id', s.id)
       setParentContacts(contactsData ?? [])
+      loadChannels((contactsData ?? []).map(c => c.id))
       const evVisits = ((evParts || []) as any[])
         .filter(ep => ep.events?.date && ep.events?.name)
         .map(ep => ({
@@ -516,7 +576,7 @@ export default function ParentPage() {
             { key: 'progress',    icon: '📈', label: 'Прогр.', badge: surveys.length > 0 ? surveys.length : null },
             { key: 'tasks',       icon: '📋', label: 'Задан.', badge: assignments.filter(a => !a.completed).length || null },
             { key: 'attestation', icon: '🎉', label: 'Мероп.',  badge: attestationApps.filter(a => a.status === 'pending' || (!a.paid && a.preatt1_status === 'approved')).length || null },
-            { key: 'tickets',     icon: '📞', label: 'Тренер', badge: tickets.filter(t => t.status === 'pending').length || null },
+            { key: 'tickets',     icon: '💬', label: 'Связь',  badge: tickets.filter(t => t.status === 'pending').length || null },
           ] as { key: typeof tab; icon: string; label: string; badge?: number | null }[]).map(t => (
             <button key={t.key} onClick={() => setTab(t.key)}
               className={`flex-1 flex flex-col items-center pt-2 pb-1.5 border-b-2 transition-colors relative ${
@@ -536,8 +596,8 @@ export default function ParentPage() {
 
         <div className="p-4 space-y-3">
 
-          {/* Баннер подключения Telegram родителям */}
-          {!tgBannerDismissed && parentContacts.some(c => !c.telegram_chat_id && c.invite_token) && (
+          {/* Баннер подключения Telegram родителям. На табе «Связь» скрываем — там есть детальное управление. */}
+          {tab !== 'tickets' && !tgBannerDismissed && parentContacts.some(c => !c.telegram_chat_id && c.invite_token) && (
             <div className="bg-gradient-to-br from-sky-50 to-blue-50 border border-sky-200 rounded-2xl p-4">
               <div className="flex items-start gap-3">
                 <div className="text-2xl">🔔</div>
@@ -1547,9 +1607,65 @@ export default function ParentPage() {
             </div>
           )}
 
-          {/* ── ТРЕНЕР ── */}
+          {/* ── СВЯЗЬ ── */}
           {tab === 'tickets' && (
             <div className="space-y-3">
+              {/* Каналы связи — управление подключениями мессенджеров */}
+              {parentContacts.filter(c => c.invite_token).map(contact => {
+                const connected = channels[contact.id] || []
+                const multiContact = parentContacts.filter(c => c.invite_token).length > 1
+                const providers: { key: string; label: string; bg: string; icon: ReactNode }[] = [
+                  { key: 'telegram', label: 'Telegram',  bg: '#229ED9',                                                     icon: <TelegramIcon className="w-5 h-5" /> },
+                  { key: 'vk',       label: 'ВКонтакте', bg: '#0077FF',                                                     icon: <VkIcon className="w-5 h-5" /> },
+                  { key: 'max',      label: 'Макс',      bg: 'linear-gradient(135deg, #4FB7E5 0%, #8651E8 100%)',           icon: <MaxIcon className="w-5 h-5" /> },
+                ]
+                return (
+                  <div key={contact.id} className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm space-y-3">
+                    <div className="text-xs text-gray-400 uppercase tracking-wide">
+                      Каналы связи{multiContact ? ` — ${contact.name}` : ''}
+                    </div>
+                    {providers.map(p => {
+                      const isConnected = connected.includes(p.key)
+                      const isBusy = disconnecting === `${contact.id}:${p.key}`
+                      return (
+                        <div key={p.key} className="flex items-center gap-3">
+                          <span
+                            className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+                            style={{ background: p.bg }}
+                          >
+                            {p.icon}
+                          </span>
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium text-gray-800 text-sm">{p.label}</div>
+                            <div className={`text-xs ${isConnected ? 'text-green-600' : 'text-gray-400'}`}>
+                              {isConnected ? '✓ Подключено' : 'Не подключено'}
+                            </div>
+                          </div>
+                          {isConnected ? (
+                            <button
+                              onClick={() => disconnectChannel(contact.id, contact.invite_token!, p.key)}
+                              disabled={isBusy}
+                              className="text-xs bg-gray-100 text-gray-700 px-2.5 py-1.5 rounded-lg font-medium disabled:opacity-50"
+                            >
+                              {isBusy ? '...' : 'Отключить'}
+                            </button>
+                          ) : (
+                            <a
+                              href={`/invite/${contact.invite_token}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-xs bg-black text-white px-2.5 py-1.5 rounded-lg font-medium"
+                            >
+                              Подключить
+                            </a>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )
+              })}
+
               {/* Контакты тренеров */}
               {trainers.length > 0 && (
                 <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm space-y-3">
