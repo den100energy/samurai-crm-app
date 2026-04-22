@@ -431,6 +431,20 @@ export default function ApplicationDetailPage() {
     setSaving(null)
   }
 
+  async function deletePayment() {
+    if (!confirm('Удалить оплату? Запись в кассе тоже будет удалена.')) return
+    setSaving('deletepayment')
+    const patch = {
+      paid: false, paid_at: null, payment_method: null,
+      prepaid_amount: null, prepaid_at: null, prepaid_method: null,
+    }
+    await supabase.from('attestation_applications').update(patch).eq('id', appId)
+    await supabase.from('payments').delete().eq('attestation_application_id', appId)
+    setApp(prev => prev ? { ...prev, ...patch } : prev)
+    setEditingPayment(false)
+    setSaving(null)
+  }
+
   async function saveResult() {
     if (!resultForm.result) return
     setSaving('result')
@@ -749,16 +763,25 @@ export default function ApplicationDetailPage() {
             {app.prepaid_amount && (
               <p className="text-xs text-gray-400">Предоплата: {app.prepaid_amount} ₽ · Остаток: {(app.price || 0) - app.prepaid_amount} ₽</p>
             )}
-            <button
-              onClick={() => {
-                setPaymentForm({ price: app.price?.toString() || '', method: app.payment_method || 'cash', paid_at: app.paid_at || today })
-                setLegacyPayment(false)
-                setEditingPayment(true)
-              }}
-              className="text-xs text-blue-600 hover:underline mt-1"
-            >
-              Изменить оплату
-            </button>
+            <div className="flex gap-3 mt-1">
+              <button
+                onClick={() => {
+                  setPaymentForm({ price: app.price?.toString() || '', method: app.payment_method || 'cash', paid_at: app.paid_at || today })
+                  setLegacyPayment(false)
+                  setEditingPayment(true)
+                }}
+                className="text-xs text-blue-600 hover:underline"
+              >
+                Изменить оплату
+              </button>
+              <button
+                onClick={deletePayment}
+                disabled={saving === 'deletepayment'}
+                className="text-xs text-red-500 hover:underline disabled:opacity-60"
+              >
+                Удалить оплату
+              </button>
+            </div>
           </div>
         )}
 
