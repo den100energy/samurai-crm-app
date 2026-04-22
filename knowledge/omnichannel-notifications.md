@@ -1,6 +1,6 @@
 # Омниканальные уведомления: Telegram + VK + Макс
 
-> Статус: 🟢 Этапы 1, 2 (VK) и 3 (Макс — код) готовы. Макс ждёт регистрации webhook на проде
+> Статус: 🟢 Этапы 1, 2 (VK) и 3 (Макс) полностью готовы и работают в проде
 > Последнее обновление: 2026-04-22
 
 ## Зачем это нужно
@@ -187,7 +187,7 @@ VK_CONFIRMATION_CODE=<строка подтверждения>
 ---
 
 ### ЭТАП 3 — Мессенджер Макс
-**Статус: 🟢 Код готов, ждёт env на Beget + регистрацию webhook**
+**Статус: 🟢 Работает в проде с 2026-04-22**
 
 #### Бот:
 - [x] Зарегистрирован на dev.max.ru
@@ -224,16 +224,12 @@ NEXT_PUBLIC_MAX_BOT_USERNAME=id615518110903_bot
 MAX_WEBHOOK_SECRET=P8N5B7jBUfi5ewMtKlLhpNJGayh6xzWZ
 ```
 
-#### Что осталось сделать на Beget после `git pull`:
-1. Добавить 3 env-переменные в `.env.local`
-2. Перезапустить приложение (`pm2 restart all` или как настроено)
-3. Зарегистрировать webhook:
-   ```bash
-   curl -X POST https://crm.samu-rai.ru/api/max/register \
-        -H "Authorization: Bearer $CRON_SECRET"
-   ```
-4. Проверить: `curl -H "Authorization: Bearer $CRON_SECRET" https://crm.samu-rai.ru/api/max/register` → должен вернуть наш URL в списке подписок
-5. Тест: открыть `/invite/<TOKEN>` существующего ученика → нажать «Макс» → попасть в бот → автопривязка + приветствие
+#### Деплой на Beget (готово 2026-04-22):
+- Путь проекта: `/opt/samurai-crm-app`
+- Три env в `.env.local`: `MAX_BOT_TOKEN`, `NEXT_PUBLIC_MAX_BOT_USERNAME`, `MAX_WEBHOOK_SECRET`
+- Команда сборки: `npm run build && pm2 restart all --update-env` (ВАЖНО флаг `--update-env`, иначе PM2 держит старые env)
+- Webhook зарегистрирован через `POST /api/max/register` с `Authorization: Bearer $CRON_SECRET`
+- Протестировано на живом ученике: диплинк → бот → автопривязка → приветствие → бейдж в карточке
 
 #### Подводные камни (на которых можем потерять время):
 1. **Authorization БЕЗ слова Bearer** — у MAX просто `Authorization: <token>`, отличается от Telegram
