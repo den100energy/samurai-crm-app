@@ -28,8 +28,8 @@ export async function GET(req: NextRequest) {
   return NextResponse.json(result)
 }
 
-// Резолвит invite-токен в пару (user_id, user_type). Пока поддерживаем только контакты родителей,
-// но логика расширяемая — по мере необходимости добавим student/lead/trainer.
+// Резолвит invite-токен в пару (user_id, user_type). Поддерживаем родительские контакты и учеников,
+// логика расширяемая — по мере необходимости добавим lead/trainer.
 async function resolveOwner(token: string): Promise<{ user_id: string; user_type: string } | null> {
   const { data: contact } = await admin
     .from('student_contacts')
@@ -37,6 +37,13 @@ async function resolveOwner(token: string): Promise<{ user_id: string; user_type
     .eq('invite_token', token)
     .maybeSingle()
   if (contact) return { user_id: contact.id, user_type: 'contact' }
+
+  const { data: student } = await admin
+    .from('students')
+    .select('id')
+    .eq('invite_token', token)
+    .maybeSingle()
+  if (student) return { user_id: student.id, user_type: 'student' }
 
   return null
 }

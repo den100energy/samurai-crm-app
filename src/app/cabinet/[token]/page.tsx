@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { useParams, useSearchParams } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
 import { FujiScene } from '@/components/FujiScene'
@@ -9,6 +9,13 @@ import { CabinetTour } from '@/components/CabinetTour'
 import { CABINET_TOUR_SLIDES } from '@/lib/onboarding'
 import { SubscriptionQuiz } from '@/components/SubscriptionQuiz'
 import { getQuoteOfTheDay } from '@/lib/quotes'
+import { TelegramIcon, VkIcon, MaxIcon } from '@/components/MessengerIcon'
+
+const PROVIDER_LABELS: Record<string, string> = {
+  telegram: 'Telegram',
+  vk: 'ВКонтакте',
+  max: 'Макс',
+}
 
 const supabase = createBrowserClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -348,6 +355,8 @@ export default function CabinetPage() {
   }[]>([])
   const [togglingTask, setTogglingTask] = useState<string | null>(null)
   const [tgBannerDismissed, setTgBannerDismissed] = useState(false)
+  const [channels, setChannels] = useState<string[]>([])
+  const [disconnecting, setDisconnecting] = useState<string | null>(null)
 
   useEffect(() => {
     if (token) loadAll()
@@ -359,9 +368,55 @@ export default function CabinetPage() {
     }
   }, [token])
 
+  useEffect(() => {
+    function onVisible() {
+      if (document.visibilityState === 'visible' && student?.id) loadChannels(student.id)
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+  }, [student?.id])
+
   function dismissTgBanner() {
     localStorage.setItem(`tg_banner_dismissed_${token}`, '1')
     setTgBannerDismissed(true)
+  }
+
+  async function loadChannels(studentId: string) {
+    try {
+      const res = await fetch(`/api/user-channels?user_ids=${studentId}`, { cache: 'no-store' })
+      if (res.ok) {
+        const data = await res.json() as Record<string, string[]>
+        setChannels(data[studentId] || [])
+      }
+    } catch {}
+  }
+
+  async function disconnectChannel(provider: string) {
+    if (!student?.invite_token) return
+    if (channels.length <= 1) {
+      const ok = window.confirm('Вы останетесь без уведомлений о занятиях, абонементе и расписании. Точно отключить?')
+      if (!ok) return
+    } else {
+      const ok = window.confirm(`Отключить ${PROVIDER_LABELS[provider] || provider}?`)
+      if (!ok) return
+    }
+    setDisconnecting(provider)
+    try {
+      const res = await fetch('/api/user-channels', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: student.invite_token, provider }),
+      })
+      if (res.ok) {
+        setChannels(prev => prev.filter(p => p !== provider))
+      } else {
+        alert('Не удалось отключить. Попробуйте ещё раз.')
+      }
+    } catch {
+      alert('Не удалось отключить. Проверьте связь.')
+    } finally {
+      setDisconnecting(null)
+    }
   }
 
   async function loadAll() {
@@ -374,6 +429,7 @@ export default function CabinetPage() {
 
     if (!studentData) { setLoading(false); return }
     setStudent(studentData)
+    loadChannels(studentData.id)
 
     const sid = studentData.id
 
@@ -802,7 +858,7 @@ export default function CabinetPage() {
       <div className="max-w-lg mx-auto p-4 space-y-4">
 
         {/* Баннер подключения Telegram */}
-        {!student.telegram_chat_id && student.invite_token && !tgBannerDismissed && (
+        {tab !== 'tickets' && !student.telegram_chat_id && student.invite_token && !tgBannerDismissed && (
           <div className="bg-gradient-to-br from-sky-50 to-blue-50 border border-sky-200 rounded-2xl p-4">
             <div className="flex items-start gap-3">
               <div className="text-2xl">🔔</div>
@@ -1909,9 +1965,61 @@ export default function CabinetPage() {
           </>
         )}
 
-        {/* ── СВЯЗЬ С ТРЕНЕРОМ ── */}
+        {/* ── СВЯЗЬ ── */}
         {tab === 'tickets' && (
           <div className="space-y-3">
+            {/* Каналы связи — управление подключениями мессенджеров */}
+            {student?.invite_token && (() => {
+              const providers: { key: string; label: string; bg: string; icon: ReactNode }[] = [
+                { key: 'telegram', label: 'Telegram',  bg: '#229ED9',                                           icon: <TelegramIcon className="w-5 h-5" /> },
+                { key: 'vk',       label: 'ВКонтакте', bg: '#0077FF',                                           icon: <VkIcon className="w-5 h-5" /> },
+                { key: 'max',      label: 'Макс',      bg: 'linear-gradient(135deg, #4FB7E5 0%, #8651E8 100%)', icon: <MaxIcon className="w-5 h-5" /> },
+              ]
+              return (
+                <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm space-y-3">
+                  <div className="text-xs text-gray-400 uppercase tracking-wide">Каналы связи</div>
+                  {providers.map(p => {
+                    const isConnected = channels.includes(p.key)
+                    const isBusy = disconnecting === p.key
+                    return (
+                      <div key={p.key} className="flex items-center gap-3">
+                        <span
+                          className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+                          style={{ background: p.bg }}
+                        >
+                          {p.icon}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-gray-800 text-sm">{p.label}</div>
+                          <div className={`text-xs ${isConnected ? 'text-green-600' : 'text-gray-400'}`}>
+                            {isConnected ? '✓ Подключено' : 'Не подключено'}
+                          </div>
+                        </div>
+                        {isConnected ? (
+                          <button
+                            onClick={() => disconnectChannel(p.key)}
+                            disabled={isBusy}
+                            className="text-xs bg-gray-100 text-gray-700 px-2.5 py-1.5 rounded-lg font-medium disabled:opacity-50"
+                          >
+                            {isBusy ? '...' : 'Отключить'}
+                          </button>
+                        ) : (
+                          <a
+                            href={`/invite/${student.invite_token}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-xs bg-black text-white px-2.5 py-1.5 rounded-lg font-medium"
+                          >
+                            Подключить
+                          </a>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )
+            })()}
+
             {showTicketForm ? (
               <form onSubmit={sendTicket} className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm space-y-3">
                 <div className="font-semibold text-gray-800 text-sm">Новое обращение</div>
