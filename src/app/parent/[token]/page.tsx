@@ -47,6 +47,17 @@ const PROVIDER_LABELS: Record<string, string> = {
   max: 'Макс',
 }
 
+const TG_BOT  = process.env.NEXT_PUBLIC_TELEGRAM_CLIENT_BOT_USERNAME
+const VK_GROUP = process.env.NEXT_PUBLIC_VK_GROUP_SHORT_NAME
+const MAX_BOT  = process.env.NEXT_PUBLIC_MAX_BOT_USERNAME
+
+function getConnectUrl(provider: string, token: string): string | null {
+  if (provider === 'telegram') return TG_BOT  ? `https://t.me/${TG_BOT}?start=${token}`          : null
+  if (provider === 'vk')       return VK_GROUP ? `https://vk.me/${VK_GROUP}?ref=${token}`         : null
+  if (provider === 'max')      return MAX_BOT  ? `https://max.ru/${MAX_BOT}?start=${token}`        : null
+  return null
+}
+
 const TICKET_TYPE_LABELS: Record<string, string> = {
   'болезнь': '🤒 Болезнь',
   'перенос': '🔄 Перенос занятия',
@@ -1649,16 +1660,16 @@ export default function ParentPage() {
                             >
                               {isBusy ? '...' : 'Отключить'}
                             </button>
-                          ) : (
+                          ) : getConnectUrl(p.key, contact.invite_token!) ? (
                             <a
-                              href={`/invite/${contact.invite_token}`}
+                              href={getConnectUrl(p.key, contact.invite_token!)!}
                               target="_blank"
                               rel="noreferrer"
                               className="text-xs bg-black text-white px-2.5 py-1.5 rounded-lg font-medium"
                             >
                               Подключить
                             </a>
-                          )}
+                          ) : null}
                         </div>
                       )
                     })}
