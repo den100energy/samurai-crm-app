@@ -302,6 +302,13 @@ export default function SeminarPage() {
     setSessions(prev => prev.filter(s => s.id !== sessionId))
   }
 
+  async function deleteRegistration(regId: string) {
+    if (!confirm('Удалить заявку участника?')) return
+    await supabase.from('seminar_session_attendance').delete().eq('registration_id', regId)
+    await supabase.from('seminar_registrations').delete().eq('id', regId)
+    setRegs(prev => prev.filter(r => r.id !== regId))
+  }
+
   async function addRegistration(e: React.FormEvent) {
     e.preventDefault()
     setSaving('reg')
@@ -853,27 +860,35 @@ export default function SeminarPage() {
               const st = STATUS_LABELS[r.status] || { label: r.status, color: 'bg-gray-100 text-gray-500' }
               const totalR = (r.deposit_amount || 0) + (r.total_paid || 0)
               return (
-                <Link key={r.id} href={`/seminars/${id}/${r.id}`}
-                  className="block bg-white rounded-xl p-3 border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-medium text-gray-800 text-sm">{r.participant_name}</span>
-                        {r.is_external && <span className="text-xs px-1.5 py-0.5 rounded bg-orange-50 text-orange-600">внешний</span>}
-                        {r.attended && <span className="text-xs">✅</span>}
+                <div key={r.id} className="flex items-center gap-2">
+                  <Link href={`/seminars/${id}/${r.id}`}
+                    className="flex-1 block bg-white rounded-xl p-3 border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-medium text-gray-800 text-sm">{r.participant_name}</span>
+                          {r.is_external && <span className="text-xs px-1.5 py-0.5 rounded bg-orange-50 text-orange-600">внешний</span>}
+                          {r.attended && <span className="text-xs">✅</span>}
+                        </div>
+                        <div className="text-xs text-gray-400 mt-0.5">
+                          {(r.seminar_tariffs as any)?.name || '—'}
+                          {r.locked_price ? ` · ${r.locked_price.toLocaleString('ru')} ₽` : ''}
+                          {totalR > 0 ? ` · внесено ${totalR.toLocaleString('ru')} ₽` : ''}
+                        </div>
                       </div>
-                      <div className="text-xs text-gray-400 mt-0.5">
-                        {(r.seminar_tariffs as any)?.name || '—'}
-                        {r.locked_price ? ` · ${r.locked_price.toLocaleString('ru')} ₽` : ''}
-                        {totalR > 0 ? ` · внесено ${totalR.toLocaleString('ru')} ₽` : ''}
+                      <div className="flex items-center gap-2 ml-2">
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${st.color}`}>{st.label}</span>
+                        <span className="text-gray-300">›</span>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2 ml-2">
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${st.color}`}>{st.label}</span>
-                      <span className="text-gray-300">›</span>
-                    </div>
-                  </div>
-                </Link>
+                  </Link>
+                  {canEdit && (
+                    <button
+                      onClick={() => deleteRegistration(r.id)}
+                      className="text-gray-300 hover:text-red-400 text-2xl leading-none shrink-0 px-1"
+                    >×</button>
+                  )}
+                </div>
               )
             })}
           </div>
