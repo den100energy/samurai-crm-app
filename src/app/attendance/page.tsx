@@ -190,6 +190,9 @@ export default function AttendancePage() {
         .lt('date', today)
 
       console.log('[debug] attendance query:', { minDate, today, count: attData?.length, error: attError, sample: attData?.[0] })
+      const markedKeys = [...new Set((attData || []).map(a => `${String(a.date).slice(0, 10)}|${a.group_name}`))].sort()
+      console.log('[debug] markedSet keys:', markedKeys)
+      console.log('[debug] expected keys:', expected.map(e => `${e.date}|${e.group_name}`).sort().filter((v, i, a) => a.indexOf(v) === i))
 
       const markedSet = new Set<string>(
         (attData || []).map(a => `${String(a.date).slice(0, 10)}|${a.group_name}`)
