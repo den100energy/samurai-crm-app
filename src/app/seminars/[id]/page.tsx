@@ -59,6 +59,8 @@ type Session = {
   seminar_id: string
   title: string
   session_date: string | null
+  start_time: string | null
+  end_time: string | null
   sort_order: number
 }
 
@@ -182,7 +184,35 @@ export default function SeminarPage() {
 
   // Session form
   const [showSessionForm, setShowSessionForm] = useState(false)
-  const [sessionForm, setSessionForm] = useState({ title: '', session_date: '' })
+  const [sessionForm, setSessionForm] = useState({ title: '', session_date: '', start_time: '', end_time: '' })
+
+  // Session edit
+  const [editingSessionId, setEditingSessionId] = useState<string | null>(null)
+  const [editSessionForm, setEditSessionForm] = useState({ title: '', session_date: '', start_time: '', end_time: '' })
+
+  function startEditSession(s: Session) {
+    setEditingSessionId(s.id)
+    setEditSessionForm({
+      title: s.title,
+      session_date: s.session_date || '',
+      start_time: s.start_time || '',
+      end_time: s.end_time || '',
+    })
+  }
+
+  async function saveSession(e: React.FormEvent, sessionId: string) {
+    e.preventDefault()
+    setSaving('edit-session')
+    await supabase.from('seminar_sessions').update({
+      title: editSessionForm.title,
+      session_date: editSessionForm.session_date || null,
+      start_time: editSessionForm.start_time || null,
+      end_time: editSessionForm.end_time || null,
+    }).eq('id', sessionId)
+    setEditingSessionId(null)
+    setSaving(null)
+    load()
+  }
 
   // Manual registration form
   const [showRegForm, setShowRegForm] = useState(false)
@@ -288,9 +318,11 @@ export default function SeminarPage() {
       seminar_id: id,
       title: sessionForm.title,
       session_date: sessionForm.session_date || null,
+      start_time: sessionForm.start_time || null,
+      end_time: sessionForm.end_time || null,
       sort_order: sessions.length,
     })
-    setSessionForm({ title: '', session_date: '' })
+    setSessionForm({ title: '', session_date: '', start_time: '', end_time: '' })
     setShowSessionForm(false)
     setSaving(null)
     load()
@@ -547,6 +579,18 @@ export default function SeminarPage() {
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none" />
             </div>
             <div className="flex gap-2">
+              <div className="flex-1">
+                <label className="text-xs text-gray-400 mb-1 block">Начало</label>
+                <input type="time" value={sessionForm.start_time} onChange={e => setSessionForm({ ...sessionForm, start_time: e.target.value })}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none" />
+              </div>
+              <div className="flex-1">
+                <label className="text-xs text-gray-400 mb-1 block">Конец</label>
+                <input type="time" value={sessionForm.end_time} onChange={e => setSessionForm({ ...sessionForm, end_time: e.target.value })}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none" />
+              </div>
+            </div>
+            <div className="flex gap-2">
               <button type="submit" disabled={saving === 'session'}
                 className="flex-1 bg-black text-white py-2 rounded-lg text-sm font-medium disabled:opacity-50">
                 {saving === 'session' ? '...' : 'Добавить'}
@@ -566,17 +610,66 @@ export default function SeminarPage() {
         ) : (
           <div className="space-y-1.5">
             {sessions.map((s, i) => (
-              <div key={s.id} className="flex items-center justify-between bg-white rounded-xl px-3 py-2.5 border border-gray-100 shadow-sm">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-400 w-5">{i + 1}.</span>
-                  <div>
-                    <div className="text-sm text-gray-800">{s.title}</div>
-                    {s.session_date && <div className="text-xs text-gray-400">{s.session_date}</div>}
+              <div key={s.id} className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+                {editingSessionId === s.id ? (
+                  <form onSubmit={e => saveSession(e, s.id)} className="p-3 space-y-2">
+                    <div className="text-xs font-medium text-indigo-600 mb-1">Редактирование тренировки</div>
+                    <input required value={editSessionForm.title} onChange={e => setEditSessionForm({ ...editSessionForm, title: e.target.value })}
+                      placeholder="Название *" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none" />
+                    <div>
+                      <label className="text-xs text-gray-400 mb-1 block">Дата</label>
+                      <input type="date" value={editSessionForm.session_date} onChange={e => setEditSessionForm({ ...editSessionForm, session_date: e.target.value })}
+                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none" />
+                    </div>
+                    <div className="flex gap-2">
+                      <div className="flex-1">
+                        <label className="text-xs text-gray-400 mb-1 block">Начало</label>
+                        <input type="time" value={editSessionForm.start_time} onChange={e => setEditSessionForm({ ...editSessionForm, start_time: e.target.value })}
+                          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none" />
+                      </div>
+                      <div className="flex-1">
+                        <label className="text-xs text-gray-400 mb-1 block">Конец</label>
+                        <input type="time" value={editSessionForm.end_time} onChange={e => setEditSessionForm({ ...editSessionForm, end_time: e.target.value })}
+                          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none" />
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button type="submit" disabled={saving === 'edit-session'}
+                        className="flex-1 bg-black text-white py-2 rounded-lg text-sm font-medium disabled:opacity-50">
+                        {saving === 'edit-session' ? '...' : 'Сохранить'}
+                      </button>
+                      <button type="button" onClick={() => setEditingSessionId(null)}
+                        className="flex-1 bg-gray-100 text-gray-600 py-2 rounded-lg text-sm">
+                        Отмена
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  <div className="flex items-center justify-between px-3 py-2.5">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-400 w-5">{i + 1}.</span>
+                      <div>
+                        <div className="text-sm font-medium text-gray-800">{s.title}</div>
+                        {(s.session_date || s.start_time) && (
+                          <div className="text-xs text-gray-400">
+                            {s.session_date && <span>{s.session_date}</span>}
+                            {s.start_time && (
+                              <span className="ml-1">
+                                {s.session_date ? ' · ' : ''}{s.start_time.slice(0, 5)}
+                                {s.end_time ? `–${s.end_time.slice(0, 5)}` : ''}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    {canEdit && (
+                      <div className="flex items-center gap-1 ml-2">
+                        <button onClick={() => startEditSession(s)} className="text-gray-400 hover:text-indigo-600 text-sm px-1">✏️</button>
+                        <button onClick={() => deleteSession(s.id)} className="text-gray-300 hover:text-red-400 text-lg leading-none px-1">×</button>
+                      </div>
+                    )}
                   </div>
-                </div>
-                {canEdit && (
-                  <button onClick={() => deleteSession(s.id)}
-                    className="text-gray-300 hover:text-red-400 text-lg leading-none ml-2">×</button>
                 )}
               </div>
             ))}
