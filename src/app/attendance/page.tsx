@@ -181,18 +181,19 @@ export default function AttendancePage() {
       if (expected.length === 0) { setMissingDays([]); return }
 
       // Проверяем, какие из них есть в attendance
-      // Фильтруем только по датам — .in() с Кириллицей+скобками в именах групп
-      // некорректно кодируется в PostgREST и возвращает пустой результат
-      const dateSet = [...new Set(expected.map(e => e.date))]
+      // date хранится как TIMESTAMP — используем диапазон вместо .in()
+      const minDate = days[days.length - 1]
       const { data: attData } = await supabase
         .from('attendance')
         .select('date, group_name')
-        .in('date', dateSet)
+        .gte('date', minDate)
+        .lt('date', today)
 
-      const markedSet = new Set<string>((attData || []).map(a => `${a.date}|${a.group_name}`))
+      const markedSet = new Set<string>(
+        (attData || []).map(a => `${String(a.date).slice(0, 10)}|${a.group_name}`)
+      )
 
       const missing = expected.filter(e => !markedSet.has(`${e.date}|${e.group_name}`))
-      // Сортируем: сначала самые свежие
       missing.sort((a, b) => b.date.localeCompare(a.date))
       setMissingDays(missing)
 
@@ -200,12 +201,15 @@ export default function AttendancePage() {
       const LOG_START = '2026-04-16'
       const expectedLogs = expected.filter(e => e.date >= LOG_START)
       if (expectedLogs.length > 0) {
-        const logDateSet = [...new Set(expectedLogs.map(e => e.date))]
+        const logMinDate = expectedLogs[expectedLogs.length - 1].date
         const { data: logsData } = await supabase
           .from('training_logs').select('date, group_name')
-          .in('date', logDateSet)
+          .gte('date', logMinDate)
+          .lt('date', today)
 
-        const logsSet = new Set<string>((logsData || []).map(l => `${l.date}|${l.group_name}`))
+        const logsSet = new Set<string>(
+          (logsData || []).map(l => `${String(l.date).slice(0, 10)}|${l.group_name}`)
+        )
         const missingL = expectedLogs
           .filter(e => !logsSet.has(`${e.date}|${e.group_name}`))
           .sort((a, b) => b.date.localeCompare(a.date))
