@@ -203,12 +203,13 @@ export default function SeminarPage() {
   async function saveSession(e: React.FormEvent, sessionId: string) {
     e.preventDefault()
     setSaving('edit-session')
-    await supabase.from('seminar_sessions').update({
+    const { error } = await supabase.from('seminar_sessions').update({
       title: editSessionForm.title,
       session_date: editSessionForm.session_date || null,
       start_time: editSessionForm.start_time || null,
       end_time: editSessionForm.end_time || null,
     }).eq('id', sessionId)
+    if (error) { alert('Ошибка сохранения: ' + error.message); setSaving(null); return }
     setEditingSessionId(null)
     setSaving(null)
     load()
