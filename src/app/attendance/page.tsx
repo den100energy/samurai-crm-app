@@ -189,10 +189,6 @@ export default function AttendancePage() {
         .gte('date', minDate)
         .lt('date', today)
 
-      console.log('[debug] attendance query:', { minDate, today, count: attData?.length, error: attError, sample: attData?.[0] })
-      const markedKeys = [...new Set((attData || []).map(a => `${String(a.date).slice(0, 10)}|${a.group_name}`))].sort()
-      console.log('[debug] markedSet keys:', markedKeys)
-      console.log('[debug] expected keys:', expected.map(e => `${e.date}|${e.group_name}`).sort().filter((v, i, a) => a.indexOf(v) === i))
 
       const markedSet = new Set<string>(
         (attData || []).map(a => `${String(a.date).slice(0, 10)}|${a.group_name}`)
@@ -255,7 +251,8 @@ export default function AttendancePage() {
       group_name: group,
       present: true,
     }))
-    await supabase.from('attendance').upsert([...mainRows, ...guestRows], { onConflict: 'student_id,date' })
+    const { error: attErr } = await supabase.from('attendance').upsert([...mainRows, ...guestRows], { onConflict: 'student_id,date' })
+    if (attErr) { alert('Ошибка сохранения посещаемости: ' + attErr.message); setSaving(false); return }
 
     // Adjust sessions only for the diff, using the chosen sub
     for (const s of allStudents) {
