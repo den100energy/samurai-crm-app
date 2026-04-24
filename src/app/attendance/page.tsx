@@ -183,11 +183,13 @@ export default function AttendancePage() {
       // Проверяем, какие из них есть в attendance
       // date хранится как TIMESTAMP — используем диапазон вместо .in()
       const minDate = days[days.length - 1]
-      const { data: attData } = await supabase
+      const { data: attData, error: attError } = await supabase
         .from('attendance')
         .select('date, group_name')
         .gte('date', minDate)
         .lt('date', today)
+
+      console.log('[debug] attendance query:', { minDate, today, count: attData?.length, error: attError, sample: attData?.[0] })
 
       const markedSet = new Set<string>(
         (attData || []).map(a => `${String(a.date).slice(0, 10)}|${a.group_name}`)
