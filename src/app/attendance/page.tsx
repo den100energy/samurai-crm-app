@@ -181,13 +181,13 @@ export default function AttendancePage() {
       if (expected.length === 0) { setMissingDays([]); return }
 
       // Проверяем, какие из них есть в attendance
+      // Фильтруем только по датам — .in() с Кириллицей+скобками в именах групп
+      // некорректно кодируется в PostgREST и возвращает пустой результат
       const dateSet = [...new Set(expected.map(e => e.date))]
-      const groupSet = [...new Set(expected.map(e => e.group_name))]
       const { data: attData } = await supabase
         .from('attendance')
         .select('date, group_name')
         .in('date', dateSet)
-        .in('group_name', groupSet)
 
       const markedSet = new Set<string>((attData || []).map(a => `${a.date}|${a.group_name}`))
 
@@ -201,10 +201,9 @@ export default function AttendancePage() {
       const expectedLogs = expected.filter(e => e.date >= LOG_START)
       if (expectedLogs.length > 0) {
         const logDateSet = [...new Set(expectedLogs.map(e => e.date))]
-        const logGroupSet = [...new Set(expectedLogs.map(e => e.group_name))]
         const { data: logsData } = await supabase
           .from('training_logs').select('date, group_name')
-          .in('date', logDateSet).in('group_name', logGroupSet)
+          .in('date', logDateSet)
 
         const logsSet = new Set<string>((logsData || []).map(l => `${l.date}|${l.group_name}`))
         const missingL = expectedLogs
