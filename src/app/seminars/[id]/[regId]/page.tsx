@@ -205,9 +205,10 @@ export default function RegDetailPage() {
       price_locked_at: new Date().toISOString(),
       status: 'deposit_paid',
     }
-    await supabase.from('seminar_registrations').update(updates).eq('id', regId)
+    const { error: regErr } = await supabase.from('seminar_registrations').update(updates).eq('id', regId)
+    if (regErr) { alert('Ошибка сохранения предоплаты: ' + regErr.message); setSaving(null); return }
 
-    await supabase.from('payments').insert({
+    const { error: payErr } = await supabase.from('payments').insert({
       amount,
       direction: 'income',
       category: 'Семинар',
@@ -217,6 +218,7 @@ export default function RegDetailPage() {
       status: 'confirmed',
       student_id: reg.student_id || null,
     })
+    if (payErr) { alert('Ошибка записи оплаты в финансы: ' + payErr.message); setSaving(null); return }
 
     if (reg.is_external && reg.referred_by_student_id) {
       const credit = Math.round(amount * 0.1)
@@ -252,14 +254,15 @@ export default function RegDetailPage() {
     const amount = parseFloat(payForm.amount)
     const newTotal = (reg.total_paid || 0) + amount
 
-    await supabase.from('seminar_registrations').update({
+    const { error: regErr2 } = await supabase.from('seminar_registrations').update({
       total_paid: newTotal,
       total_paid_at: payForm.date,
       total_method: payForm.method,
       status: 'fully_paid',
     }).eq('id', regId)
+    if (regErr2) { alert('Ошибка сохранения оплаты: ' + regErr2.message); setSaving(null); return }
 
-    await supabase.from('payments').insert({
+    const { error: payErr2 } = await supabase.from('payments').insert({
       amount,
       direction: 'income',
       category: 'Семинар',
@@ -269,6 +272,7 @@ export default function RegDetailPage() {
       status: 'confirmed',
       student_id: reg.student_id || null,
     })
+    if (payErr2) { alert('Ошибка записи оплаты в финансы: ' + payErr2.message); setSaving(null); return }
 
     if (reg.participant_telegram) {
       await fetch('/api/notify-seminar', {

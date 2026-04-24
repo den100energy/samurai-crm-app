@@ -352,9 +352,9 @@ export default function ApplicationDetailPage() {
       payment_method: paymentForm.method,
       price: amount,
     }
-    await supabase.from('attestation_applications').update(patch).eq('id', appId)
-    // Create payment record
-    await supabase.from('payments').insert({
+    const { error: appErr } = await supabase.from('attestation_applications').update(patch).eq('id', appId)
+    if (appErr) { alert('Ошибка сохранения оплаты: ' + appErr.message); setSaving(null); return }
+    const { error: payErr } = await supabase.from('payments').insert({
       amount,
       direction: 'income',
       category: 'Аттестация+',
@@ -365,7 +365,7 @@ export default function ApplicationDetailPage() {
       status: 'paid',
       attestation_application_id: appId,
     })
-    // Notify student + parents
+    if (payErr) { alert('Ошибка записи оплаты в финансы: ' + payErr.message); setSaving(null); return }
     await notifyAll(`✅ Оплата аттестации принята — ${amount} ₽\n${app?.target_grade} (${app?.discipline === 'aikido' ? 'айкидо' : 'ушу'})`)
     setApp(prev => prev ? { ...prev, ...patch } : prev)
     setSaving(null)
@@ -375,7 +375,8 @@ export default function ApplicationDetailPage() {
     setSaving('editpayment')
     const amount = parseFloat(paymentForm.price) || app?.price || 0
     const patch = { price: amount, payment_method: paymentForm.method, paid_at: paymentForm.paid_at }
-    await supabase.from('attestation_applications').update(patch).eq('id', appId)
+    const { error: editErr } = await supabase.from('attestation_applications').update(patch).eq('id', appId)
+    if (editErr) { alert('Ошибка редактирования оплаты: ' + editErr.message); setSaving(null); return }
     const { data: updated } = await supabase
       .from('payments')
       .update({ amount, payment_type: paymentForm.method, paid_at: paymentForm.paid_at })
@@ -392,8 +393,9 @@ export default function ApplicationDetailPage() {
     if (!amount) return
     setSaving('prepayment')
     const patch = { prepaid_amount: amount, prepaid_at: prepaidForm.paid_at, prepaid_method: prepaidForm.method }
-    await supabase.from('attestation_applications').update(patch).eq('id', appId)
-    await supabase.from('payments').insert({
+    const { error: preErr } = await supabase.from('attestation_applications').update(patch).eq('id', appId)
+    if (preErr) { alert('Ошибка сохранения предоплаты: ' + preErr.message); setSaving(null); return }
+    const { error: prePayErr } = await supabase.from('payments').insert({
       amount,
       direction: 'income',
       category: 'Аттестация (предоплата)',
@@ -404,6 +406,7 @@ export default function ApplicationDetailPage() {
       status: 'paid',
       attestation_application_id: appId,
     })
+    if (prePayErr) { alert('Ошибка записи предоплаты в финансы: ' + prePayErr.message); setSaving(null); return }
     await notifyAll(`⚡ Предоплата аттестации принята — ${amount} ₽\n${app?.target_grade} (${app?.discipline === 'aikido' ? 'айкидо' : 'ушу'})`)
     setApp(prev => prev ? { ...prev, ...patch } : prev)
     setSaving(null)
@@ -415,8 +418,9 @@ export default function ApplicationDetailPage() {
     const prepaid = app?.prepaid_amount || 0
     const remaining = total > 0 ? total - prepaid : prepaid
     const patch = { paid: true, paid_at: paymentForm.paid_at, payment_method: paymentForm.method }
-    await supabase.from('attestation_applications').update(patch).eq('id', appId)
-    await supabase.from('payments').insert({
+    const { error: remErr } = await supabase.from('attestation_applications').update(patch).eq('id', appId)
+    if (remErr) { alert('Ошибка сохранения остатка: ' + remErr.message); setSaving(null); return }
+    const { error: remPayErr } = await supabase.from('payments').insert({
       amount: remaining,
       direction: 'income',
       category: 'Аттестация (остаток)',
@@ -427,6 +431,7 @@ export default function ApplicationDetailPage() {
       status: 'paid',
       attestation_application_id: appId,
     })
+    if (remPayErr) { alert('Ошибка записи остатка в финансы: ' + remPayErr.message); setSaving(null); return }
     await notifyAll(`✅ Оплата аттестации завершена — итого ${total} ₽\n${app?.target_grade}`)
     setApp(prev => prev ? { ...prev, ...patch } : prev)
     setSaving(null)

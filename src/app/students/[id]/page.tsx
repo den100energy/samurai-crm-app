@@ -432,7 +432,7 @@ export default function StudentPage() {
       const paymentAmount = subForm.installment
         ? (parseFloat(subForm.deposit_amount) || 0)
         : amount
-      const { data: payData } = await supabase.from('payments').insert({
+      const { data: payData, error: payErr } = await supabase.from('payments').insert({
         student_id: id,
         direction: 'income',
         category: 'Абонементы',
@@ -442,10 +442,11 @@ export default function StudentPage() {
         paid_at: subForm.start_date || new Date().toISOString().split('T')[0],
         status: 'paid',
       }).select('id').single()
+      if (payErr) { alert('Ошибка записи оплаты: ' + payErr.message); return }
       if (payData) paymentId = payData.id
     }
 
-    const { data } = await supabase.from('subscriptions').insert({
+    const { data, error: subErr } = await supabase.from('subscriptions').insert({
       student_id: id,
       type: subForm.type,
       sessions_total: sessions,
@@ -459,6 +460,7 @@ export default function StudentPage() {
       bonuses_used: {},
       payment_id: paymentId,
     }).select().single()
+    if (subErr) { alert('Ошибка сохранения абонемента: ' + subErr.message); return }
 
     if (data) {
       setSubs(prev => [data, ...prev])
@@ -489,7 +491,7 @@ export default function StudentPage() {
 
   async function addExistingSubToFinance(sub: Subscription, paymentType: 'cash' | 'card') {
     if (!sub.amount) return
-    const { data: payData } = await supabase.from('payments').insert({
+    const { data: payData, error: payErr } = await supabase.from('payments').insert({
       student_id: id,
       direction: 'income',
       category: 'Абонементы',
@@ -499,6 +501,7 @@ export default function StudentPage() {
       paid_at: sub.start_date || new Date().toISOString().split('T')[0],
       status: 'paid',
     }).select('id').single()
+    if (payErr) { alert('Ошибка записи оплаты: ' + payErr.message); return }
     if (payData) {
       await supabase.from('subscriptions').update({ payment_id: payData.id }).eq('id', sub.id)
       setSubs(prev => prev.map(s => s.id === sub.id ? { ...s, payment_id: payData.id } : s))
