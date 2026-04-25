@@ -511,6 +511,25 @@ export default function SeminarPage() {
               </div>
             </div>
           )}
+          {/* Публичный список участников */}
+          <div className="mt-2 pt-2 border-t border-gray-100">
+            <div className="text-xs text-gray-500">📋 Публичный список участников:</div>
+            <div className="flex items-center gap-2 mt-1">
+              <input
+                readOnly
+                value={typeof window !== 'undefined' ? `${window.location.origin}/seminars/${id}/public` : `/seminars/${id}/public`}
+                className="flex-1 text-xs bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 outline-none text-gray-600"
+              />
+              <button
+                onClick={() => navigator.clipboard.writeText(
+                  typeof window !== 'undefined' ? `${window.location.origin}/seminars/${id}/public` : `/seminars/${id}/public`
+                )}
+                className="text-xs bg-orange-50 text-orange-600 px-2 py-1.5 rounded-lg hover:bg-orange-100 whitespace-nowrap"
+              >
+                Копировать
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
