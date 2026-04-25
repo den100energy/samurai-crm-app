@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 
@@ -98,6 +98,7 @@ const GROUP_COLORS = [
 
 export default function AttestationEventPage() {
   const { id } = useParams<{ id: string }>()
+  const router = useRouter()
   const [event, setEvent] = useState<AttestationEvent | null>(null)
   const [apps, setApps] = useState<Application[]>([])
   const [loading, setLoading] = useState(true)
@@ -189,6 +190,13 @@ export default function AttestationEventPage() {
     setAddForm(p => ({ ...p, student_id: '', current_grade: '', target_grade: '', last_attestation_date: '' }))
     setStudentSearch('')
     setSaving(false)
+    load()
+  }
+
+  async function deleteApplication(appId: string, name: string) {
+    if (!confirm(`Удалить заявку «${name}»? Это действие нельзя отменить.`)) return
+    const { error } = await supabase.from('attestation_applications').delete().eq('id', appId)
+    if (error) { alert('Ошибка при удалении: ' + error.message); return }
     load()
   }
 
@@ -585,8 +593,9 @@ export default function AttestationEventPage() {
             }
 
             return (
-              <Link key={app.id} href={`/attestations/${id}/${app.id}`}
-                className="grid grid-cols-[1fr_44px_36px_36px_28px_52px] gap-2 items-center bg-white border border-gray-200 rounded-xl px-3 py-2.5 hover:border-gray-400 transition-colors"
+              <div key={app.id}
+                className="relative grid grid-cols-[1fr_44px_36px_36px_28px_52px] gap-2 items-center bg-white border border-gray-200 rounded-xl px-3 py-2.5 hover:border-gray-400 transition-colors cursor-pointer"
+                onClick={() => router.push(`/attestations/${id}/${app.id}`)}
               >
                 {/* Name + grade */}
                 <div className="min-w-0">
@@ -612,7 +621,15 @@ export default function AttestationEventPage() {
                     ? <span className={RESULT_INFO[app.result]?.color}>{RESULT_INFO[app.result]?.label}</span>
                     : <span className="text-gray-300">—</span>}
                 </div>
-              </Link>
+
+                <button
+                  onClick={e => { e.stopPropagation(); deleteApplication(app.id, studentName(app)) }}
+                  className="ap-no-print absolute top-1.5 right-1.5 w-5 h-5 flex items-center justify-center text-gray-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors text-xs leading-none"
+                  title="Удалить заявку"
+                >
+                  ✕
+                </button>
+              </div>
             )
           })}
         </div>
