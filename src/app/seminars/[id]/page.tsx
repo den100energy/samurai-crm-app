@@ -232,7 +232,7 @@ export default function SeminarPage() {
       supabase.from('seminar_registrations')
         .select('id, tariff_id, student_id, is_external, participant_name, participant_phone, participant_telegram, school_status, locked_price, deposit_amount, deposit_paid_at, total_paid, status, attended, seminar_tariffs(name)')
         .eq('seminar_id', id)
-        .order('submitted_at', { ascending: false }),
+        .order('participant_name', { ascending: true }),
       supabase.from('seminar_sessions').select('*').eq('seminar_id', id).order('sort_order'),
       supabase.from('students').select('id, name, phone, group_name').eq('status', 'active').order('name'),
     ])
