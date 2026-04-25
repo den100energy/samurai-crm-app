@@ -311,6 +311,13 @@ export default function AttestationEventPage() {
           🖨 Печать
         </button>
         <button
+          onClick={() => navigator.clipboard.writeText(`${window.location.origin}/attestations/${id}/public`)}
+          className="ap-no-print text-xs px-3 py-1.5 border border-orange-300 rounded-xl text-orange-600 hover:border-orange-400 shrink-0"
+          title="Скопировать публичную ссылку"
+        >
+          📋 Ссылка
+        </button>
+        <button
           onClick={() => setShowEditForm(v => !v)}
           className="ap-no-print text-xs px-3 py-1.5 border border-gray-300 rounded-xl text-gray-600 hover:border-gray-500 shrink-0"
         >
