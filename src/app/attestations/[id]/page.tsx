@@ -237,7 +237,8 @@ export default function AttestationEventPage() {
     { key: 'passed',  icon: '🎖', label: 'Сдали',    val: passedCount,   fn: () => apps.filter(a => a.result === 'passed' || a.result === 'passed_remarks') },
   ]
   const dashFiltered = dashFilter ? (DASH_STATS.find(s => s.key === dashFilter)?.fn() ?? apps) : apps
-  const filtered = discFilter === 'all' ? dashFiltered : dashFiltered.filter((a: Application) => a.discipline === discFilter)
+  const filtered = (discFilter === 'all' ? dashFiltered : dashFiltered.filter((a: Application) => a.discipline === discFilter))
+    .sort((a, b) => studentName(a).localeCompare(studentName(b), 'ru'))
 
   return (
     <div className="ap">
