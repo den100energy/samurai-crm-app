@@ -33,10 +33,10 @@ type Registration = {
 }
 
 const STATUS_MAP: Record<string, { label: string; cls: string; printCls: string }> = {
-  fully_paid:   { label: 'Оплачен',    cls: 'bg-green-100 text-green-700',   printCls: 'text-green-700 font-semibold' },
-  deposit_paid: { label: 'Предоплата', cls: 'bg-yellow-100 text-yellow-700', printCls: 'text-yellow-700' },
-  pending:      { label: 'Не оплачен', cls: 'bg-red-100 text-red-600',       printCls: 'text-red-600 font-semibold' },
-  no_show:      { label: 'Не пришёл', cls: 'bg-gray-100 text-gray-500',      printCls: 'text-gray-500' },
+  fully_paid:   { label: 'Оплачен',    cls: 'sp-paid',    printCls: 'sp-paid-txt' },
+  deposit_paid: { label: 'Предоплата', cls: 'sp-deposit', printCls: 'sp-deposit-txt' },
+  pending:      { label: 'Не оплачен', cls: 'sp-pending', printCls: 'sp-pending-txt' },
+  no_show:      { label: 'Не пришёл', cls: 'sp-noshow',  printCls: 'sp-noshow-txt' },
 }
 
 const DISCIPLINE_LABELS: Record<string, string> = {
@@ -70,14 +70,14 @@ export default function SeminarPublicPage() {
   }, [load])
 
   if (loading) return (
-    <div className="min-h-screen flex items-center justify-center bg-white">
-      <div className="text-gray-400 text-sm">Загрузка...</div>
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fff' }}>
+      <span style={{ color: '#9ca3af', fontSize: 14 }}>Загрузка...</span>
     </div>
   )
 
   if (notFound || !seminar) return (
-    <div className="min-h-screen flex items-center justify-center bg-white">
-      <div className="text-gray-500">Семинар не найден</div>
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fff' }}>
+      <span style={{ color: '#6b7280' }}>Семинар не найден</span>
     </div>
   )
 
@@ -91,131 +91,168 @@ export default function SeminarPublicPage() {
   const totalPaid    = activeRegs.reduce((s, r) => s + (r.deposit_amount || 0) + (r.total_paid || 0), 0)
 
   return (
-    <div className="min-h-screen bg-white text-gray-900">
+    <div className="sp">
       <style>{`
+        /* ── Сброс тёмной темы для .sp ── */
+        body                { background: #ffffff !important; color: #111827 !important; }
+        .sp                 { background: #ffffff !important; min-height: 100vh; color: #111827; }
+        .sp *               { box-sizing: border-box; }
+
+        /* Фон */
+        [data-theme="dark"] .sp { background: #ffffff !important; }
+        [data-theme="dark"] .sp .sp-bg-white  { background: #ffffff !important; }
+        [data-theme="dark"] .sp .sp-bg-stripe { background: #f9fafb !important; }
+
+        /* Текст */
+        .sp .sp-t1  { color: #111827 !important; }
+        .sp .sp-t2  { color: #1f2937 !important; }
+        .sp .sp-t3  { color: #374151 !important; }
+        .sp .sp-t4  { color: #6b7280 !important; }
+        .sp .sp-t5  { color: #9ca3af !important; }
+        .sp .sp-t6  { color: #d1d5db !important; }
+
+        /* Статусы — бейдж (экран) */
+        .sp .sp-paid    { background: #dcfce7 !important; color: #15803d !important; }
+        .sp .sp-deposit { background: #fef9c3 !important; color: #a16207 !important; }
+        .sp .sp-pending { background: #fee2e2 !important; color: #dc2626 !important; }
+        .sp .sp-noshow  { background: #f3f4f6 !important; color: #6b7280 !important; }
+
+        /* Статусы — текст (печать) */
+        .sp .sp-paid-txt    { color: #15803d !important; font-weight: 600; }
+        .sp .sp-deposit-txt { color: #a16207 !important; }
+        .sp .sp-pending-txt { color: #dc2626 !important; font-weight: 600; }
+        .sp .sp-noshow-txt  { color: #6b7280 !important; }
+
+        /* Статблоки */
+        .sp .sp-stat        { border: 1px solid #e5e7eb; border-radius: 12px; padding: 12px; text-align: center; background: #fff; }
+        .sp .sp-stat-green  { border-color: #bbf7d0 !important; background: #f0fdf4 !important; }
+        .sp .sp-stat-yellow { border-color: #fef08a !important; background: #fefce8 !important; }
+        .sp .sp-stat-red    { border-color: #fecaca !important; background: #fef2f2 !important; }
+
+        /* Кнопка печати */
+        .sp .sp-btn-print { background: #111827 !important; color: #ffffff !important; border: none; border-radius: 8px; padding: 8px 16px; font-size: 14px; cursor: pointer; }
+        .sp .sp-btn-print:hover { background: #374151 !important; }
+        .sp .sp-btn-refresh { background: none; border: none; color: #9ca3af; font-size: 12px; cursor: pointer; }
+        .sp .sp-btn-refresh:hover { color: #374151; }
+
+        /* Инпуты (тёмная тема ломает) */
+        [data-theme="dark"] .sp input,
+        [data-theme="dark"] .sp select,
+        [data-theme="dark"] .sp textarea {
+          background: #ffffff !important;
+          color: #111827 !important;
+          border-color: #e5e7eb !important;
+        }
+
+        /* Печать */
         @media print {
           @page { size: A4 portrait; margin: 15mm 12mm; }
-          .no-print { display: none !important; }
+          .sp-no-print { display: none !important; }
           body { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
           table { page-break-inside: auto; }
           tr { page-break-inside: avoid; }
+          .sp-badge { display: none !important; }
+          .sp-print-only { display: inline !important; }
+        }
+        @media screen {
+          .sp-print-only { display: none !important; }
         }
       `}</style>
 
-      <div className="max-w-4xl mx-auto px-6 py-8">
+      <div style={{ maxWidth: 900, margin: '0 auto', padding: '32px 24px' }}>
 
         {/* Шапка */}
-        <div className="flex items-start justify-between border-b-2 border-gray-900 pb-5 mb-6">
+        <div style={{ borderBottom: '2px solid #111827', paddingBottom: 20, marginBottom: 24, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
           <div>
-            <div className="text-xs text-gray-400 uppercase tracking-widest mb-1 font-medium">
+            <div className="sp-t5" style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 4, fontWeight: 600 }}>
               Школа Самурая · Список участников
             </div>
-            <h1 className="text-2xl font-bold text-gray-900 leading-tight">{seminar.title}</h1>
-            <div className="flex flex-wrap gap-x-5 gap-y-1 mt-2 text-sm text-gray-600">
-              <span>
-                📅 {seminar.starts_at}
-                {seminar.ends_at !== seminar.starts_at ? ` — ${seminar.ends_at}` : ''}
-              </span>
+            <h1 className="sp-t1" style={{ fontSize: 22, fontWeight: 700, lineHeight: 1.3, margin: 0 }}>
+              {seminar.title}
+            </h1>
+            <div className="sp-t3" style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 20px', marginTop: 8, fontSize: 14 }}>
+              <span>📅 {seminar.starts_at}{seminar.ends_at !== seminar.starts_at ? ` — ${seminar.ends_at}` : ''}</span>
               {seminar.location && <span>📍 {seminar.location}</span>}
-              {seminar.discipline && (
-                <span>🥋 {DISCIPLINE_LABELS[seminar.discipline] || seminar.discipline}</span>
-              )}
+              {seminar.discipline && <span>🥋 {DISCIPLINE_LABELS[seminar.discipline] || seminar.discipline}</span>}
             </div>
           </div>
 
-          {/* Кнопки — скрыты при печати */}
-          <div className="flex flex-col items-end gap-2 no-print ml-4 shrink-0">
-            <button
-              onClick={() => window.print()}
-              className="text-sm bg-gray-900 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors"
-            >
-              🖨 Печать
-            </button>
-            <button
-              onClick={() => load()}
-              className="text-xs text-gray-400 hover:text-gray-700 transition-colors"
-            >
-              ↻ Обновить
-            </button>
+          <div className="sp-no-print" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8, flexShrink: 0 }}>
+            <button className="sp-btn-print" onClick={() => window.print()}>🖨 Печать</button>
+            <button className="sp-btn-refresh" onClick={() => load()}>↻ Обновить</button>
             {lastUpdated && (
-              <span className="text-xs text-gray-400">
-                {lastUpdated.toLocaleTimeString('ru')}
-              </span>
+              <span className="sp-t5" style={{ fontSize: 11 }}>{lastUpdated.toLocaleTimeString('ru')}</span>
             )}
           </div>
         </div>
 
         {/* Статистика */}
-        <div className="grid grid-cols-4 gap-3 mb-7">
-          <div className="border border-gray-200 rounded-xl p-3 text-center">
-            <div className="text-2xl font-bold text-gray-800">{activeRegs.length}</div>
-            <div className="text-xs text-gray-400 mt-0.5">Участников</div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 28 }}>
+          <div className="sp-stat">
+            <div className="sp-t1" style={{ fontSize: 28, fontWeight: 700 }}>{activeRegs.length}</div>
+            <div className="sp-t5" style={{ fontSize: 12, marginTop: 2 }}>Участников</div>
           </div>
-          <div className="border border-green-200 bg-green-50 rounded-xl p-3 text-center">
-            <div className="text-2xl font-bold text-green-700">{countPaid}</div>
-            <div className="text-xs text-gray-400 mt-0.5">Оплатили</div>
+          <div className="sp-stat sp-stat-green">
+            <div style={{ fontSize: 28, fontWeight: 700, color: '#15803d' }}>{countPaid}</div>
+            <div className="sp-t5" style={{ fontSize: 12, marginTop: 2 }}>Оплатили</div>
           </div>
-          <div className="border border-yellow-200 bg-yellow-50 rounded-xl p-3 text-center">
-            <div className="text-2xl font-bold text-yellow-700">{countDeposit}</div>
-            <div className="text-xs text-gray-400 mt-0.5">Предоплата</div>
+          <div className="sp-stat sp-stat-yellow">
+            <div style={{ fontSize: 28, fontWeight: 700, color: '#a16207' }}>{countDeposit}</div>
+            <div className="sp-t5" style={{ fontSize: 12, marginTop: 2 }}>Предоплата</div>
           </div>
-          <div className="border border-red-200 bg-red-50 rounded-xl p-3 text-center">
-            <div className="text-2xl font-bold text-red-600">{countPending}</div>
-            <div className="text-xs text-gray-400 mt-0.5">Не оплатили</div>
+          <div className="sp-stat sp-stat-red">
+            <div style={{ fontSize: 28, fontWeight: 700, color: '#dc2626' }}>{countPending}</div>
+            <div className="sp-t5" style={{ fontSize: 12, marginTop: 2 }}>Не оплатили</div>
           </div>
         </div>
 
         {/* Таблица */}
         {activeRegs.length === 0 ? (
-          <div className="text-center py-12 text-gray-400">Участников пока нет</div>
+          <div className="sp-t5" style={{ textAlign: 'center', padding: '48px 0' }}>Участников пока нет</div>
         ) : (
-          <table className="w-full text-sm border-collapse">
+          <table style={{ width: '100%', fontSize: 14, borderCollapse: 'collapse' }}>
             <thead>
-              <tr className="border-b-2 border-gray-900">
-                <th className="pb-2.5 text-left text-xs text-gray-500 font-semibold w-8">#</th>
-                <th className="pb-2.5 text-left text-gray-900 font-semibold">Участник</th>
-                <th className="pb-2.5 text-left text-gray-900 font-semibold">Тариф</th>
-                <th className="pb-2.5 text-right text-gray-900 font-semibold">Стоимость</th>
-                <th className="pb-2.5 text-right text-gray-900 font-semibold">Внесено</th>
-                <th className="pb-2.5 text-center text-gray-900 font-semibold">Статус</th>
+              <tr style={{ borderBottom: '2px solid #111827' }}>
+                <th className="sp-t4" style={{ textAlign: 'left', paddingBottom: 10, fontSize: 12, fontWeight: 600, width: 32 }}>#</th>
+                <th className="sp-t1" style={{ textAlign: 'left', paddingBottom: 10, fontWeight: 600 }}>Участник</th>
+                <th className="sp-t1" style={{ textAlign: 'left', paddingBottom: 10, fontWeight: 600 }}>Тариф</th>
+                <th className="sp-t1" style={{ textAlign: 'right', paddingBottom: 10, fontWeight: 600 }}>Стоимость</th>
+                <th className="sp-t1" style={{ textAlign: 'right', paddingBottom: 10, fontWeight: 600 }}>Внесено</th>
+                <th className="sp-t1" style={{ textAlign: 'center', paddingBottom: 10, fontWeight: 600 }}>Статус</th>
               </tr>
             </thead>
             <tbody>
               {activeRegs.map((r, i) => {
                 const tariff = r.tariff_id ? tariffMap[r.tariff_id] : null
                 const paid = (r.deposit_amount || 0) + (r.total_paid || 0)
-                const st = STATUS_MAP[r.status] || { label: r.status, cls: 'bg-gray-100 text-gray-500', printCls: 'text-gray-500' }
-                const isOdd = i % 2 !== 0
+                const st = STATUS_MAP[r.status] || { label: r.status, cls: 'sp-noshow', printCls: 'sp-noshow-txt' }
                 return (
                   <tr
                     key={r.id}
-                    className={`border-b border-gray-100 ${isOdd ? 'bg-gray-50' : 'bg-white'}`}
+                    className={i % 2 !== 0 ? 'sp-bg-stripe' : 'sp-bg-white'}
+                    style={{ borderBottom: '1px solid #f3f4f6' }}
                   >
-                    <td className="py-2.5 pr-2 text-gray-400 text-xs align-middle">{i + 1}</td>
-                    <td className="py-2.5 pr-3 align-middle">
-                      <div className="font-medium text-gray-900">{r.participant_name}</div>
-                      {r.is_external && (
-                        <div className="text-xs text-orange-500 leading-tight">внешний</div>
-                      )}
+                    <td className="sp-t5" style={{ padding: '10px 8px 10px 0', fontSize: 12, verticalAlign: 'middle' }}>{i + 1}</td>
+                    <td style={{ padding: '10px 12px 10px 0', verticalAlign: 'middle' }}>
+                      <div className="sp-t1" style={{ fontWeight: 500 }}>{r.participant_name}</div>
+                      {r.is_external && <div style={{ fontSize: 12, color: '#f97316' }}>внешний</div>}
                     </td>
-                    <td className="py-2.5 pr-3 text-gray-600 align-middle">
+                    <td className="sp-t3" style={{ padding: '10px 12px 10px 0', verticalAlign: 'middle' }}>
                       {tariff?.name || '—'}
                     </td>
-                    <td className="py-2.5 pr-3 text-right text-gray-800 font-medium align-middle whitespace-nowrap">
+                    <td className="sp-t2" style={{ padding: '10px 12px 10px 0', textAlign: 'right', fontWeight: 500, verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
                       {r.locked_price ? `${r.locked_price.toLocaleString('ru')} ₽` : '—'}
                     </td>
-                    <td className="py-2.5 pr-3 text-right align-middle whitespace-nowrap">
-                      <span className={paid > 0 ? 'text-green-700 font-medium' : 'text-gray-400'}>
+                    <td style={{ padding: '10px 12px 10px 0', textAlign: 'right', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
+                      <span style={{ color: paid > 0 ? '#15803d' : '#d1d5db', fontWeight: paid > 0 ? 500 : 400 }}>
                         {paid > 0 ? `${paid.toLocaleString('ru')} ₽` : '—'}
                       </span>
                     </td>
-                    <td className="py-2.5 text-center align-middle">
-                      {/* Экран */}
-                      <span className={`no-print inline-block text-xs px-2.5 py-1 rounded-full font-medium ${st.cls}`}>
+                    <td style={{ padding: '10px 0', textAlign: 'center', verticalAlign: 'middle' }}>
+                      <span className={`sp-badge ${st.cls}`} style={{ display: 'inline-block', fontSize: 12, padding: '3px 10px', borderRadius: 999, fontWeight: 500 }}>
                         {st.label}
                       </span>
-                      {/* Печать */}
-                      <span className={`hidden print:inline text-xs font-medium ${st.printCls}`}>
+                      <span className={`sp-print-only ${st.printCls}`} style={{ fontSize: 12 }}>
                         {st.label}
                       </span>
                     </td>
@@ -224,15 +261,15 @@ export default function SeminarPublicPage() {
               })}
             </tbody>
             <tfoot>
-              <tr className="border-t-2 border-gray-900">
+              <tr style={{ borderTop: '2px solid #111827' }}>
                 <td />
-                <td colSpan={2} className="pt-3 text-sm font-bold text-gray-900">
+                <td colSpan={2} className="sp-t1" style={{ paddingTop: 12, fontSize: 14, fontWeight: 700 }}>
                   Итого ({activeRegs.length} чел.)
                 </td>
-                <td className="pt-3 text-right text-sm font-bold text-gray-900 whitespace-nowrap">
+                <td className="sp-t1" style={{ paddingTop: 12, textAlign: 'right', fontSize: 14, fontWeight: 700, whiteSpace: 'nowrap' }}>
                   {totalLocked.toLocaleString('ru')} ₽
                 </td>
-                <td className="pt-3 text-right text-sm font-bold text-green-700 whitespace-nowrap">
+                <td style={{ paddingTop: 12, textAlign: 'right', fontSize: 14, fontWeight: 700, color: '#15803d', whiteSpace: 'nowrap' }}>
                   {totalPaid.toLocaleString('ru')} ₽
                 </td>
                 <td />
@@ -242,14 +279,12 @@ export default function SeminarPublicPage() {
         )}
 
         {/* Подвал */}
-        <div className="mt-8 pt-4 border-t border-gray-200">
-          {/* Экран */}
-          <div className="no-print flex items-center justify-between text-xs text-gray-400">
+        <div style={{ marginTop: 32, paddingTop: 16, borderTop: '1px solid #e5e7eb' }}>
+          <div className="sp-no-print sp-t5" style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
             <span>Школа Самурая · crm.samu-rai.ru</span>
-            <span>Обновляется автоматически каждые 30 сек</span>
+            <span>Обновляется каждые 30 сек</span>
           </div>
-          {/* Печать */}
-          <div className="hidden print:block text-center text-xs text-gray-400">
+          <div className="sp-print-only sp-t5" style={{ textAlign: 'center', fontSize: 12 }}>
             Школа Самурая · Распечатано {new Date().toLocaleDateString('ru', { day: '2-digit', month: 'long', year: 'numeric' })}
           </div>
         </div>
