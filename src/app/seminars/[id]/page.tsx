@@ -125,6 +125,7 @@ export default function SeminarPage() {
   const [regs, setRegs] = useState<Registration[]>([])
   const [sessions, setSessions] = useState<Session[]>([])
   const [students, setStudents] = useState<Student[]>([])
+  const [sessionAttendanceCounts, setSessionAttendanceCounts] = useState<Record<string, number>>({})
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState<string | null>(null)
 
@@ -236,11 +237,25 @@ export default function SeminarPage() {
       supabase.from('seminar_sessions').select('*').eq('seminar_id', id).order('sort_order'),
       supabase.from('students').select('id, name, phone, group_name').eq('status', 'active').order('name'),
     ])
+    const sessionIds = (sess || []).map(s => s.id)
+    let attCounts: Record<string, number> = {}
+    if (sessionIds.length > 0) {
+      const { data: att } = await supabase
+        .from('seminar_session_attendance')
+        .select('session_id')
+        .in('session_id', sessionIds)
+        .eq('attended', true)
+      for (const a of att || []) {
+        attCounts[a.session_id] = (attCounts[a.session_id] || 0) + 1
+      }
+    }
+
     setSeminar(sem)
     setTariffs(tar || [])
     setRegs(((reg || []) as unknown) as Registration[])
     setSessions(sess || [])
     setStudents(stu || [])
+    setSessionAttendanceCounts(attCounts)
     setLoading(false)
   }
 
@@ -555,6 +570,23 @@ export default function SeminarPage() {
             <div className="text-sm text-indigo-700 font-medium">Пришли на семинар</div>
             <div className="text-xl font-bold text-indigo-800">{countAttended} / {regs.length}</div>
           </div>
+          {/* By session */}
+          {sessions.length > 0 && (
+            <div className="mt-3 pt-3 border-t border-gray-100 space-y-1.5">
+              <div className="text-xs font-medium text-gray-500 mb-1">По тренировкам</div>
+              {sessions.map((s, i) => {
+                const count = sessionAttendanceCounts[s.id] || 0
+                return (
+                  <div key={s.id} className="flex items-center justify-between text-xs">
+                    <span className="text-gray-500 truncate mr-2">{i + 1}. {s.title}</span>
+                    <span className={`font-medium shrink-0 ${count > 0 ? 'text-indigo-700' : 'text-gray-300'}`}>
+                      {count} чел.
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          )}
           {/* By tariff */}
           {tariffs.length > 1 && (
             <div className="mt-3 pt-3 border-t border-gray-100 space-y-1">
