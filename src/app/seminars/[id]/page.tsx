@@ -404,6 +404,9 @@ export default function SeminarPage() {
   const regLink = typeof window !== 'undefined'
     ? `${window.location.origin}/seminars/${id}/register`
     : `/seminars/${id}/register`
+  const publicLink = typeof window !== 'undefined'
+    ? `${window.location.origin}/seminars/${id}/public`
+    : `/seminars/${id}/public`
 
   if (loading) return <div className="text-center py-12 text-gray-400">Загрузка...</div>
   if (!seminar) return <div className="text-center py-12 text-gray-400">Семинар не найден</div>
@@ -515,17 +518,10 @@ export default function SeminarPage() {
           <div className="mt-2 pt-2 border-t border-gray-100">
             <div className="text-xs text-gray-500">📋 Публичный список участников:</div>
             <div className="flex items-center gap-2 mt-1">
-              <input
-                readOnly
-                value={typeof window !== 'undefined' ? `${window.location.origin}/seminars/${id}/public` : `/seminars/${id}/public`}
-                className="flex-1 text-xs bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 outline-none text-gray-600"
-              />
-              <button
-                onClick={() => navigator.clipboard.writeText(
-                  typeof window !== 'undefined' ? `${window.location.origin}/seminars/${id}/public` : `/seminars/${id}/public`
-                )}
-                className="text-xs bg-orange-50 text-orange-600 px-2 py-1.5 rounded-lg hover:bg-orange-100 whitespace-nowrap"
-              >
+              <input readOnly value={publicLink}
+                className="flex-1 text-xs bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 outline-none text-gray-600" />
+              <button onClick={() => navigator.clipboard.writeText(publicLink)}
+                className="text-xs bg-orange-50 text-orange-600 px-2 py-1.5 rounded-lg hover:bg-orange-100 whitespace-nowrap">
                 Копировать
               </button>
             </div>
