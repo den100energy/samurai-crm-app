@@ -217,8 +217,8 @@ export default function AttestationEventPage() {
     })
   }
 
-  if (loading) return <main className="max-w-2xl mx-auto p-4"><p className="text-gray-400 py-8 text-center">Загрузка...</p></main>
-  if (!event) return <main className="max-w-2xl mx-auto p-4"><p className="text-red-500">Мероприятие не найдено</p></main>
+  if (loading) return <div className="ap"><main className="max-w-2xl mx-auto p-4"><p className="text-gray-400 py-8 text-center">Загрузка...</p></main></div>
+  if (!event) return <div className="ap"><main className="max-w-2xl mx-auto p-4"><p className="text-red-500">Мероприятие не найдено</p></main></div>
 
   const si = EVENT_STATUS_INFO[event.status] || EVENT_STATUS_INFO.draft
   const totalApps = apps.length
@@ -240,18 +240,79 @@ export default function AttestationEventPage() {
   const filtered = discFilter === 'all' ? dashFiltered : dashFiltered.filter((a: Application) => a.discipline === discFilter)
 
   return (
+    <div className="ap">
+    <style>{`
+      body { background: #ffffff !important; color: #111827 !important; }
+      .ap  { background: #ffffff; min-height: 100vh; }
+
+      [data-theme="dark"] .ap .bg-white    { background: #ffffff !important; }
+      [data-theme="dark"] .ap .bg-gray-50  { background: #f9fafb !important; }
+      [data-theme="dark"] .ap .bg-gray-100 { background: #f3f4f6 !important; }
+      [data-theme="dark"] .ap .bg-gray-200 { background: #e5e7eb !important; }
+      [data-theme="dark"] .ap .bg-black    { background: #111827 !important; }
+      [data-theme="dark"] .ap .bg-amber-50 { background: #fffbeb !important; }
+      [data-theme="dark"] .ap .bg-blue-50  { background: #eff6ff !important; }
+      [data-theme="dark"] .ap .bg-green-50 { background: #f0fdf4 !important; }
+      [data-theme="dark"] .ap .bg-purple-50{ background: #faf5ff !important; }
+
+      [data-theme="dark"] .ap .text-gray-900 { color: #111827 !important; }
+      [data-theme="dark"] .ap .text-gray-800 { color: #1f2937 !important; }
+      [data-theme="dark"] .ap .text-gray-700 { color: #374151 !important; }
+      [data-theme="dark"] .ap .text-gray-600 { color: #4b5563 !important; }
+      [data-theme="dark"] .ap .text-gray-500 { color: #6b7280 !important; }
+      [data-theme="dark"] .ap .text-gray-400 { color: #9ca3af !important; }
+      [data-theme="dark"] .ap .text-gray-300 { color: #d1d5db !important; }
+      [data-theme="dark"] .ap .text-black    { color: #111827 !important; }
+      [data-theme="dark"] .ap .text-white    { color: #ffffff !important; }
+      [data-theme="dark"] .ap .text-green-600{ color: #16a34a !important; }
+      [data-theme="dark"] .ap .text-green-700{ color: #15803d !important; }
+      [data-theme="dark"] .ap .text-amber-600{ color: #d97706 !important; }
+      [data-theme="dark"] .ap .text-amber-700{ color: #b45309 !important; }
+      [data-theme="dark"] .ap .text-red-500  { color: #ef4444 !important; }
+      [data-theme="dark"] .ap .text-blue-600 { color: #2563eb !important; }
+      [data-theme="dark"] .ap .text-blue-700 { color: #1d4ed8 !important; }
+      [data-theme="dark"] .ap .text-purple-600{ color: #9333ea !important; }
+      [data-theme="dark"] .ap .text-purple-700{ color: #7e22ce !important; }
+
+      [data-theme="dark"] .ap .border-gray-200 { border-color: #e5e7eb !important; }
+      [data-theme="dark"] .ap .border-gray-300 { border-color: #d1d5db !important; }
+      [data-theme="dark"] .ap .border-black    { border-color: #111827 !important; }
+
+      [data-theme="dark"] .ap input,
+      [data-theme="dark"] .ap select,
+      [data-theme="dark"] .ap textarea {
+        background: #ffffff !important; color: #111827 !important; border-color: #d1d5db !important;
+      }
+      [data-theme="dark"] .ap .hover\:bg-black:hover  { background: #1f2937 !important; }
+      [data-theme="dark"] .ap .hover\:bg-gray-50:hover { background: #f9fafb !important; }
+      [data-theme="dark"] .ap .hover\:text-black:hover { color: #111827 !important; }
+      [data-theme="dark"] .ap .shadow-sm { box-shadow: 0 1px 3px rgba(0,0,0,0.1) !important; }
+
+      @media print {
+        @page { size: A4 portrait; margin: 15mm 12mm; }
+        .ap-no-print { display: none !important; }
+        body { print-color-adjust: exact; -webkit-print-color-adjust: exact; background: #fff !important; }
+        .ap a { text-decoration: none !important; }
+      }
+    `}</style>
     <main className="max-w-2xl mx-auto p-4">
       {/* Header */}
       <div className="flex items-center gap-3 mb-4">
-        <Link href="/attestations" className="text-gray-500 hover:text-black text-xl font-bold leading-none">←</Link>
+        <Link href="/attestations" className="ap-no-print text-gray-500 hover:text-black text-xl font-bold leading-none">←</Link>
         <div className="flex-1 min-w-0">
           <h1 className="text-lg font-bold text-gray-900 truncate">{event.title}</h1>
           <p className="text-sm text-gray-500">{DISC_LABEL[event.discipline] || event.discipline} · {event.event_date}</p>
         </div>
         <span className={`text-xs px-2 py-1 rounded-full font-medium shrink-0 ${si.color}`}>{si.label}</span>
         <button
+          onClick={() => window.print()}
+          className="ap-no-print text-xs px-3 py-1.5 border border-gray-300 rounded-xl text-gray-600 hover:border-gray-500 shrink-0"
+        >
+          🖨 Печать
+        </button>
+        <button
           onClick={() => setShowEditForm(v => !v)}
-          className="text-xs px-3 py-1.5 border border-gray-300 rounded-xl text-gray-600 hover:border-gray-500 shrink-0"
+          className="ap-no-print text-xs px-3 py-1.5 border border-gray-300 rounded-xl text-gray-600 hover:border-gray-500 shrink-0"
         >
           ✏️ Изменить
         </button>
@@ -259,7 +320,7 @@ export default function AttestationEventPage() {
 
       {/* Edit form */}
       {showEditForm && (
-        <form onSubmit={saveEdit} className="bg-blue-50 border border-blue-200 rounded-2xl p-4 mb-4 space-y-3">
+        <form onSubmit={saveEdit} className="ap-no-print bg-blue-50 border border-blue-200 rounded-2xl p-4 mb-4 space-y-3">
           <h3 className="font-semibold text-gray-800 text-sm">Редактирование мероприятия</h3>
 
           <div>
@@ -374,7 +435,7 @@ export default function AttestationEventPage() {
       )}
 
       {/* Actions */}
-      <div className="flex gap-2 mb-4">
+      <div className="ap-no-print flex gap-2 mb-4">
         {EVENT_STATUS_NEXT[event.status] && (
           <button onClick={advanceStatus} disabled={changingStatus} className="bg-black text-white px-4 py-2 rounded-xl text-sm font-medium disabled:opacity-60">
             {changingStatus ? '...' : EVENT_STATUS_NEXT_LABEL[event.status]}
@@ -387,7 +448,7 @@ export default function AttestationEventPage() {
 
       {/* Add form */}
       {showAddForm && (
-        <form onSubmit={addApplication} className="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-4 space-y-3">
+        <form onSubmit={addApplication} className="ap-no-print bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-4 space-y-3">
           <h3 className="font-semibold text-gray-800 text-sm">Новая заявка</h3>
 
           <div className="relative">
@@ -463,7 +524,7 @@ export default function AttestationEventPage() {
 
       {/* Discipline filter */}
       {event.discipline === 'both' && (
-        <div className="flex gap-2 mb-3">
+        <div className="ap-no-print flex gap-2 mb-3">
           {(['all', 'aikido', 'wushu'] as const).map(d => (
             <button key={d} onClick={() => setDiscFilter(d)} className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${discFilter === d ? 'bg-black text-white' : 'bg-gray-100 text-gray-600'}`}>
               {d === 'all' ? 'Все' : d === 'aikido' ? 'Айкидо' : 'Ушу'}
@@ -551,5 +612,6 @@ export default function AttestationEventPage() {
 
       {event.notes && <p className="mt-4 text-xs text-gray-400 bg-gray-50 rounded-xl px-3 py-2">{event.notes}</p>}
     </main>
+    </div>
   )
 }
