@@ -109,6 +109,13 @@ export default function AttestationEventPage() {
   const [addForm, setAddForm] = useState({ student_id: '', discipline: 'aikido', current_grade: '', target_grade: '', last_attestation_date: '' })
   const [saving, setSaving] = useState(false)
   const [changingStatus, setChangingStatus] = useState(false)
+  const [copiedLink, setCopiedLink] = useState(false)
+
+  function copyPublicLink() {
+    navigator.clipboard.writeText(`${window.location.origin}/attestations/${id}/public`)
+    setCopiedLink(true)
+    setTimeout(() => setCopiedLink(false), 2000)
+  }
   const [showGroupSchedule, setShowGroupSchedule] = useState(false)
   const [showEditForm, setShowEditForm] = useState(false)
   const [editForm, setEditForm] = useState({ title: '', applications_open_at: '', event_date: '', notes: '' })
@@ -320,11 +327,10 @@ export default function AttestationEventPage() {
           🖨 Печать
         </button>
         <button
-          onClick={() => navigator.clipboard.writeText(`${window.location.origin}/attestations/${id}/public`)}
-          className="ap-no-print text-xs px-3 py-1.5 border border-orange-300 rounded-xl text-orange-600 hover:border-orange-400 shrink-0"
-          title="Скопировать публичную ссылку"
+          onClick={copyPublicLink}
+          className={`ap-no-print text-xs px-3 py-1.5 border rounded-xl shrink-0 transition-all duration-200 ${copiedLink ? 'border-green-400 bg-green-50 text-green-700' : 'border-orange-300 text-orange-600 hover:border-orange-400'}`}
         >
-          📋 Ссылка
+          {copiedLink ? '✓ Скопировано' : '📋 Ссылка'}
         </button>
         <button
           onClick={() => setShowEditForm(v => !v)}

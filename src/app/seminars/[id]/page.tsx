@@ -128,6 +128,13 @@ export default function SeminarPage() {
   const [sessionAttendanceCounts, setSessionAttendanceCounts] = useState<Record<string, number>>({})
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState<string | null>(null)
+  const [copied, setCopied] = useState<string | null>(null)
+
+  function copyLink(key: string, url: string) {
+    navigator.clipboard.writeText(url)
+    setCopied(key)
+    setTimeout(() => setCopied(null), 2000)
+  }
 
   // Seminar edit
   const [editingSeminar, setEditingSeminar] = useState(false)
@@ -522,9 +529,9 @@ export default function SeminarPage() {
               <div className="text-xs text-gray-500">Ссылка для записи:</div>
               <div className="flex items-center gap-2 mt-1">
                 <input readOnly value={regLink} className="flex-1 text-xs bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 outline-none text-gray-600" />
-                <button onClick={() => navigator.clipboard.writeText(regLink)}
-                  className="text-xs bg-indigo-50 text-indigo-600 px-2 py-1.5 rounded-lg hover:bg-indigo-100">
-                  Копировать
+                <button onClick={() => copyLink('reg', regLink)}
+                  className={`text-xs px-2 py-1.5 rounded-lg whitespace-nowrap transition-all duration-200 ${copied === 'reg' ? 'bg-green-100 text-green-700' : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100'}`}>
+                  {copied === 'reg' ? '✓ Скопировано' : 'Копировать'}
                 </button>
               </div>
             </div>
@@ -535,9 +542,9 @@ export default function SeminarPage() {
             <div className="flex items-center gap-2 mt-1">
               <input readOnly value={publicLink}
                 className="flex-1 text-xs bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 outline-none text-gray-600" />
-              <button onClick={() => navigator.clipboard.writeText(publicLink)}
-                className="text-xs bg-orange-50 text-orange-600 px-2 py-1.5 rounded-lg hover:bg-orange-100 whitespace-nowrap">
-                Копировать
+              <button onClick={() => copyLink('public', publicLink)}
+                className={`text-xs px-2 py-1.5 rounded-lg whitespace-nowrap transition-all duration-200 ${copied === 'public' ? 'bg-green-100 text-green-700' : 'bg-orange-50 text-orange-600 hover:bg-orange-100'}`}>
+                {copied === 'public' ? '✓ Скопировано' : 'Копировать'}
               </button>
             </div>
           </div>
