@@ -1978,7 +1978,7 @@ export default function StudentPage() {
             10: 'bg-amber-400 text-amber-900',
             11: 'bg-amber-400 text-amber-900',
           }
-          const lastSub = subs.length > 0 ? subs[0] : null
+          const lastSub = subs.find(s => !s.is_pending) ?? null
           const subStart = lastSub?.start_date ?? null
           const subEnd = lastSub?.end_date ?? null
           const monthCounts: { key: string; label: string; count: number; monthNum: number }[] = []
