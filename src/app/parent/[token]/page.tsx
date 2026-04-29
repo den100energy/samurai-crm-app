@@ -573,6 +573,7 @@ export default function ParentPage() {
                 {student.name[0]}
               </div>
             )}
+            <div className="text-white/80 text-xs font-semibold uppercase tracking-widest drop-shadow mb-0.5">Кабинет родителя</div>
             <div className="text-white text-lg font-bold drop-shadow-lg">{student.name}</div>
             <div className="text-white/70 text-sm drop-shadow">{student.group_name || 'Группа не указана'}</div>
           </div>
