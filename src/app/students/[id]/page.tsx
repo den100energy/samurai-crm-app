@@ -1353,6 +1353,12 @@ export default function StudentPage() {
               const isExpiredByDate = s.end_date ? s.end_date < today : false
               const isExpiredBySessions = s.sessions_left !== null && s.sessions_left <= 0
               const isExpired = !s.is_pending && !s.is_frozen && (isExpiredByDate || isExpiredBySessions)
+              const lastSessionDate = isExpiredBySessions && s.start_date && s.sessions_total
+                ? (() => {
+                    const subAtt = attendance.filter(a => a.present && a.date >= s.start_date!).sort((a, b) => a.date.localeCompare(b.date))
+                    return subAtt[s.sessions_total! - 1]?.date ?? null
+                  })()
+                : null
               const matchedType = subTypes.find(t => t.name === s.type)
               return (
                 <div key={s.id} className={`p-3 rounded-xl ${isExpired ? 'bg-red-50 border border-red-200' : 'bg-gray-50'}`}>
@@ -1378,6 +1384,9 @@ export default function StudentPage() {
                       </div>
                       {s.is_frozen && s.freeze_end && (
                         <div className="text-xs text-blue-500 mt-0.5">Заморозка до {formatDate(s.freeze_end)} · {s.freeze_days_used} дн.</div>
+                      )}
+                      {lastSessionDate && (
+                        <div className="text-xs text-red-500 mt-0.5">Закончился {formatDate(lastSessionDate)} по кол-ву занятий</div>
                       )}
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
@@ -2011,6 +2020,15 @@ export default function StudentPage() {
               {(() => {
                 const subStarts = [...new Set(subs.map(s => s.start_date).filter(Boolean) as string[])].sort()
                 const formatStart = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' })
+                const expiredBySessionEndDates = new Set<string>(
+                  subs
+                    .filter(s => !s.is_pending && !s.is_frozen && s.sessions_left !== null && s.sessions_left <= 0 && s.start_date && s.sessions_total)
+                    .map(s => {
+                      const subAtt = attendance.filter(a => a.present && a.date >= s.start_date!).sort((a, b) => a.date.localeCompare(b.date))
+                      return subAtt[s.sessions_total! - 1]?.date ?? null
+                    })
+                    .filter((d): d is string => d !== null)
+                )
                 return rows.map((row, idx) => {
                   const prev = rows[idx - 1]
                   const crossedStart = prev ? subStarts.find(s => prev.date >= s && row.date < s) : null
@@ -2018,6 +2036,14 @@ export default function StudentPage() {
                     <div key={`sep-${crossedStart}-${idx}`} className="flex items-center gap-2 py-1.5 my-1">
                       <div className="flex-1 h-px bg-red-400" />
                       <span className="text-[10px] text-red-500 font-medium whitespace-nowrap">Абонемент с {formatStart(crossedStart)}</span>
+                      <div className="flex-1 h-px bg-red-400" />
+                    </div>
+                  ) : null
+                  const isLastExpiredSession = row.kind === 'att' && row.a.present && expiredBySessionEndDates.has(row.date)
+                  const endSeparator = isLastExpiredSession ? (
+                    <div key={`end-sep-${row.date}-${idx}`} className="flex items-center gap-2 py-1.5 my-1">
+                      <div className="flex-1 h-px bg-red-400" />
+                      <span className="text-[10px] text-red-500 font-medium whitespace-nowrap">Последнее занятие по абонементу</span>
                       <div className="flex-1 h-px bg-red-400" />
                     </div>
                   ) : null
@@ -2035,6 +2061,7 @@ export default function StudentPage() {
                   const a = row.a
                   return (
                     <div key={`att-group-${a.id}`}>
+                      {endSeparator}
                       {separator}
                       <div className="flex items-center justify-between text-sm gap-2">
                     {editingAttId === a.id ? (
