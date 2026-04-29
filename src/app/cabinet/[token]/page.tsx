@@ -879,14 +879,12 @@ export default function CabinetPage() {
                   Получай в Telegram напоминания об абонементе, изменения в расписании и задания от тренера.
                 </div>
                 <div className="flex gap-2 flex-wrap">
-                  <a
-                    href={getConnectUrl('telegram', student.invite_token!) ?? undefined}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                  <button
+                    onClick={() => setTab('tickets')}
                     className="inline-flex items-center gap-1.5 bg-sky-500 hover:bg-sky-600 text-white text-sm font-medium px-4 py-2 rounded-xl"
                   >
                     Подключить уведомления
-                  </a>
+                  </button>
                   <button
                     onClick={dismissTgBanner}
                     className="text-sm text-gray-500 hover:text-gray-700 px-3 py-2"

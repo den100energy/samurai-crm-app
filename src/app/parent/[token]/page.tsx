@@ -617,36 +617,20 @@ export default function ParentPage() {
                   <div className="text-sm text-gray-600 mb-3">
                     Получайте в Telegram напоминания об абонементе, изменения в расписании и программу тренировок.
                   </div>
-                  <div className="space-y-2 mb-2">
-                    {parentContacts
-                      .filter(c => !c.telegram_chat_id && c.invite_token)
-                      .map(c => (
-                        <a
-                          key={c.id}
-                          href={getConnectUrl('telegram', c.invite_token!) ?? undefined}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center justify-between bg-white border border-sky-200 hover:bg-sky-50 rounded-xl px-3 py-2 text-sm"
-                        >
-                          <span className="text-gray-700">
-                            Я — <b>{c.name}</b>
-                            {c.role && <span className="text-gray-400 text-xs ml-1">({c.role})</span>}
-                          </span>
-                          <span className="text-sky-600 font-medium">Подключить →</span>
-                        </a>
-                      ))}
+                  <div className="flex gap-2 flex-wrap">
+                    <button
+                      onClick={() => setTab('tickets')}
+                      className="inline-flex items-center gap-1.5 bg-sky-500 hover:bg-sky-600 text-white text-sm font-medium px-4 py-2 rounded-xl"
+                    >
+                      Подключить уведомления
+                    </button>
+                    <button
+                      onClick={dismissParentTgBanner}
+                      className="text-sm text-gray-500 hover:text-gray-700 px-3 py-2"
+                    >
+                      Не сейчас
+                    </button>
                   </div>
-                  {parentContacts.some(c => c.telegram_chat_id) && (
-                    <div className="text-xs text-gray-500 mb-2">
-                      ✅ Уже подключены: {parentContacts.filter(c => c.telegram_chat_id).map(c => c.name).join(', ')}
-                    </div>
-                  )}
-                  <button
-                    onClick={dismissParentTgBanner}
-                    className="text-sm text-gray-500 hover:text-gray-700"
-                  >
-                    Не сейчас
-                  </button>
                 </div>
               </div>
             </div>
