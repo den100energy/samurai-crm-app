@@ -776,10 +776,10 @@ export default function StudentPage() {
   }
 
   function copyContactInviteLink(contact: Contact) {
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || window.location.origin
-    const link = `${appUrl}/invite/${contact.invite_token}`
-    navigator.clipboard.writeText(link)
-    alert(`Ссылка для ${contact.name} скопирована!\n\n${link}`)
+    if (!student?.parent_token) return alert('Токен кабинета не найден')
+    const url = `${window.location.origin}/parent/${student.parent_token}`
+    navigator.clipboard.writeText(url)
+    alert(`Ссылка на кабинет для ${contact.name} скопирована!\n\n${url}`)
   }
 
   async function sendContactReminder(contact: Contact) {
@@ -969,11 +969,10 @@ export default function StudentPage() {
   }
 
   function copyStudentTelegramLink() {
-    if (!student?.invite_token) return alert('Токен не найден')
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || window.location.origin
-    const link = `${appUrl}/invite/${student.invite_token}`
-    navigator.clipboard.writeText(link)
-    alert(`Ссылка скопирована!\n\nОтправьте ученику:\n${link}\n\nОн сможет выбрать удобный мессенджер для получения уведомлений.`)
+    if (!student?.cabinet_token) return alert('Токен кабинета не найден')
+    const url = `${window.location.origin}/cabinet/${student.cabinet_token}`
+    navigator.clipboard.writeText(url)
+    alert(`Ссылка на кабинет ученика скопирована!\n\nОтправьте ученику:\n${url}\n\nВ кабинете он сможет подключить мессенджер.`)
   }
 
   function openWhatsApp() {

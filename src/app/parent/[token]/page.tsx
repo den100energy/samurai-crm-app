@@ -623,7 +623,7 @@ export default function ParentPage() {
                       .map(c => (
                         <a
                           key={c.id}
-                          href={`/invite/${c.invite_token}`}
+                          href={getConnectUrl('telegram', c.invite_token!) ?? undefined}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="flex items-center justify-between bg-white border border-sky-200 hover:bg-sky-50 rounded-xl px-3 py-2 text-sm"
