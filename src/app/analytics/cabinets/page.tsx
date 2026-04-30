@@ -60,7 +60,7 @@ export default function CabinetsPage() {
 
   useEffect(() => {
     async function load() {
-      const [studentsRes, contactsRes, studentChRes, contactChRes] = await Promise.all([
+      const [studentsRes, contactsRes] = await Promise.all([
         supabase
           .from('students')
           .select('id, name, group_name, telegram_chat_id')
@@ -70,38 +70,25 @@ export default function CabinetsPage() {
           .from('student_contacts')
           .select('id, name, role, student_id, telegram_chat_id')
           .order('name'),
-        supabase
-          .from('user_channels')
-          .select('user_id, provider')
-          .eq('user_type', 'student'),
-        supabase
-          .from('user_channels')
-          .select('user_id, provider')
-          .eq('user_type', 'contact'),
       ])
 
       const students = studentsRes.data || []
       const contactsRaw = contactsRes.data || []
 
-      // user_id → Set<provider>
-      const studentProvMap = new Map<string, Set<string>>()
-      for (const ch of studentChRes.data || []) {
-        if (!studentProvMap.has(ch.user_id)) studentProvMap.set(ch.user_id, new Set())
-        studentProvMap.get(ch.user_id)!.add(ch.provider)
-      }
-      const contactProvMap = new Map<string, Set<string>>()
-      for (const ch of contactChRes.data || []) {
-        if (!contactProvMap.has(ch.user_id)) contactProvMap.set(ch.user_id, new Set())
-        contactProvMap.get(ch.user_id)!.add(ch.provider)
+      const allIds = [...students.map(s => s.id), ...contactsRaw.map(c => c.id)]
+      let channelMap: Record<string, string[]> = {}
+      if (allIds.length > 0) {
+        const res = await fetch(`/api/user-channels?user_ids=${allIds.join(',')}`)
+        if (res.ok) channelMap = await res.json()
       }
 
       const getStudentProviders = (s: { id: string; telegram_chat_id: string | null }) => {
-        const ps = new Set<string>(studentProvMap.get(s.id) || [])
+        const ps = new Set<string>(channelMap[s.id] || [])
         if (s.telegram_chat_id) ps.add('telegram')
         return Array.from(ps)
       }
       const getContactProviders = (c: { id: string; telegram_chat_id: string | null }) => {
-        const ps = new Set<string>(contactProvMap.get(c.id) || [])
+        const ps = new Set<string>(channelMap[c.id] || [])
         if (c.telegram_chat_id) ps.add('telegram')
         return Array.from(ps)
       }

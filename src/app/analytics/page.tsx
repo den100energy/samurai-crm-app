@@ -78,21 +78,24 @@ export default function AnalyticsPage() {
   }
 
   async function loadCabinetStats() {
-    const [studentsRes, contactsRes, studentChRes, contactChRes] = await Promise.all([
+    const [studentsRes, contactsRes] = await Promise.all([
       supabase.from('students').select('id, telegram_chat_id').eq('status', 'active'),
       supabase.from('student_contacts').select('id, telegram_chat_id'),
-      supabase.from('user_channels').select('user_id').eq('user_type', 'student'),
-      supabase.from('user_channels').select('user_id').eq('user_type', 'contact'),
     ])
 
     const students = studentsRes.data || []
     const contacts = contactsRes.data || []
-    const studentChannelIds = new Set((studentChRes.data || []).map(c => c.user_id))
-    const contactChannelIds = new Set((contactChRes.data || []).map(c => c.user_id))
 
-    const studentsLinked = students.filter(s => s.telegram_chat_id != null || studentChannelIds.has(s.id)).length
+    const allIds = [...students.map(s => s.id), ...contacts.map(c => c.id)]
+    let channelMap: Record<string, string[]> = {}
+    if (allIds.length > 0) {
+      const res = await fetch(`/api/user-channels?user_ids=${allIds.join(',')}`)
+      if (res.ok) channelMap = await res.json()
+    }
+
+    const studentsLinked = students.filter(s => s.telegram_chat_id != null || (channelMap[s.id]?.length ?? 0) > 0).length
     const notLinked = students.length - studentsLinked
-    const parentsLinked = contacts.filter(c => c.telegram_chat_id != null || contactChannelIds.has(c.id)).length
+    const parentsLinked = contacts.filter(c => c.telegram_chat_id != null || (channelMap[c.id]?.length ?? 0) > 0).length
 
     setCabinetStats({ studentsLinked, parentsLinked, notLinked, loading: false })
   }
