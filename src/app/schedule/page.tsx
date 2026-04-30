@@ -61,12 +61,12 @@ const GROUP_COLORS_FALLBACK_DARK  = { card: 'bg-[#2C2C2E] border-[#3A3A3C]', lab
 const emptyForm = { group_name: '', trainer_name: '', days: [] as number[], time_start: '', time_end: '' }
 const emptyOverride = { date: '', group_name: '', trainer_name: '', cancelled: false, note: '', time_start: '' }
 
-// Get Monday of current week
-function getWeekDates() {
+// Get Monday of week with offset (0 = current, -1 = last, +1 = next, etc.)
+function getWeekDates(weekOffset = 0) {
   const now = new Date()
   const jsDay = now.getDay()
   const monday = new Date(now)
-  monday.setDate(now.getDate() - (jsDay === 0 ? 6 : jsDay - 1))
+  monday.setDate(now.getDate() - (jsDay === 0 ? 6 : jsDay - 1) + weekOffset * 7)
   const dates: Record<number, string> = {}
   for (let i = 0; i < 7; i++) {
     const d = new Date(monday)
@@ -76,10 +76,11 @@ function getWeekDates() {
   return dates
 }
 
-// Get nearest future date for a given day of week
-function nearestDateForDay(dayNum: number): string {
-  const weekDates = getWeekDates()
-  return weekDates[dayNum] || localDateStr()
+function weekLabel(offset: number) {
+  if (offset === 0) return 'Эта неделя'
+  if (offset === -1) return 'Прошлая неделя'
+  if (offset === 1) return 'Следующая неделя'
+  return `+${offset} нед.`
 }
 
 export default function SchedulePage() {
@@ -94,6 +95,7 @@ export default function SchedulePage() {
   const inputCls = dark ? 'bg-[#1C1C1E] border-[#3A3A3C] text-[#E5E5E7]' : 'border-gray-200 bg-white text-gray-800'
   const selectCls = dark ? 'bg-[#1C1C1E] border-[#3A3A3C] text-[#E5E5E7]' : 'border-gray-200 bg-white text-gray-800'
 
+  const [weekOffset, setWeekOffset] = useState(0)
   const [entries, setEntries] = useState<ScheduleEntry[]>([])
   const [overrides, setOverrides] = useState<Override[]>([])
   const [trainers, setTrainers] = useState<string[]>([])
@@ -108,10 +110,10 @@ export default function SchedulePage() {
   const [savingOverride, setSavingOverride] = useState(false)
   const [notifying, setNotifying] = useState<string | null>(null)
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load(weekOffset) }, [weekOffset])
 
-  async function load() {
-    const weekDates = getWeekDates()
+  async function load(offset = 0) {
+    const weekDates = getWeekDates(offset)
     const monday = weekDates[1]
     const sunday = weekDates[7]
 
@@ -195,9 +197,10 @@ export default function SchedulePage() {
   }
 
   function openOverrideModal(entry: ScheduleEntry) {
+    const dates = getWeekDates(weekOffset)
     setOverrideSlot(entry)
     setOverrideForm({
-      date: nearestDateForDay(entry.day_of_week),
+      date: dates[entry.day_of_week] || localDateStr(),
       group_name: entry.group_name,
       trainer_name: entry.trainer_name || '',
       cancelled: false,
@@ -244,7 +247,7 @@ export default function SchedulePage() {
 
   const jsDay = new Date().getDay()
   const todayNum = jsDay === 0 ? 7 : jsDay
-  const weekDates = getWeekDates()
+  const weekDates = getWeekDates(weekOffset)
 
   return (
     <main className="max-w-lg mx-auto p-4" style={{ background: 'var(--bg)', minHeight: '100vh' }}>
@@ -259,10 +262,42 @@ export default function SchedulePage() {
         )}
       </div>
 
-      {/* Изменения на этой неделе */}
+      {/* Навигация по неделям */}
+      <div className={`flex items-center gap-2 mb-4 rounded-2xl p-2 ${dark ? 'bg-[#2C2C2E]' : 'bg-gray-50 border border-gray-100'}`}>
+        <button
+          onClick={() => setWeekOffset(o => Math.max(o - 1, -1))}
+          disabled={weekOffset <= -1}
+          className={`px-3 py-1.5 rounded-xl text-sm font-medium transition-colors disabled:opacity-30 ${dark ? 'bg-[#3A3A3C] text-[#E5E5E7] hover:bg-[#48484A]' : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-100'}`}
+        >←</button>
+        <div className="flex-1 text-center">
+          <div className={`text-sm font-semibold ${textPrimary}`}>{weekLabel(weekOffset)}</div>
+          <div className={`text-xs ${textSecondary}`}>
+            {weekDates[1] && weekDates[7] && (
+              <>
+                {new Date(weekDates[1] + 'T00:00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}
+                {' — '}
+                {new Date(weekDates[7] + 'T00:00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}
+              </>
+            )}
+          </div>
+        </div>
+        <button
+          onClick={() => setWeekOffset(o => Math.min(o + 1, 2))}
+          disabled={weekOffset >= 2}
+          className={`px-3 py-1.5 rounded-xl text-sm font-medium transition-colors disabled:opacity-30 ${dark ? 'bg-[#3A3A3C] text-[#E5E5E7] hover:bg-[#48484A]' : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-100'}`}
+        >→</button>
+        {weekOffset !== 0 && (
+          <button
+            onClick={() => setWeekOffset(0)}
+            className="text-xs px-2 py-1.5 rounded-xl bg-red-700 text-white font-medium"
+          >сег.</button>
+        )}
+      </div>
+
+      {/* Изменения на неделе */}
       {overrides.length > 0 && (
         <div className={`rounded-2xl p-4 mb-4 ${dark ? 'bg-amber-950/40 border border-amber-800/40' : 'bg-amber-50 border border-amber-100'}`}>
-          <h2 className={`font-semibold text-sm mb-3 ${dark ? 'text-amber-300' : 'text-amber-800'}`}>⚡ Изменения на этой неделе</h2>
+          <h2 className={`font-semibold text-sm mb-3 ${dark ? 'text-amber-300' : 'text-amber-800'}`}>⚡ Изменения на неделе</h2>
           <div className="space-y-2">
             {overrides.map(ov => {
               const d = new Date(ov.date + 'T00:00:00')
@@ -364,7 +399,7 @@ export default function SchedulePage() {
           {DAYS.map(day => {
             const dayEntries = entries.filter(e => e.day_of_week === day.num)
             if (dayEntries.length === 0) return null
-            const isToday = day.num === todayNum
+            const isToday = day.num === todayNum && weekOffset === 0
             const dateStr = weekDates[day.num]
             return (
               <div key={day.num} className={`rounded-2xl border overflow-hidden ${isToday ? 'border-red-700' : dark ? 'border-[#3A3A3C]' : 'border-gray-100 shadow-sm'}`}>
