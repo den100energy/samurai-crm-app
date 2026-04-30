@@ -78,15 +78,21 @@ export default function AnalyticsPage() {
   }
 
   async function loadCabinetStats() {
-    const [studentsRes, contactsRes] = await Promise.all([
+    const [studentsRes, contactsRes, studentChRes, contactChRes] = await Promise.all([
       supabase.from('students').select('id, telegram_chat_id').eq('status', 'active'),
-      supabase.from('student_contacts').select('id').not('telegram_chat_id', 'is', null),
+      supabase.from('student_contacts').select('id, telegram_chat_id'),
+      supabase.from('user_channels').select('user_id').eq('user_type', 'student'),
+      supabase.from('user_channels').select('user_id').eq('user_type', 'contact'),
     ])
 
     const students = studentsRes.data || []
-    const studentsLinked = students.filter(s => s.telegram_chat_id != null).length
-    const notLinked = students.filter(s => s.telegram_chat_id == null).length
-    const parentsLinked = contactsRes.data?.length || 0
+    const contacts = contactsRes.data || []
+    const studentChannelIds = new Set((studentChRes.data || []).map(c => c.user_id))
+    const contactChannelIds = new Set((contactChRes.data || []).map(c => c.user_id))
+
+    const studentsLinked = students.filter(s => s.telegram_chat_id != null || studentChannelIds.has(s.id)).length
+    const notLinked = students.length - studentsLinked
+    const parentsLinked = contacts.filter(c => c.telegram_chat_id != null || contactChannelIds.has(c.id)).length
 
     setCabinetStats({ studentsLinked, parentsLinked, notLinked, loading: false })
   }
@@ -177,7 +183,7 @@ export default function AnalyticsPage() {
             <div className="flex items-center gap-3">
               <span className="text-2xl">📱</span>
               <div>
-                <div className="font-semibold text-gray-800 text-sm">Кабинеты / Telegram</div>
+                <div className="font-semibold text-gray-800 text-sm">Кабинеты / Мессенджеры</div>
                 <div className="text-xs text-gray-400">Подключение учеников и родителей</div>
               </div>
             </div>
@@ -188,11 +194,11 @@ export default function AnalyticsPage() {
               <div className="text-xs text-gray-400 py-2 pl-1">Загрузка...</div>
             ) : (
               <>
-                <MiniStat value={cabinetStats.studentsLinked} label="учеников в TG" color="text-green-600" />
-                <MiniStat value={cabinetStats.parentsLinked} label="родителей в TG" color="text-blue-600" />
+                <MiniStat value={cabinetStats.studentsLinked} label="учеников" color="text-green-600" />
+                <MiniStat value={cabinetStats.parentsLinked} label="родителей" color="text-blue-600" />
                 <MiniStat
                   value={cabinetStats.notLinked}
-                  label="без Telegram"
+                  label="без мессенджеров"
                   color={cabinetStats.notLinked > 0 ? 'text-orange-500' : 'text-gray-800'}
                 />
               </>
