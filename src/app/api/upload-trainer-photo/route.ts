@@ -33,7 +33,8 @@ export async function POST(req: NextRequest) {
   const publicId = `trainer_${trainerId}`
 
   const crypto = await import('crypto')
-  const signStr = `folder=${folder}&overwrite=true&public_id=${publicId}&timestamp=${timestamp}${apiSecret}`
+  const transformation = 'w_400,h_400,c_fill,g_face,q_auto,f_auto'
+  const signStr = `folder=${folder}&overwrite=true&public_id=${publicId}&timestamp=${timestamp}&transformation=${transformation}${apiSecret}`
   const signature = crypto.createHash('sha256').update(signStr).digest('hex')
 
   const uploadForm = new FormData()
@@ -44,7 +45,7 @@ export async function POST(req: NextRequest) {
   uploadForm.append('folder', folder)
   uploadForm.append('public_id', publicId)
   uploadForm.append('overwrite', 'true')
-  uploadForm.append('transformation', 'w_400,h_400,c_fill,g_face,q_auto,f_auto')
+  uploadForm.append('transformation', transformation)
 
   const uploadRes = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
     method: 'POST',
