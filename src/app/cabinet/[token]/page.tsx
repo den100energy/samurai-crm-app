@@ -815,12 +815,17 @@ export default function CabinetPage() {
     }
   }
 
-  function handleApplyAvatar() {
-    if (!avatarPreviewUrl) return
+  async function handleApplyAvatar() {
+    if (!avatarPreviewUrl || !student) return
     setStudent(prev => prev ? { ...prev, photo_url: avatarPreviewUrl } : prev)
     setShowAvatarModal(false)
     setAvatarPreviewUrl(null)
     setSelectedStyle(null)
+    await fetch('/api/set-photo', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ student_id: student.id, url: avatarPreviewUrl }),
+    })
   }
 
   async function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
