@@ -7,13 +7,9 @@ const supabase = createClient(
 )
 
 export async function POST(req: NextRequest) {
-  console.log('[upload-photo] called')
-
   const formData = await req.formData()
   const file = formData.get('file') as File | null
   const studentId = formData.get('student_id') as string | null
-
-  console.log('[upload-photo] file:', file?.size, 'studentId:', studentId)
 
   if (!file || !studentId) {
     return NextResponse.json({ error: 'file and student_id required' }, { status: 400 })
@@ -22,8 +18,6 @@ export async function POST(req: NextRequest) {
   const cloudName = process.env.CLOUDINARY_CLOUD_NAME
   const apiKey = process.env.CLOUDINARY_API_KEY
   const apiSecret = process.env.CLOUDINARY_API_SECRET
-
-  console.log('[upload-photo] cloudName:', cloudName ? 'set' : 'MISSING', 'apiKey:', apiKey ? 'set' : 'MISSING', 'apiSecret:', apiSecret ? 'set' : 'MISSING')
 
   if (!cloudName || !apiKey || !apiSecret) {
     return NextResponse.json({ error: 'Cloudinary not configured' }, { status: 500 })
@@ -51,8 +45,6 @@ export async function POST(req: NextRequest) {
   uploadForm.append('public_id', publicId)
   uploadForm.append('overwrite', 'true')
 
-  console.log('[upload-photo] sending to Cloudinary...')
-
   let uploadData: Record<string, unknown>
   try {
     const uploadRes = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
@@ -61,13 +53,12 @@ export async function POST(req: NextRequest) {
     })
     uploadData = await uploadRes.json()
   } catch (err) {
-    console.error('[upload-photo] Cloudinary fetch error:', err)
+    console.error('[upload-photo] Cloudinary error:', err)
     return NextResponse.json({ error: 'Cloudinary unreachable' }, { status: 500 })
   }
 
-  console.log('[upload-photo] Cloudinary response:', JSON.stringify(uploadData))
-
   if (!uploadData.secure_url) {
+    console.error('[upload-photo] Cloudinary rejected:', JSON.stringify(uploadData))
     return NextResponse.json({ error: 'Upload failed', details: uploadData }, { status: 500 })
   }
 
