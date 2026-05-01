@@ -36,19 +36,17 @@ export async function POST(req: NextRequest) {
 
   const { data: student } = await supabase
     .from('students')
-    .select('photo_url, original_photo_url')
+    .select('photo_url')
     .eq('id', student_id)
     .single()
 
-  if (!student?.photo_url && !student?.original_photo_url) {
+  if (!student?.photo_url) {
     return NextResponse.json({ error: 'no_photo' }, { status: 400 })
   }
 
-  // Всегда используем оригинальное фото (не сгенерированный аватар)
-  let facePhotoUrl = student.original_photo_url || student.photo_url
-  if (!facePhotoUrl) return NextResponse.json({ error: 'no_photo' }, { status: 400 })
-  // Фоллбэк: если оригинала нет в отдельном поле, но текущее фото — аватар, деривируем оригинал
-  if (!student.original_photo_url && facePhotoUrl.includes('/samurai-crm/avatars/')) {
+  // Если текущее фото — сгенерированный аватар, берём оригинал из папки students
+  let facePhotoUrl = student.photo_url
+  if (facePhotoUrl.includes('/samurai-crm/avatars/')) {
     facePhotoUrl = facePhotoUrl.replace('/samurai-crm/avatars/avatar_', '/samurai-crm/students/student_')
   }
 
