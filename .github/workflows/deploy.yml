@@ -18,5 +18,6 @@ jobs:
           script: |
             cd /opt/samurai-crm-app
             git pull
+            npm install --production=false
             npm run build
             pm2 reload samurai-crm
