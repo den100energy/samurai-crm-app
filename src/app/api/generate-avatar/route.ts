@@ -9,11 +9,13 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-const STYLES: Record<string, string> = {
-  samurai: 'wearing traditional Japanese samurai yoroi armor, red-black lacquered plates, ornate kabuto helmet with menpo face mask, ancient Japanese temple background, dramatic cinematic lighting, photorealistic portrait photography, 8k',
-  ninja:   'wearing black shinobi ninja outfit with hood, cherry blossom night scene background, moonlight dramatic lighting, photorealistic portrait photography, 8k',
-  warrior: 'wearing feudal Japanese warrior battle armor, holding katana, misty mountain landscape background, epic cinematic lighting, photorealistic portrait photography, 8k',
-  ronin:   'lone ronin samurai, worn weathered armor with battle scars, misty Japanese forest background, dramatic side lighting golden hour, photorealistic portrait photography, 8k',
+const NEGATIVE = 'helmet, hat, hood, headgear, headwear, cap, mask, cartoon, anime, illustration, painting, drawing, render, 3d, unrealistic, deformed, ugly, blurry, low quality, bad anatomy, disfigured, extra limbs, changed face, different person, mutated'
+
+const STYLES: Record<string, { prompt: string }> = {
+  samurai: { prompt: 'hyperrealistic portrait photo of a person wearing traditional Japanese samurai chest armor (do-maru), bare head, red and black lacquered plates, ancient Japanese temple background, dramatic cinematic lighting, 4k DSLR photography, detailed skin texture' },
+  ninja:   { prompt: 'hyperrealistic portrait photo of a person wearing black shinobi ninja outfit, bare head, cherry blossom night scene background, moonlight, 4k DSLR photography, detailed skin texture' },
+  warrior: { prompt: 'hyperrealistic portrait photo of a person wearing feudal Japanese warrior battle armor, bare head, holding katana, misty mountain landscape background, epic cinematic lighting, 4k DSLR photography, detailed skin texture' },
+  ronin:   { prompt: 'hyperrealistic portrait photo of a person wearing worn weathered ronin samurai armor, bare head, misty Japanese forest background, dramatic golden hour side lighting, 4k DSLR photography, detailed skin texture' },
 }
 
 export async function POST(req: NextRequest) {
@@ -44,16 +46,16 @@ export async function POST(req: NextRequest) {
 
   console.log('[generate-avatar] calling fal.ai, photo:', student.photo_url, 'style:', style)
 
-  const prompt = `${STYLES[style]}, face preserved exactly, same person`
+  const prompt = STYLES[style].prompt
 
   let falResult: { image?: { url: string }; images?: { url: string }[] }
   try {
-    const result = await fal.subscribe('fal-ai/ip-adapter-face-id', {
+    const result = await fal.subscribe('fal-ai/pulid', {
       input: {
         face_image_url: student.photo_url,
         prompt,
-        negative_prompt: 'deformed, ugly, blurry, low quality, bad anatomy, disfigured, extra limbs, changed face, different person',
-        num_inference_steps: 30,
+        negative_prompt: NEGATIVE,
+        num_inference_steps: 20,
         guidance_scale: 7.5,
       },
     })
