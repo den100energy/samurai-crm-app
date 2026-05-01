@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
         reference_images: [{ image_url: student.photo_url }],
         prompt,
         negative_prompt: NEGATIVE,
-        guidance_scale: 7.5,
+        guidance_scale: 1.2,
         image_size: 'portrait_4_3',
         mode: 'fidelity',
       },
