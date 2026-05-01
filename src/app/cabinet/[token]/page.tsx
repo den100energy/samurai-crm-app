@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useState, useRef, type ReactNode } from 'react'
 import { useParams, useSearchParams } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
 import { FujiScene } from '@/components/FujiScene'
@@ -353,6 +353,8 @@ export default function CabinetPage() {
   const [showTicketForm, setShowTicketForm] = useState(false)
   const [ticketSending, setTicketSending] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [uploadingPhoto, setUploadingPhoto] = useState(false)
+  const photoInputRef = useRef<HTMLInputElement>(null)
   const [bonusTotalValue, setBonusTotalValue] = useState<number | null>(null)
   const [subTypes, setSubTypes] = useState<any[]>([])
   const [tab, setTab] = useState<'home' | 'progress' | 'tasks' | 'achievements' | 'tickets'>('home')
@@ -783,6 +785,29 @@ export default function CabinetPage() {
     { count: 100, icon: '🏆', label: '100 тренировок' },
   ].map(m => ({ ...m, achieved: totalAttendance >= m.count }))
 
+  async function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file || !student) return
+    setUploadingPhoto(true)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      fd.append('student_id', student.id)
+      const res = await fetch('/api/upload-photo', { method: 'POST', body: fd })
+      const data = await res.json()
+      if (data.url) {
+        setStudent(prev => prev ? { ...prev, photo_url: data.url } : prev)
+      } else {
+        alert('Не удалось загрузить фото. Попробуй ещё раз.')
+      }
+    } catch {
+      alert('Ошибка при загрузке фото.')
+    } finally {
+      setUploadingPhoto(false)
+      if (photoInputRef.current) photoInputRef.current.value = ''
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       <CabinetTour
@@ -805,14 +830,28 @@ export default function CabinetPage() {
         <div className="absolute inset-x-0 bottom-0 px-4 pb-5 z-10">
           <div className="max-w-lg mx-auto">
             <div className="flex items-end gap-3 mb-3">
-              {student.photo_url ? (
-                <img src={student.photo_url} alt={student.name}
-                  className="w-16 h-16 rounded-2xl object-cover border-2 border-white/30 shadow-lg shrink-0" />
-              ) : (
-                <div className="w-16 h-16 rounded-2xl bg-white/20 backdrop-blur-sm border border-white/30 flex items-center justify-center text-2xl font-bold text-white shrink-0">
-                  {student.name[0]}
+              <button
+                onClick={() => photoInputRef.current?.click()}
+                disabled={uploadingPhoto}
+                className="relative w-16 h-16 rounded-2xl shrink-0 group"
+                title="Изменить фото"
+              >
+                {student.photo_url ? (
+                  <img src={student.photo_url} alt={student.name}
+                    className="w-16 h-16 rounded-2xl object-cover border-2 border-white/30 shadow-lg" />
+                ) : (
+                  <div className="w-16 h-16 rounded-2xl bg-white/20 backdrop-blur-sm border border-white/30 flex items-center justify-center text-2xl font-bold text-white">
+                    {student.name[0]}
+                  </div>
+                )}
+                <div className="absolute inset-0 rounded-2xl bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 active:opacity-100 transition-opacity">
+                  {uploadingPhoto
+                    ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    : <span className="text-white text-lg">📷</span>
+                  }
                 </div>
-              )}
+              </button>
+              <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} />
               <div>
                 <div className="text-xs text-white/50 mb-0.5">Личный кабинет</div>
                 <h1 className="text-2xl font-bold text-white drop-shadow-lg">{student.name}</h1>

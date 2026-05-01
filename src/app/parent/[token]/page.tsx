@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useState, useRef, type ReactNode } from 'react'
 import { useParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { FujiScene } from '@/components/FujiScene'
@@ -196,6 +196,8 @@ export default function ParentPage() {
   const [showTicketForm, setShowTicketForm] = useState(false)
   const [ticketSending, setTicketSending] = useState(false)
   const [notFound, setNotFound] = useState(false)
+  const [uploadingPhoto, setUploadingPhoto] = useState(false)
+  const photoInputRef = useRef<HTMLInputElement>(null)
   const [schedule, setSchedule] = useState<ScheduleSlot[]>([])
   const [scheduleOverrides, setScheduleOverrides] = useState<ScheduleOverride[]>([])
   const [trainers, setTrainers] = useState<{ name: string; phone: string | null; telegram_username: string | null }[]>([])
@@ -553,6 +555,29 @@ export default function ParentPage() {
     return 'text-green-600'
   }
 
+  async function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file || !student) return
+    setUploadingPhoto(true)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      fd.append('student_id', student.id)
+      const res = await fetch('/api/upload-photo', { method: 'POST', body: fd })
+      const data = await res.json()
+      if (data.url) {
+        setStudent(prev => prev ? { ...prev, photo_url: data.url } : prev)
+      } else {
+        alert('Не удалось загрузить фото. Попробуй ещё раз.')
+      }
+    } catch {
+      alert('Ошибка при загрузке фото.')
+    } finally {
+      setUploadingPhoto(false)
+      if (photoInputRef.current) photoInputRef.current.value = ''
+    }
+  }
+
   return (
     <main className="min-h-screen bg-gray-50">
       <CabinetTour
@@ -565,14 +590,28 @@ export default function ParentPage() {
         <div className="relative overflow-hidden">
           <FujiScene dark={false} bgColor="#F9FAFB" />
           <div className="absolute inset-x-0 bottom-0 pb-4 flex flex-col items-center z-10">
-            {student.photo_url ? (
-              <img src={student.photo_url} alt={student.name}
-                className="w-16 h-16 rounded-full object-cover shadow-lg border-2 border-white mb-2" />
-            ) : (
-              <div className="w-16 h-16 rounded-full bg-white/90 text-gray-800 flex items-center justify-center text-2xl font-bold shadow-lg border-2 border-white mb-2">
-                {student.name[0]}
+            <button
+              onClick={() => photoInputRef.current?.click()}
+              disabled={uploadingPhoto}
+              className="relative w-16 h-16 rounded-full mb-2 group"
+              title="Изменить фото"
+            >
+              {student.photo_url ? (
+                <img src={student.photo_url} alt={student.name}
+                  className="w-16 h-16 rounded-full object-cover shadow-lg border-2 border-white" />
+              ) : (
+                <div className="w-16 h-16 rounded-full bg-white/90 text-gray-800 flex items-center justify-center text-2xl font-bold shadow-lg border-2 border-white">
+                  {student.name[0]}
+                </div>
+              )}
+              <div className="absolute inset-0 rounded-full bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 active:opacity-100 transition-opacity">
+                {uploadingPhoto
+                  ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  : <span className="text-white text-lg">📷</span>
+                }
               </div>
-            )}
+            </button>
+            <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} />
             <div className="text-white/80 text-xs font-semibold uppercase tracking-widest drop-shadow mb-0.5">Кабинет родителя</div>
             <div className="text-white text-lg font-bold drop-shadow-lg">{student.name}</div>
             <div className="text-white/70 text-sm drop-shadow">{student.group_name || 'Группа не указана'}</div>
