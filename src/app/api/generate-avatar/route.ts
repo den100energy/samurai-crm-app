@@ -56,7 +56,10 @@ export async function POST(req: NextRequest) {
 
   let falResult: { images?: { url: string }[] }
   try {
-    const result = await fal.subscribe('fal-ai/pulid', {
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('fal.ai timeout after 55s')), 55000)
+    )
+    const subscribePromise = fal.subscribe('fal-ai/pulid', {
       input: {
         reference_images: [{ image_url: facePhotoUrl }],
         prompt,
@@ -65,8 +68,13 @@ export async function POST(req: NextRequest) {
         image_size: 'portrait_4_3',
         mode: 'fidelity',
       },
+      onQueueUpdate: (update) => {
+        console.log('[generate-avatar] queue status:', update.status)
+      },
     })
-    falResult = result.data as { images?: { url: string }[] }
+    const result = await Promise.race([subscribePromise, timeoutPromise])
+    console.log('[generate-avatar] fal.ai done, keys:', Object.keys((result as { data: object }).data || {}))
+    falResult = (result as { data: { images?: { url: string }[] } }).data
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
     const body = (err as Record<string, unknown>).body
