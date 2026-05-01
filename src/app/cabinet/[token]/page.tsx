@@ -355,6 +355,10 @@ export default function CabinetPage() {
   const [loading, setLoading] = useState(true)
   const [uploadingPhoto, setUploadingPhoto] = useState(false)
   const photoInputRef = useRef<HTMLInputElement>(null)
+  const [showAvatarModal, setShowAvatarModal] = useState(false)
+  const [generatingAvatar, setGeneratingAvatar] = useState(false)
+  const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null)
+  const [selectedStyle, setSelectedStyle] = useState<string | null>(null)
   const [bonusTotalValue, setBonusTotalValue] = useState<number | null>(null)
   const [subTypes, setSubTypes] = useState<any[]>([])
   const [tab, setTab] = useState<'home' | 'progress' | 'tasks' | 'achievements' | 'tickets'>('home')
@@ -785,6 +789,40 @@ export default function CabinetPage() {
     { count: 100, icon: '🏆', label: '100 тренировок' },
   ].map(m => ({ ...m, achieved: totalAttendance >= m.count }))
 
+  async function handleGenerateAvatar() {
+    if (!student || !selectedStyle) return
+    setGeneratingAvatar(true)
+    setAvatarPreviewUrl(null)
+    try {
+      const res = await fetch('/api/generate-avatar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ student_id: student.id, style: selectedStyle }),
+      })
+      const data = await res.json()
+      if (data.url) {
+        setAvatarPreviewUrl(data.url)
+      } else if (data.error === 'no_photo') {
+        alert('Сначала загрузи своё фото, потом создадим образ воина.')
+        setShowAvatarModal(false)
+      } else {
+        alert('Не удалось создать образ. Попробуй ещё раз.')
+      }
+    } catch {
+      alert('Ошибка при создании образа.')
+    } finally {
+      setGeneratingAvatar(false)
+    }
+  }
+
+  function handleApplyAvatar() {
+    if (!avatarPreviewUrl) return
+    setStudent(prev => prev ? { ...prev, photo_url: avatarPreviewUrl } : prev)
+    setShowAvatarModal(false)
+    setAvatarPreviewUrl(null)
+    setSelectedStyle(null)
+  }
+
   async function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file || !student) return
@@ -858,6 +896,12 @@ export default function CabinetPage() {
                 {student.group_name && (
                   <div className="text-sm text-white/60 mt-0.5">{student.group_name}</div>
                 )}
+                <button
+                  onClick={() => { setShowAvatarModal(true); setAvatarPreviewUrl(null); setSelectedStyle(null) }}
+                  className="mt-1.5 text-xs text-orange-300 hover:text-orange-200 transition-colors"
+                >
+                  ✨ Образ воина
+                </button>
               </div>
             </div>
             {/* Быстрые показатели */}
@@ -2148,6 +2192,82 @@ export default function CabinetPage() {
           </div>
         )}
       </div>
+
+      {/* Модалка: образ воина */}
+      {showAvatarModal && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-3xl w-full max-w-sm shadow-2xl overflow-hidden">
+            <div className="p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-bold text-gray-900">✨ Образ воина</h2>
+                <button onClick={() => setShowAvatarModal(false)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
+              </div>
+
+              {avatarPreviewUrl ? (
+                <div>
+                  <img src={avatarPreviewUrl} alt="Образ воина" className="w-full aspect-[3/4] object-cover rounded-2xl mb-4" />
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleApplyAvatar}
+                      className="flex-1 bg-orange-500 hover:bg-orange-600 text-white font-semibold py-3 rounded-xl transition-colors"
+                    >
+                      Поставить как фото
+                    </button>
+                    <button
+                      onClick={() => setAvatarPreviewUrl(null)}
+                      className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-3 rounded-xl transition-colors"
+                    >
+                      Другой образ
+                    </button>
+                  </div>
+                </div>
+              ) : generatingAvatar ? (
+                <div className="flex flex-col items-center py-10 gap-4">
+                  <div className="w-12 h-12 border-4 border-orange-500 border-t-transparent rounded-full animate-spin" />
+                  <p className="text-gray-500 text-sm text-center">Нейросеть рисует твой образ…<br/>Обычно 15–30 секунд</p>
+                </div>
+              ) : (
+                <div>
+                  {!student.photo_url && (
+                    <p className="text-sm text-amber-600 bg-amber-50 rounded-xl p-3 mb-3">
+                      Сначала загрузи своё фото, потом создадим образ воина.
+                    </p>
+                  )}
+                  <p className="text-sm text-gray-500 mb-3">Выбери образ — нейросеть оденет тебя в него, сохранив лицо</p>
+                  <div className="grid grid-cols-2 gap-2 mb-4">
+                    {([
+                      { key: 'samurai', icon: '⚔️', label: 'Самурай' },
+                      { key: 'ninja',   icon: '🥷', label: 'Ниндзя'  },
+                      { key: 'warrior', icon: '🛡️', label: 'Воин'    },
+                      { key: 'ronin',   icon: '🗡️', label: 'Ронин'   },
+                    ]).map(s => (
+                      <button
+                        key={s.key}
+                        onClick={() => setSelectedStyle(s.key)}
+                        className={`flex flex-col items-center gap-1 p-4 rounded-2xl border-2 transition-colors ${
+                          selectedStyle === s.key
+                            ? 'border-orange-500 bg-orange-50'
+                            : 'border-gray-200 hover:border-gray-300'
+                        }`}
+                      >
+                        <span className="text-3xl">{s.icon}</span>
+                        <span className="text-sm font-medium text-gray-700">{s.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    onClick={handleGenerateAvatar}
+                    disabled={!selectedStyle || !student.photo_url}
+                    className="w-full bg-orange-500 hover:bg-orange-600 disabled:bg-gray-200 disabled:text-gray-400 text-white font-semibold py-3 rounded-xl transition-colors"
+                  >
+                    Создать образ
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
