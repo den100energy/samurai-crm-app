@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { supabase } from '@/lib/supabase'
 
 type StudentRow = {
   id: string
@@ -59,73 +58,15 @@ export default function CabinetsPage() {
   const [tab, setTab] = useState<'students' | 'parents' | 'unlinked'>('students')
 
   useEffect(() => {
-    async function load() {
-      const [studentsRes, contactsRes] = await Promise.all([
-        supabase
-          .from('students')
-          .select('id, name, group_name, telegram_chat_id')
-          .eq('status', 'active')
-          .order('name'),
-        supabase
-          .from('student_contacts')
-          .select('id, name, role, student_id, telegram_chat_id')
-          .order('name'),
-      ])
-
-      const students = studentsRes.data || []
-      const contactsRaw = contactsRes.data || []
-
-      const allIds = [...students.map(s => s.id), ...contactsRaw.map(c => c.id)]
-      let channelMap: Record<string, string[]> = {}
-      if (allIds.length > 0) {
-        const res = await fetch(`/api/user-channels?user_ids=${allIds.join(',')}`)
-        if (res.ok) channelMap = await res.json()
-      }
-
-      const getStudentProviders = (s: { id: string; telegram_chat_id: string | null }) => {
-        const ps = new Set<string>(channelMap[s.id] || [])
-        if (s.telegram_chat_id) ps.add('telegram')
-        return Array.from(ps)
-      }
-      const getContactProviders = (c: { id: string; telegram_chat_id: string | null }) => {
-        const ps = new Set<string>(channelMap[c.id] || [])
-        if (c.telegram_chat_id) ps.add('telegram')
-        return Array.from(ps)
-      }
-
-      const studentMap = new Map(students.map(s => [s.id, s]))
-
-      setStudentsLinked(
-        students
-          .filter(s => getStudentProviders(s).length > 0)
-          .map(s => ({ id: s.id, name: s.name, group_name: s.group_name, providers: getStudentProviders(s) }))
-      )
-      setStudentsUnlinked(
-        students
-          .filter(s => getStudentProviders(s).length === 0)
-          .map(s => ({ id: s.id, name: s.name, group_name: s.group_name, providers: [] }))
-      )
-      setContacts(
-        contactsRaw
-          .filter(c => getContactProviders(c).length > 0)
-          .map(c => {
-            const st = studentMap.get(c.student_id)
-            return {
-              id: c.id,
-              name: c.name,
-              role: c.role,
-              student_id: c.student_id,
-              studentName: st?.name || '—',
-              studentId: st?.id || c.student_id,
-              groupName: st?.group_name || null,
-              providers: getContactProviders(c),
-            }
-          })
-      )
-
-      setLoading(false)
-    }
-    load()
+    fetch('/api/analytics/cabinets')
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (!data) return
+        setStudentsLinked(data.studentsLinked)
+        setStudentsUnlinked(data.studentsUnlinked)
+        setContacts(data.contacts)
+      })
+      .finally(() => setLoading(false))
   }, [])
 
   const tabs = [
