@@ -63,7 +63,8 @@ export async function POST(req: NextRequest) {
     falResult = result.data as { images?: { url: string }[] }
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
-    console.error('[generate-avatar] fal.ai error:', msg)
+    const body = (err as Record<string, unknown>).body
+    console.error('[generate-avatar] fal.ai error:', msg, 'body:', JSON.stringify(body))
     return NextResponse.json({ error: 'generation_failed', details: msg }, { status: 500 })
   }
 
