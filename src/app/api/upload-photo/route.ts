@@ -7,9 +7,13 @@ const supabase = createClient(
 )
 
 export async function POST(req: NextRequest) {
+  console.log('[upload-photo] called')
+
   const formData = await req.formData()
   const file = formData.get('file') as File | null
   const studentId = formData.get('student_id') as string | null
+
+  console.log('[upload-photo] file:', file?.size, 'studentId:', studentId)
 
   if (!file || !studentId) {
     return NextResponse.json({ error: 'file and student_id required' }, { status: 400 })
@@ -19,11 +23,12 @@ export async function POST(req: NextRequest) {
   const apiKey = process.env.CLOUDINARY_API_KEY
   const apiSecret = process.env.CLOUDINARY_API_SECRET
 
+  console.log('[upload-photo] cloudName:', cloudName ? 'set' : 'MISSING', 'apiKey:', apiKey ? 'set' : 'MISSING', 'apiSecret:', apiSecret ? 'set' : 'MISSING')
+
   if (!cloudName || !apiKey || !apiSecret) {
     return NextResponse.json({ error: 'Cloudinary not configured' }, { status: 500 })
   }
 
-  // Upload to Cloudinary
   const bytes = await file.arrayBuffer()
   const buffer = Buffer.from(bytes)
   const base64 = buffer.toString('base64')
@@ -33,10 +38,8 @@ export async function POST(req: NextRequest) {
   const folder = 'samurai-crm/students'
   const publicId = `student_${studentId}`
 
-  // Generate signature
   const crypto = await import('crypto')
-  const transformation = 'w_400,h_400,c_fill,g_face,q_auto,f_auto'
-  const signStr = `folder=${folder}&overwrite=true&public_id=${publicId}&timestamp=${timestamp}&transformation=${transformation}${apiSecret}`
+  const signStr = `folder=${folder}&overwrite=true&public_id=${publicId}&timestamp=${timestamp}${apiSecret}`
   const signature = crypto.createHash('sha256').update(signStr).digest('hex')
 
   const uploadForm = new FormData()
@@ -47,21 +50,27 @@ export async function POST(req: NextRequest) {
   uploadForm.append('folder', folder)
   uploadForm.append('public_id', publicId)
   uploadForm.append('overwrite', 'true')
-  uploadForm.append('transformation', transformation)
 
-  const uploadRes = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
-    method: 'POST',
-    body: uploadForm,
-  })
+  console.log('[upload-photo] sending to Cloudinary...')
 
-  const uploadData = await uploadRes.json()
+  let uploadData: Record<string, unknown>
+  try {
+    const uploadRes = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
+      method: 'POST',
+      body: uploadForm,
+    })
+    uploadData = await uploadRes.json()
+  } catch (err) {
+    console.error('[upload-photo] Cloudinary fetch error:', err)
+    return NextResponse.json({ error: 'Cloudinary unreachable' }, { status: 500 })
+  }
+
+  console.log('[upload-photo] Cloudinary response:', JSON.stringify(uploadData))
 
   if (!uploadData.secure_url) {
-    console.error('Cloudinary upload error:', JSON.stringify(uploadData))
     return NextResponse.json({ error: 'Upload failed', details: uploadData }, { status: 500 })
   }
 
-  // Save URL to student
   await supabase
     .from('students')
     .update({ photo_url: uploadData.secure_url })
