@@ -57,6 +57,7 @@ export async function POST(req: NextRequest) {
   const uploadData = await uploadRes.json()
 
   if (!uploadData.secure_url) {
+    console.error('Cloudinary upload error:', JSON.stringify(uploadData))
     return NextResponse.json({ error: 'Upload failed', details: uploadData }, { status: 500 })
   }
 
