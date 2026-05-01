@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { fal } from '@fal-ai/client'
 
-export const maxDuration = 60
+export const maxDuration = 120
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
   let falResult: { images?: { url: string }[] }
   try {
     const timeoutPromise = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error('fal.ai timeout after 55s')), 55000)
+      setTimeout(() => reject(new Error('fal.ai timeout after 90s')), 90000)
     )
     const subscribePromise = fal.subscribe('fal-ai/pulid', {
       input: {
