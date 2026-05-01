@@ -16,8 +16,6 @@ const STYLES: Record<string, string> = {
   ronin:   'lone ronin samurai, worn weathered armor with battle scars, misty Japanese forest background, dramatic side lighting golden hour, photorealistic portrait photography, 8k',
 }
 
-fal.config({ credentials: process.env.FAL_KEY! })
-
 export async function POST(req: NextRequest) {
   const { student_id, style } = await req.json()
 
@@ -25,7 +23,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'student_id and valid style required' }, { status: 400 })
   }
 
-  // Fetch student's current photo URL
+  const falKey = process.env.FAL_KEY
+  console.log('[generate-avatar] FAL_KEY:', falKey ? 'set' : 'MISSING')
+
+  if (!falKey) {
+    return NextResponse.json({ error: 'FAL_KEY not configured' }, { status: 500 })
+  }
+
+  fal.config({ credentials: falKey })
+
   const { data: student } = await supabase
     .from('students')
     .select('photo_url')
@@ -36,9 +42,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'no_photo' }, { status: 400 })
   }
 
+  console.log('[generate-avatar] calling fal.ai, photo:', student.photo_url, 'style:', style)
+
   const prompt = `${STYLES[style]}, face preserved exactly, same person`
 
-  // Call fal.ai
   let falResult: { images?: { url: string }[] }
   try {
     const result = await fal.subscribe('fal-ai/ip-adapter-face-id', {
@@ -50,18 +57,23 @@ export async function POST(req: NextRequest) {
         guidance_scale: 7.5,
       },
     })
+    console.log('[generate-avatar] fal.ai result keys:', Object.keys(result.data || {}))
     falResult = result.data as { images?: { url: string }[] }
-  } catch (err) {
-    console.error('fal.ai error:', err)
-    return NextResponse.json({ error: 'generation_failed' }, { status: 500 })
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err)
+    console.error('[generate-avatar] fal.ai error:', msg)
+    return NextResponse.json({ error: 'generation_failed', details: msg }, { status: 500 })
   }
 
   const generatedUrl = falResult?.images?.[0]?.url
+  console.log('[generate-avatar] generatedUrl:', generatedUrl)
+
   if (!generatedUrl) {
+    console.error('[generate-avatar] no url in result:', JSON.stringify(falResult))
     return NextResponse.json({ error: 'no_result_url' }, { status: 500 })
   }
 
-  // Upload generated image to Cloudinary
+  // Upload to Cloudinary
   const cloudName = process.env.CLOUDINARY_CLOUD_NAME!
   const apiKey = process.env.CLOUDINARY_API_KEY!
   const apiSecret = process.env.CLOUDINARY_API_SECRET!
@@ -90,10 +102,10 @@ export async function POST(req: NextRequest) {
   const uploadData = await uploadRes.json()
 
   if (!uploadData.secure_url) {
+    console.error('[generate-avatar] Cloudinary error:', JSON.stringify(uploadData))
     return NextResponse.json({ error: 'cloudinary_upload_failed', details: uploadData }, { status: 500 })
   }
 
-  // Save to student record
   await supabase
     .from('students')
     .update({ photo_url: uploadData.secure_url })
