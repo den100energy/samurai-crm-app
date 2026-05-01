@@ -48,25 +48,26 @@ export async function POST(req: NextRequest) {
 
   const prompt = STYLES[style].prompt
 
-  let falResult: { image?: { url: string }; images?: { url: string }[] }
+  let falResult: { images?: { url: string }[] }
   try {
     const result = await fal.subscribe('fal-ai/pulid', {
       input: {
-        face_image_url: student.photo_url,
+        reference_images: [{ image_url: student.photo_url }],
         prompt,
         negative_prompt: NEGATIVE,
-        num_inference_steps: 20,
         guidance_scale: 7.5,
+        image_size: 'portrait_4_3',
+        mode: 'fidelity',
       },
     })
-    falResult = result.data as { image?: { url: string }; images?: { url: string }[] }
+    falResult = result.data as { images?: { url: string }[] }
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
     console.error('[generate-avatar] fal.ai error:', msg)
     return NextResponse.json({ error: 'generation_failed', details: msg }, { status: 500 })
   }
 
-  const generatedUrl = falResult?.image?.url ?? falResult?.images?.[0]?.url
+  const generatedUrl = falResult?.images?.[0]?.url
 
   if (!generatedUrl) {
     console.error('[generate-avatar] no url in result:', JSON.stringify(falResult))
