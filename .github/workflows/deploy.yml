@@ -19,5 +19,5 @@ jobs:
             cd /opt/samurai-crm-app
             git pull
             npm install --production=false
-            npm run build
+            NODE_OPTIONS="--max-old-space-size=1024" npm run build
             pm2 reload samurai-crm
