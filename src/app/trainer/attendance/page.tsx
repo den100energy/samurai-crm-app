@@ -85,6 +85,13 @@ function AttendanceContent() {
   const [existingLog, setExistingLog] = useState<{ id: string; data: TrainingLogData } | null>(null)
   const [logDates, setLogDates] = useState<Set<string>>(new Set())
 
+  // Training photo state
+  type TrainingPhoto = { id: string; photo_url: string; sort_order: number; telegram_published_at: string | null }
+  const [sessionPhotos, setSessionPhotos] = useState<TrainingPhoto[]>([])
+  const [photoUploading, setPhotoUploading] = useState(false)
+  const [photoPublishing, setPhotoPublishing] = useState(false)
+  const [photoPublished, setPhotoPublished] = useState(false)
+
   // Pre-fill from URL params (?date=&group=)
   useEffect(() => {
     const urlDate = searchParams.get('date')
@@ -123,6 +130,72 @@ function AttendanceContent() {
     if (!selectedGroup) return
     loadLogDates()
   }, [selectedGroup, date, userName])
+
+  // Load session photos when group or date changes
+  useEffect(() => {
+    if (!selectedGroup) return
+    loadSessionPhotos()
+  }, [selectedGroup, date])
+
+  async function loadSessionPhotos() {
+    const { data } = await supabase
+      .from('training_photos')
+      .select('id, photo_url, sort_order, telegram_published_at')
+      .eq('group_name', selectedGroup)
+      .eq('session_date', date)
+      .order('sort_order')
+    setSessionPhotos(data || [])
+    setPhotoPublished(!!(data && data.length > 0 && data[0].telegram_published_at))
+  }
+
+  async function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setPhotoUploading(true)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      fd.append('group_name', selectedGroup)
+      fd.append('session_date', date)
+      fd.append('trainer_name', userName || '')
+      fd.append('student_count', String(mainPresentCount + guestsPresentCount))
+      fd.append('sort_order', String(sessionPhotos.length))
+      const res = await fetch('/api/upload-training-photo', { method: 'POST', body: fd })
+      if (!res.ok) { alert('Ошибка загрузки фото'); return }
+      await loadSessionPhotos()
+    } catch {
+      alert('Ошибка загрузки фото')
+    } finally {
+      setPhotoUploading(false)
+      e.target.value = ''
+    }
+  }
+
+  async function handlePhotoDelete(id: string) {
+    await fetch(`/api/upload-training-photo?id=${id}`, { method: 'DELETE' })
+    await loadSessionPhotos()
+  }
+
+  async function handlePublishToTelegram() {
+    setPhotoPublishing(true)
+    try {
+      const res = await fetch('/api/telegram/publish-training-photo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ group_name: selectedGroup, session_date: date }),
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        alert(`Ошибка публикации: ${err.error || 'неизвестная ошибка'}`)
+        return
+      }
+      setPhotoPublished(true)
+    } catch {
+      alert('Ошибка публикации в Telegram')
+    } finally {
+      setPhotoPublishing(false)
+    }
+  }
 
   async function loadLogDates() {
     const { data } = await supabase
@@ -467,6 +540,69 @@ function AttendanceContent() {
                 }`}>
               {logDates.has(date) ? '📝 Редактировать журнал' : '📝 Добавить журнал тренировки'}
             </button>
+          </div>
+
+          {/* Training Photo Block */}
+          <div className={`mt-4 rounded-xl border p-4 ${dark ? 'bg-[#2C2C2E] border-[#3A3A3C]' : 'bg-gray-50 border-gray-200'}`}>
+            <div className="flex items-center justify-between mb-3">
+              <span className={`text-sm font-medium ${textPrimary}`}>📸 Фото тренировки</span>
+              {sessionPhotos.length > 0 && (
+                photoPublished
+                  ? <span className="text-xs text-green-500 font-medium">✅ Опубликовано</span>
+                  : <span className={`text-xs ${textSecondary}`}>{sessionPhotos.length} фото</span>
+              )}
+            </div>
+
+            {/* Photo previews */}
+            {sessionPhotos.length > 0 && (
+              <div className="flex gap-2 flex-wrap mb-3">
+                {sessionPhotos.map(photo => (
+                  <div key={photo.id} className="relative">
+                    <img
+                      src={photo.photo_url}
+                      alt="Фото тренировки"
+                      className="w-24 h-24 object-cover rounded-lg"
+                    />
+                    <button
+                      onClick={() => handlePhotoDelete(photo.id)}
+                      className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full text-xs flex items-center justify-center leading-none"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Add photo button */}
+            <label className={`flex items-center justify-center gap-2 w-full py-2.5 rounded-xl text-sm font-medium border border-dashed cursor-pointer transition-colors
+              ${photoUploading
+                ? 'opacity-50 cursor-not-allowed'
+                : dark
+                  ? 'border-[#636366] text-[#8E8E93] hover:border-orange-500 hover:text-orange-400'
+                  : 'border-gray-300 text-gray-500 hover:border-orange-400 hover:text-orange-500'
+              }`}>
+              <input
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                disabled={photoUploading}
+                onChange={handlePhotoUpload}
+              />
+              {photoUploading ? 'Загружаю...' : '+ Добавить фото'}
+            </label>
+
+            {/* Publish button */}
+            {sessionPhotos.length > 0 && !photoPublished && (
+              <button
+                onClick={handlePublishToTelegram}
+                disabled={photoPublishing}
+                className="mt-2 w-full py-2.5 rounded-xl text-sm font-medium bg-[#229ED9] text-white disabled:opacity-50 transition-opacity"
+              >
+                {photoPublishing ? 'Публикую...' : '✈️ Опубликовать в Telegram'}
+              </button>
+            )}
           </div>
         </>
       )}
