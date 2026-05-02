@@ -376,7 +376,7 @@ export default function AdminUsersPage() {
                     }`}>
                     ✏️ Изменить
                   </button>
-                  {u.role === 'trainer' && u.name && (
+                  {(u.role === 'trainer' || u.role === 'assistant') && u.name && (
                     <Link
                       href={`/trainer?as=${encodeURIComponent(u.name)}`}
                       className="text-xs px-3 py-1.5 rounded-lg border border-indigo-200 text-indigo-600 hover:bg-indigo-50 transition-colors">
