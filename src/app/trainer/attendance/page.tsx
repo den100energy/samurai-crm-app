@@ -244,6 +244,7 @@ function AttendanceContent() {
 
     // Загрузить уже сохранённые отметки за эту дату (если есть)
     let savedPresent = new Set<string>()
+    let hasExistingRecords = false
     if (withSubs.length > 0) {
       const { data: attData } = await supabase
         .from('attendance')
@@ -252,6 +253,7 @@ function AttendanceContent() {
         .in('student_id', withSubs.map(s => s.id))
 
       if (attData && attData.length > 0) {
+        hasExistingRecords = true
         attData.forEach(a => { if (a.present) savedPresent.add(a.student_id) })
       }
     }
@@ -259,11 +261,7 @@ function AttendanceContent() {
     setOriginalPresent(new Set(savedPresent))
 
     // Для помощника: если есть хоть одна запись — блокируем редактирование
-    if (isAssistant) {
-      setAttendanceLocked(attData != null && attData.length > 0)
-    } else {
-      setAttendanceLocked(false)
-    }
+    setAttendanceLocked(isAssistant && hasExistingRecords)
   }
 
   async function loadGuests() {
