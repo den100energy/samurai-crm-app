@@ -11,6 +11,7 @@ type AuthContextType = {
   userName: string | null
   trainerId: string | null
   permissions: string[]
+  assignedGroups: string[]
   loading: boolean
 }
 
@@ -20,6 +21,7 @@ const AuthContext = createContext<AuthContextType>({
   userName: null,
   trainerId: null,
   permissions: [],
+  assignedGroups: [],
   loading: true,
 })
 
@@ -29,12 +31,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [userName, setUserName] = useState<string | null>(null)
   const [trainerId, setTrainerId] = useState<string | null>(null)
   const [permissions, setPermissions] = useState<string[]>([])
+  const [assignedGroups, setAssignedGroups] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
 
   async function loadProfile(userId: string) {
     const { data } = await supabase
       .from('user_profiles')
-      .select('role, name, trainer_id, permissions')
+      .select('role, name, trainer_id, permissions, assigned_groups')
       .eq('id', userId)
       .single()
     if (data) {
@@ -42,6 +45,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUserName(data.name)
       setTrainerId(data.trainer_id)
       setPermissions(data.permissions || [])
+      setAssignedGroups(data.assigned_groups || [])
     }
   }
 
@@ -88,6 +92,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUserName(null)
         setTrainerId(null)
         setPermissions([])
+        setAssignedGroups([])
         if (realtimeChannel) supabase.removeChannel(realtimeChannel)
       }
     })
@@ -99,7 +104,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   return (
-    <AuthContext.Provider value={{ user, role, userName, trainerId, permissions, loading }}>
+    <AuthContext.Provider value={{ user, role, userName, trainerId, permissions, assignedGroups, loading }}>
       {children}
     </AuthContext.Provider>
   )

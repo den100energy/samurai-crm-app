@@ -6,6 +6,8 @@ import { useAuth } from '@/components/AuthProvider'
 import { ROLE_LABELS, SECTIONS, UserRole } from '@/lib/auth'
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || ''
 
+const ALL_GROUPS = ['Старт', 'Основная (нач.)', 'Основная (оп.)', 'Цигун', 'Индивидуальные']
+
 type StaffUser = {
   id: string
   email: string
@@ -13,6 +15,7 @@ type StaffUser = {
   name: string
   trainer_id: string | null
   permissions: string[]
+  assigned_groups: string[]
   created_at: string
 }
 
@@ -25,7 +28,7 @@ export default function AdminUsersPage() {
   const [trainers, setTrainers] = useState<Trainer[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState({ email: '', password: '', role: 'trainer', name: '', trainer_id: '' })
+  const [form, setForm] = useState({ email: '', password: '', role: 'trainer', name: '', trainer_id: '', assigned_groups: [] as string[] })
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState('')
 
@@ -73,7 +76,7 @@ export default function AdminUsersPage() {
     if (data.error) { setFormError(data.error) }
     else {
       setShowForm(false)
-      setForm({ email: '', password: '', role: 'trainer', name: '', trainer_id: '' })
+      setForm({ email: '', password: '', role: 'trainer', name: '', trainer_id: '', assigned_groups: [] })
       loadAll()
     }
     setSaving(false)
@@ -243,13 +246,37 @@ export default function AdminUsersPage() {
           </div>
           <div>
             <label className="text-xs text-gray-500 block mb-1">Роль</label>
-            <select value={form.role} onChange={e => setForm({...form, role: e.target.value})}
+            <select value={form.role} onChange={e => setForm({...form, role: e.target.value, assigned_groups: []})}
               className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none bg-white">
               <option value="trainer">Тренер</option>
+              <option value="assistant">Помощник тренера</option>
               <option value="admin">Администратор</option>
               <option value="founder">Основатель</option>
             </select>
           </div>
+          {form.role === 'assistant' && (
+            <div>
+              <label className="text-xs text-gray-500 block mb-1">Группы (выбери одну или несколько)</label>
+              <div className="space-y-1.5">
+                {ALL_GROUPS.map(g => (
+                  <label key={g} className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={form.assigned_groups.includes(g)}
+                      onChange={e => setForm(prev => ({
+                        ...prev,
+                        assigned_groups: e.target.checked
+                          ? [...prev.assigned_groups, g]
+                          : prev.assigned_groups.filter(x => x !== g)
+                      }))}
+                      className="rounded"
+                    />
+                    <span className="text-sm text-gray-700">{g}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
           {form.role === 'trainer' && trainers.length > 0 && (
             <div>
               <label className="text-xs text-gray-500 block mb-1">Связать с тренером</label>
@@ -314,13 +341,19 @@ export default function AdminUsersPage() {
                     <div className="font-medium text-gray-800">{u.name || '—'}</div>
                     <div className="text-xs text-gray-400 truncate">{u.email}</div>
                   </div>
-                  <span className={`text-xs px-2.5 py-1 rounded-full shrink-0 ${
-                    u.role === 'founder' ? 'bg-purple-100 text-purple-700' :
-                    u.role === 'admin'   ? 'bg-blue-100 text-blue-700' :
-                                           'bg-green-100 text-green-700'
-                  }`}>
-                    {ROLE_LABELS[u.role] || u.role}
-                  </span>
+                  <div className="flex flex-col items-end gap-1 shrink-0">
+                    <span className={`text-xs px-2.5 py-1 rounded-full ${
+                      u.role === 'founder'   ? 'bg-purple-100 text-purple-700' :
+                      u.role === 'admin'     ? 'bg-blue-100 text-blue-700' :
+                      u.role === 'assistant' ? 'bg-orange-100 text-orange-700' :
+                                               'bg-green-100 text-green-700'
+                    }`}>
+                      {ROLE_LABELS[u.role] || u.role}
+                    </span>
+                    {u.role === 'assistant' && u.assigned_groups?.length > 0 && (
+                      <span className="text-xs text-gray-400">{u.assigned_groups.join(', ')}</span>
+                    )}
+                  </div>
                 </div>
 
                 {/* Кнопки действий */}

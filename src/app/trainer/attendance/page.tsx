@@ -54,7 +54,14 @@ function sessionsColor(n: number | null) {
 }
 
 function AttendanceContent() {
-  const { userName, loading } = useAuth()
+  const { userName, role, assignedGroups, loading } = useAuth()
+  const isAssistant = role === 'assistant'
+
+  // Помощнику тренера доступны только последние 2 дня
+  const minDate = (() => {
+    const d = new Date(); d.setDate(d.getDate() - 2); return d.toISOString().split('T')[0]
+  })()
+  const maxDate = localDateStr()
   const { theme } = useTheme()
   const searchParams = useSearchParams()
 
@@ -85,6 +92,9 @@ function AttendanceContent() {
   const [existingLog, setExistingLog] = useState<{ id: string; data: TrainingLogData } | null>(null)
   const [logDates, setLogDates] = useState<Set<string>>(new Set())
 
+  // Режим только-чтение для помощника (посещаемость уже внесена)
+  const [attendanceLocked, setAttendanceLocked] = useState(false)
+
   // Training photo state
   type TrainingPhoto = { id: string; photo_url: string; sort_order: number; telegram_published_at: string | null }
   const [sessionPhotos, setSessionPhotos] = useState<TrainingPhoto[]>([])
@@ -103,6 +113,12 @@ function AttendanceContent() {
   // Load trainer's groups
   useEffect(() => {
     if (!loading && userName) {
+      if (isAssistant) {
+        // Помощник видит только назначенные ему группы
+        setMyGroups(assignedGroups)
+        if (!searchParams.get('group') && assignedGroups.length === 1) setSelectedGroup(assignedGroups[0])
+        return
+      }
       supabase.from('schedule').select('group_name').eq('trainer_name', userName)
         .then(async ({ data }) => {
           const groups = [...new Set((data || []).map(s => s.group_name).filter(Boolean))] as string[]
@@ -117,7 +133,7 @@ function AttendanceContent() {
           }
         })
     }
-  }, [loading, userName])
+  }, [loading, userName, isAssistant, assignedGroups])
 
   // Load students when group or date changes
   useEffect(() => {
@@ -241,6 +257,13 @@ function AttendanceContent() {
     }
     setPresent(new Set(savedPresent))
     setOriginalPresent(new Set(savedPresent))
+
+    // Для помощника: если есть хоть одна запись — блокируем редактирование
+    if (isAssistant) {
+      setAttendanceLocked(attData != null && attData.length > 0)
+    } else {
+      setAttendanceLocked(false)
+    }
   }
 
   async function loadGuests() {
@@ -412,6 +435,8 @@ function AttendanceContent() {
       </div>
 
       <input type="date" value={date} onChange={e => setDate(e.target.value)}
+        min={isAssistant ? minDate : undefined}
+        max={isAssistant ? maxDate : undefined}
         className={`w-full border rounded-xl px-4 py-2.5 mb-3 outline-none ${inputCls}`} />
 
       {/* Group tabs */}
@@ -429,12 +454,19 @@ function AttendanceContent() {
         <div className={`text-center py-12 ${textSecondary}`}>Нет учеников в этой группе</div>
       ) : (
         <>
+          {attendanceLocked && (
+            <div className="mb-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+              <div className="text-sm font-medium text-amber-800">⚠️ Посещаемость уже внесена</div>
+              <div className="text-xs text-amber-600 mt-0.5">Если нужно исправить — обратитесь к тренеру</div>
+            </div>
+          )}
+
           <div className="space-y-2 mb-4">
             {students.map(s => {
               const chosenSub = getChosenSub(s)
               return (
                 <div key={s.id} className={`rounded-xl border transition-colors ${present.has(s.id) ? 'bg-green-50 border-green-200' : dark ? 'bg-[#2C2C2E] border-[#3A3A3C]' : 'bg-gray-50 border-gray-200'}`}>
-                  <button onClick={() => toggle(s.id)} className="w-full flex items-center px-4 py-3">
+                  <button onClick={() => attendanceLocked ? undefined : toggle(s.id)} disabled={attendanceLocked} className="w-full flex items-center px-4 py-3">
                     <span className="text-xl mr-3">{present.has(s.id) ? '✅' : '⬜'}</span>
                     {s.photo_url && (
                       <img src={s.photo_url} alt={s.name} className="w-8 h-8 rounded-full object-cover mr-2 shrink-0" />
@@ -520,10 +552,12 @@ function AttendanceContent() {
             {guestsPresentCount > 0 && ` + ${guestsPresentCount} гост.`}
           </div>
 
-          <button onClick={save} disabled={saving}
-            className="w-full bg-black text-white py-3 rounded-xl font-medium disabled:opacity-50 transition-colors">
-            {saved ? '✓ Сохранено!' : saving ? 'Сохранение...' : 'Сохранить посещаемость'}
-          </button>
+          {!attendanceLocked && (
+            <button onClick={save} disabled={saving}
+              className="w-full bg-black text-white py-3 rounded-xl font-medium disabled:opacity-50 transition-colors">
+              {saved ? '✓ Сохранено!' : saving ? 'Сохранение...' : 'Сохранить посещаемость'}
+            </button>
+          )}
 
           {/* Training Log Button */}
           <div className="mt-3 flex gap-2">

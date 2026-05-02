@@ -28,7 +28,7 @@ export async function GET() {
   const admin = getAdminClient()
 
   const { data: { users } } = await admin.auth.admin.listUsers()
-  const { data: profiles } = await admin.from('user_profiles').select('id, role, name, trainer_id, permissions')
+  const { data: profiles } = await admin.from('user_profiles').select('id, role, name, trainer_id, permissions, assigned_groups')
 
   const profileMap = new Map((profiles || []).map(p => [p.id, p]))
   const result = (users || []).map(u => ({
@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
   if (!(await checkFounder())) {
     return NextResponse.json({ error: 'Нет доступа' }, { status: 403 })
   }
-  const { email, password, role, name, trainer_id } = await req.json()
+  const { email, password, role, name, trainer_id, assigned_groups } = await req.json()
   if (!email || !password || !role || !name) {
     return NextResponse.json({ error: 'Заполните все поля' }, { status: 400 })
   }
@@ -67,6 +67,7 @@ export async function POST(req: NextRequest) {
     name,
     trainer_id: trainer_id || null,
     permissions: [],
+    assigned_groups: assigned_groups || [],
   })
 
   if (profileError) {
@@ -83,16 +84,17 @@ export async function PATCH(req: NextRequest) {
   if (!(await checkFounder())) {
     return NextResponse.json({ error: 'Нет доступа' }, { status: 403 })
   }
-  const { id, permissions, name, email, password, role, trainer_id } = await req.json()
+  const { id, permissions, name, email, password, role, trainer_id, assigned_groups } = await req.json()
   const admin = getAdminClient()
 
   // Обновляем профиль через admin-клиент (обходит RLS)
-  if (permissions !== undefined || name !== undefined || trainer_id !== undefined || role !== undefined) {
+  if (permissions !== undefined || name !== undefined || trainer_id !== undefined || role !== undefined || assigned_groups !== undefined) {
     const update: Record<string, unknown> = {}
     if (permissions !== undefined) update.permissions = permissions
     if (name !== undefined) update.name = name
     if (role !== undefined) update.role = role
     if (trainer_id !== undefined) update.trainer_id = trainer_id || null
+    if (assigned_groups !== undefined) update.assigned_groups = assigned_groups
     const { error: updateError } = await admin
       .from('user_profiles')
       .update(update)

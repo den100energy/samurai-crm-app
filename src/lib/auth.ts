@@ -1,15 +1,17 @@
-export type UserRole = 'founder' | 'admin' | 'trainer'
+export type UserRole = 'founder' | 'admin' | 'trainer' | 'assistant'
 
 export const ROLE_HOME: Record<UserRole, string> = {
   founder: '/',
   admin: '/',
   trainer: '/trainer',
+  assistant: '/trainer',
 }
 
 export const ROLE_LABELS: Record<UserRole, string> = {
   founder: 'Основатель',
   admin: 'Администратор',
   trainer: 'Тренер',
+  assistant: 'Помощник тренера',
 }
 
 // Public routes — never require auth
@@ -132,6 +134,7 @@ const ADMIN_BLOCKED = ['finance', 'salary', 'settings']
 export function hasAccess(role: UserRole, permissions: string[], sectionKey: string): boolean {
   if (role === 'founder') return true
   if (role === 'admin') return !ADMIN_BLOCKED.includes(sectionKey)
+  if (role === 'assistant') return sectionKey === 'attendance'
   // trainer — есть хотя бы одно разрешение в этом разделе
   return permissions.some(p => p === sectionKey || p.startsWith(sectionKey + '.'))
 }
