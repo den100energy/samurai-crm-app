@@ -644,20 +644,37 @@ export default function AttendancePage() {
               </div>
             )}
 
-            <label className={`flex items-center justify-center gap-2 w-full py-2.5 rounded-xl text-sm font-medium border border-dashed cursor-pointer transition-colors
-              ${photoUploading
-                ? 'opacity-50 cursor-not-allowed border-gray-300 text-gray-400'
-                : 'border-gray-300 text-gray-500 hover:border-orange-400 hover:text-orange-500'
-              }`}>
-              <input
-                type="file"
-                accept="image/*"
-                className="hidden"
-                disabled={photoUploading}
-                onChange={handlePhotoUpload}
-              />
-              {photoUploading ? 'Загружаю...' : '+ Добавить фото'}
-            </label>
+            <div className="flex gap-2">
+              <label className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-medium border border-dashed cursor-pointer transition-colors
+                ${photoUploading
+                  ? 'opacity-50 cursor-not-allowed border-gray-300 text-gray-400'
+                  : 'border-gray-300 text-gray-500 hover:border-orange-400 hover:text-orange-500'
+                }`}>
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  className="hidden"
+                  disabled={photoUploading}
+                  onChange={handlePhotoUpload}
+                />
+                📷 Камера
+              </label>
+              <label className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-medium border border-dashed cursor-pointer transition-colors
+                ${photoUploading
+                  ? 'opacity-50 cursor-not-allowed border-gray-300 text-gray-400'
+                  : 'border-gray-300 text-gray-500 hover:border-orange-400 hover:text-orange-500'
+                }`}>
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  disabled={photoUploading}
+                  onChange={handlePhotoUpload}
+                />
+                🖼 Галерея
+              </label>
+            </div>
 
             {sessionPhotos.length > 0 && !photoPublished && (
               <button
