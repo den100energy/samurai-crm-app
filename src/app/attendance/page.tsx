@@ -71,6 +71,13 @@ export default function AttendancePage() {
   const [existingLog, setExistingLog] = useState<{ id: string; data: TrainingLogData } | null>(null)
   const [logDates, setLogDates] = useState<Set<string>>(new Set())
 
+  // Training photo state
+  type TrainingPhoto = { id: string; photo_url: string; sort_order: number; telegram_published_at: string | null }
+  const [sessionPhotos, setSessionPhotos] = useState<TrainingPhoto[]>([])
+  const [photoUploading, setPhotoUploading] = useState(false)
+  const [photoPublishing, setPhotoPublishing] = useState(false)
+  const [photoPublished, setPhotoPublished] = useState(false)
+
   useEffect(() => {
     async function load() {
       const { data } = await supabase
@@ -112,12 +119,77 @@ export default function AttendancePage() {
       .select('date')
       .eq('group_name', group)
       .order('date', { ascending: false })
-    
+
     const dateSet = new Set<string>()
     if (data) {
       for (const log of data) dateSet.add(log.date)
     }
     setLogDates(dateSet)
+  }
+
+  useEffect(() => {
+    loadSessionPhotos()
+  }, [group, date])
+
+  async function loadSessionPhotos() {
+    const { data } = await supabase
+      .from('training_photos')
+      .select('id, photo_url, sort_order, telegram_published_at')
+      .eq('group_name', group)
+      .eq('session_date', date)
+      .order('sort_order')
+    setSessionPhotos(data || [])
+    setPhotoPublished(!!(data && data.length > 0 && data[0].telegram_published_at))
+  }
+
+  async function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setPhotoUploading(true)
+    try {
+      const presentCount = present.size - guestsPresentCount
+      const fd = new FormData()
+      fd.append('file', file)
+      fd.append('group_name', group)
+      fd.append('session_date', date)
+      fd.append('trainer_name', userName || '')
+      fd.append('student_count', String(presentCount + guestsPresentCount))
+      fd.append('sort_order', String(sessionPhotos.length))
+      const res = await fetch('/api/upload-training-photo', { method: 'POST', body: fd })
+      if (!res.ok) { alert('Ошибка загрузки фото'); return }
+      await loadSessionPhotos()
+    } catch {
+      alert('Ошибка загрузки фото')
+    } finally {
+      setPhotoUploading(false)
+      e.target.value = ''
+    }
+  }
+
+  async function handlePhotoDelete(id: string) {
+    await fetch(`/api/upload-training-photo?id=${id}`, { method: 'DELETE' })
+    await loadSessionPhotos()
+  }
+
+  async function handlePublishToTelegram() {
+    setPhotoPublishing(true)
+    try {
+      const res = await fetch('/api/telegram/publish-training-photo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ group_name: group, session_date: date }),
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        alert(`Ошибка публикации: ${err.error || 'неизвестная ошибка'}`)
+        return
+      }
+      setPhotoPublished(true)
+    } catch {
+      alert('Ошибка публикации в Telegram')
+    } finally {
+      setPhotoPublishing(false)
+    }
   }
 
   async function loadGuests() {
@@ -156,13 +228,18 @@ export default function AttendancePage() {
       // Расписание и отмены за этот период
       const [{ data: schedules }, { data: overrides }] = await Promise.all([
         supabase.from('schedule').select('group_name, day_of_week, trainer_name'),
-        supabase.from('schedule_overrides').select('date, group_name, cancelled').gte('date', days[days.length - 1]).lte('date', today),
+        supabase.from('schedule_overrides').select('date, group_name, cancelled, trainer_name').gte('date', days[days.length - 1]).lte('date', today),
       ])
 
-      // Строим set отменённых: "date|group"
+      // Строим set отменённых и map переопределённых тренеров: "date|group"
       const cancelledSet = new Set<string>()
+      const overrideTrainers = new Map<string, string | null>()
       for (const ov of overrides || []) {
-        if (ov.cancelled) cancelledSet.add(`${ov.date}|${ov.group_name}`)
+        if (ov.cancelled) {
+          cancelledSet.add(`${ov.date}|${ov.group_name}`)
+        } else if (ov.trainer_name) {
+          overrideTrainers.set(`${ov.date}|${ov.group_name}`, ov.trainer_name)
+        }
       }
 
       // Вычисляем все ожидаемые тренировки
@@ -173,7 +250,9 @@ export default function AttendancePage() {
         const dayOfWeek = jsDay === 0 ? 7 : jsDay
         for (const s of schedules || []) {
           if (s.day_of_week === dayOfWeek && !cancelledSet.has(`${dayStr}|${s.group_name}`)) {
-            expected.push({ date: dayStr, group_name: s.group_name, trainer_name: s.trainer_name ?? null })
+            const key = `${dayStr}|${s.group_name}`
+            const trainer = overrideTrainers.has(key) ? overrideTrainers.get(key)! : (s.trainer_name ?? null)
+            expected.push({ date: dayStr, group_name: s.group_name, trainer_name: trainer })
           }
         }
       }
@@ -532,6 +611,63 @@ export default function AttendancePage() {
                 }`}>
               {logDates.has(date) ? '📝 Редактировать журнал' : '📝 Добавить журнал тренировки'}
             </button>
+          </div>
+
+          {/* Training Photo Block */}
+          <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-4">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-sm font-medium text-gray-800">📸 Фото тренировки</span>
+              {sessionPhotos.length > 0 && (
+                photoPublished
+                  ? <span className="text-xs text-green-500 font-medium">✅ Опубликовано</span>
+                  : <span className="text-xs text-gray-400">{sessionPhotos.length} фото</span>
+              )}
+            </div>
+
+            {sessionPhotos.length > 0 && (
+              <div className="flex gap-2 flex-wrap mb-3">
+                {sessionPhotos.map(photo => (
+                  <div key={photo.id} className="relative">
+                    <img
+                      src={photo.photo_url}
+                      alt="Фото тренировки"
+                      className="w-24 h-24 object-cover rounded-lg"
+                    />
+                    <button
+                      onClick={() => handlePhotoDelete(photo.id)}
+                      className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full text-xs flex items-center justify-center leading-none"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <label className={`flex items-center justify-center gap-2 w-full py-2.5 rounded-xl text-sm font-medium border border-dashed cursor-pointer transition-colors
+              ${photoUploading
+                ? 'opacity-50 cursor-not-allowed border-gray-300 text-gray-400'
+                : 'border-gray-300 text-gray-500 hover:border-orange-400 hover:text-orange-500'
+              }`}>
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                disabled={photoUploading}
+                onChange={handlePhotoUpload}
+              />
+              {photoUploading ? 'Загружаю...' : '+ Добавить фото'}
+            </label>
+
+            {sessionPhotos.length > 0 && !photoPublished && (
+              <button
+                onClick={handlePublishToTelegram}
+                disabled={photoPublishing}
+                className="mt-2 w-full py-2.5 rounded-xl text-sm font-medium bg-[#229ED9] text-white disabled:opacity-50 transition-opacity"
+              >
+                {photoPublishing ? 'Публикую...' : '✈️ Опубликовать в Telegram'}
+              </button>
+            )}
           </div>
         </>
       )}
