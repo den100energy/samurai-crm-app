@@ -585,7 +585,6 @@ function AttendanceContent() {
               <input
                 type="file"
                 accept="image/*"
-                capture="environment"
                 className="hidden"
                 disabled={photoUploading}
                 onChange={handlePhotoUpload}
