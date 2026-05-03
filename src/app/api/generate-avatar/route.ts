@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
   let falResult: { images?: { url: string }[] }
   try {
     const timeoutPromise = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error('fal.ai timeout after 90s')), 90000)
+      setTimeout(() => reject(new Error('fal.ai timeout after 120s')), 120000)
     )
     const subscribePromise = fal.subscribe('fal-ai/flux-pulid', {
       input: {
