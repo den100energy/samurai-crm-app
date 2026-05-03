@@ -59,14 +59,15 @@ export async function POST(req: NextRequest) {
     const timeoutPromise = new Promise<never>((_, reject) =>
       setTimeout(() => reject(new Error('fal.ai timeout after 90s')), 90000)
     )
-    const subscribePromise = fal.subscribe('fal-ai/instant-character', {
+    const subscribePromise = fal.subscribe('fal-ai/flux-pulid', {
       input: {
-        image_url: facePhotoUrl,
+        reference_image_url: facePhotoUrl,
         prompt,
         negative_prompt: NEGATIVE,
-        guidance_scale: 3.5,
+        guidance_scale: 4,
+        id_weight: 1,
         image_size: 'portrait_4_3',
-        num_inference_steps: 28,
+        num_inference_steps: 20,
       },
       onQueueUpdate: (update) => {
         console.log('[generate-avatar] queue status:', update.status)
