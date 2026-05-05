@@ -22,4 +22,12 @@ jobs:
             npm install --production=false
             NODE_OPTIONS="--max-old-space-size=2048" npm run build
             pm2 reload samurai-crm --update-env
+            # Очищаем nginx-кеш, чтобы браузер получил новые chunk-хеши
+            for cachedir in /var/cache/nginx /tmp/nginx /var/nginx/cache /var/lib/nginx/cache; do
+              if [ -d "$cachedir" ]; then
+                find "$cachedir" -type f -delete 2>/dev/null || true
+                echo "Cleared nginx cache: $cachedir"
+              fi
+            done
+            nginx -s reload 2>/dev/null || true
             echo "✅ Deploy complete"
