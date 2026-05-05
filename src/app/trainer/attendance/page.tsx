@@ -286,6 +286,28 @@ function AttendanceContent() {
     const withSubs = await loadWithSub(data || [])
     setGuests(withSubs)
     setGuestsLoaded(true)
+
+    // Восстанавливаем уже сохранённые отметки гостей за эту дату
+    if (withSubs.length > 0) {
+      const { data: guestAtt } = await supabase
+        .from('attendance')
+        .select('student_id, present')
+        .eq('date', date)
+        .eq('group_name', selectedGroup)
+        .in('student_id', withSubs.map(g => g.id))
+      if (guestAtt && guestAtt.length > 0) {
+        setPresent(prev => {
+          const next = new Set(prev)
+          guestAtt.forEach(a => { if (a.present) next.add(a.student_id) })
+          return next
+        })
+        setOriginalPresent(prev => {
+          const next = new Set(prev)
+          guestAtt.forEach(a => { if (a.present) next.add(a.student_id) })
+          return next
+        })
+      }
+    }
   }
 
   function toggleGuests() {
