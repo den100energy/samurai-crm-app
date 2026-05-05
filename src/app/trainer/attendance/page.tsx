@@ -213,6 +213,16 @@ function AttendanceContent() {
     }
   }
 
+  async function handleResendToTelegram() {
+    // Обновляем количество учеников перед переотправкой
+    await supabase
+      .from('training_photos')
+      .update({ student_count: mainPresentCount + guestsPresentCount })
+      .eq('group_name', selectedGroup)
+      .eq('session_date', date)
+    await handlePublishToTelegram()
+  }
+
   async function loadLogDates() {
     const { data } = await supabase
       .from('training_logs')
@@ -644,13 +654,13 @@ function AttendanceContent() {
             </div>
 
             {/* Publish button */}
-            {sessionPhotos.length > 0 && !photoPublished && (
+            {sessionPhotos.length > 0 && (
               <button
-                onClick={handlePublishToTelegram}
+                onClick={photoPublished ? handleResendToTelegram : handlePublishToTelegram}
                 disabled={photoPublishing}
                 className="mt-2 w-full py-2.5 rounded-xl text-sm font-medium bg-[#229ED9] text-white disabled:opacity-50 transition-opacity"
               >
-                {photoPublishing ? 'Публикую...' : '✈️ Опубликовать в Telegram'}
+                {photoPublishing ? 'Публикую...' : photoPublished ? '🔄 Отправить заново' : '✈️ Опубликовать в Telegram'}
               </button>
             )}
           </div>
