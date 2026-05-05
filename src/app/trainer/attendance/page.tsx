@@ -101,6 +101,7 @@ function AttendanceContent() {
   const [photoUploading, setPhotoUploading] = useState(false)
   const [photoPublishing, setPhotoPublishing] = useState(false)
   const [photoPublished, setPhotoPublished] = useState(false)
+  const [savedGuestCount, setSavedGuestCount] = useState(0)
 
   // Pre-fill from URL params (?date=&group=)
   useEffect(() => {
@@ -174,7 +175,7 @@ function AttendanceContent() {
       fd.append('group_name', selectedGroup)
       fd.append('session_date', date)
       fd.append('trainer_name', userName || '')
-      fd.append('student_count', String(mainPresentCount + guestsPresentCount))
+      fd.append('student_count', String(mainPresentCount + effectiveGuestCount))
       fd.append('sort_order', String(sessionPhotos.length))
       const res = await fetch('/api/upload-training-photo', { method: 'POST', body: fd })
       if (!res.ok) { alert('Ошибка загрузки фото'); return }
@@ -217,7 +218,7 @@ function AttendanceContent() {
     // Обновляем количество учеников перед переотправкой
     await supabase
       .from('training_photos')
-      .update({ student_count: mainPresentCount + guestsPresentCount })
+      .update({ student_count: mainPresentCount + effectiveGuestCount })
       .eq('group_name', selectedGroup)
       .eq('session_date', date)
     await handlePublishToTelegram()
@@ -252,20 +253,26 @@ function AttendanceContent() {
     setGuestsLoaded(false)
     setShowGuests(false)
 
-    // Загрузить уже сохранённые отметки за эту дату (если есть)
+    // Загрузить уже сохранённые отметки за эту дату (все: свои + гости)
     let savedPresent = new Set<string>()
     let hasExistingRecords = false
-    if (withSubs.length > 0) {
-      const { data: attData } = await supabase
-        .from('attendance')
-        .select('student_id, present')
-        .eq('date', date)
-        .in('student_id', withSubs.map(s => s.id))
+    const mainIds = new Set(withSubs.map(s => s.id))
 
-      if (attData && attData.length > 0) {
-        hasExistingRecords = true
-        attData.forEach(a => { if (a.present) savedPresent.add(a.student_id) })
-      }
+    const { data: allAttData } = await supabase
+      .from('attendance')
+      .select('student_id, present')
+      .eq('date', date)
+      .eq('group_name', selectedGroup)
+
+    if (allAttData && allAttData.length > 0) {
+      allAttData.forEach(a => {
+        if (!a.present) return
+        savedPresent.add(a.student_id)
+        if (mainIds.has(a.student_id)) hasExistingRecords = true
+      })
+      setSavedGuestCount(allAttData.filter(a => a.present && !mainIds.has(a.student_id)).length)
+    } else {
+      setSavedGuestCount(0)
     }
     setPresent(new Set(savedPresent))
     setOriginalPresent(new Set(savedPresent))
@@ -431,6 +438,8 @@ function AttendanceContent() {
 
   const guestsPresentCount = guests.filter(g => present.has(g.id)).length
   const mainPresentCount = students.filter(s => present.has(s.id)).length
+  // Если панель гостей ещё не открывалась — используем счётчик из БД
+  const effectiveGuestCount = guestsLoaded ? guestsPresentCount : savedGuestCount
 
   if (!selectedGroup) {
     return (
@@ -537,8 +546,8 @@ function AttendanceContent() {
             className={`w-full border border-dashed py-2.5 rounded-xl text-sm mb-4 transition-colors
               ${dark ? 'border-[#3A3A3C] text-[#8E8E93] hover:border-[#636366]' : 'border-gray-300 text-gray-500 hover:border-gray-400 hover:text-gray-700'}`}>
             {showGuests
-              ? `▲ Скрыть гостей${guestsPresentCount > 0 ? ` (отмечено: ${guestsPresentCount})` : ''}`
-              : `+ Гости из других групп${guestsPresentCount > 0 ? ` (${guestsPresentCount})` : ''}`}
+              ? `▲ Скрыть гостей${effectiveGuestCount > 0 ? ` (отмечено: ${effectiveGuestCount})` : ''}`
+              : `+ Гости из других групп${effectiveGuestCount > 0 ? ` (${effectiveGuestCount})` : ''}`}
           </button>
 
           {showGuests && (
@@ -579,7 +588,7 @@ function AttendanceContent() {
 
           <div className={`text-sm text-center mb-3 ${textSecondary}`}>
             Присутствует: {mainPresentCount} из {students.length}
-            {guestsPresentCount > 0 && ` + ${guestsPresentCount} гост.`}
+            {effectiveGuestCount > 0 && ` + ${effectiveGuestCount} гост.`}
           </div>
 
           {!attendanceLocked && (
