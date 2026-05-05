@@ -206,7 +206,7 @@ function AttendanceContent() {
         alert(`Ошибка публикации: ${err.error || 'неизвестная ошибка'}`)
         return
       }
-      setPhotoPublished(true)
+      await loadSessionPhotos()
     } catch {
       alert('Ошибка публикации в Telegram')
     } finally {

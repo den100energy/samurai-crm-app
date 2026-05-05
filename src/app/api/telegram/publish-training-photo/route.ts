@@ -92,9 +92,17 @@ export async function POST(req: NextRequest) {
 
   const threadId: number | null = groupRow?.telegram_thread_id ?? null
 
+  // Считаем присутствующих напрямую из attendance (точнее, чем кэшированное поле)
+  const { data: attRows } = await supabase
+    .from('attendance')
+    .select('student_id')
+    .eq('group_name', group_name)
+    .eq('present', true)
+    .eq('date', session_date)
+
   const first = photos[0]
   const trainerName = first.trainer_name || ''
-  const studentCount = first.student_count ?? 0
+  const studentCount = attRows?.length ?? first.student_count ?? 0
   const caption =
     `📸 <b>${formatDate(session_date)}</b>\n` +
     `${group_name} · ${studentCount} чел.\n` +
