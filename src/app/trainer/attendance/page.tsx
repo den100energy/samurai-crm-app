@@ -685,13 +685,24 @@ function AttendanceContent() {
             </div>
 
             {/* Publish button */}
-            {sessionPhotos.length > 0 && (
+            {sessionPhotos.length > 0 && !photoPublished && (
               <button
-                onClick={photoPublished ? handleResendToTelegram : handlePublishToTelegram}
+                onClick={handlePublishToTelegram}
                 disabled={photoPublishing}
                 className="mt-2 w-full py-2.5 rounded-xl text-sm font-medium bg-[#229ED9] text-white disabled:opacity-50 transition-opacity"
               >
-                {photoPublishing ? 'Публикую...' : photoPublished ? '🔄 Отправить заново' : '✈️ Опубликовать в Telegram'}
+                {photoPublishing ? 'Публикую...' : '✈️ Опубликовать в Telegram'}
+              </button>
+            )}
+
+            {/* Resend button */}
+            {photoPublished && (
+              <button
+                onClick={handleResendToTelegram}
+                disabled={photoPublishing}
+                className="mt-2 w-full py-2.5 rounded-xl text-sm font-medium bg-[#229ED9] text-white disabled:opacity-50 transition-opacity"
+              >
+                {photoPublishing ? 'Публикую...' : '🔄 Отправить заново'}
               </button>
             )}
           </div>
