@@ -16,8 +16,10 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
+            set -e
             cd /opt/samurai-crm-app
             git pull
             npm install --production=false
-            NODE_OPTIONS="--max-old-space-size=1024" npm run build
-            pm2 reload samurai-crm
+            NODE_OPTIONS="--max-old-space-size=2048" npm run build
+            pm2 reload samurai-crm --update-env
+            echo "✅ Deploy complete"
