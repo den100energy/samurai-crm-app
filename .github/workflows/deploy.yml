@@ -11,15 +11,29 @@ jobs:
     steps:
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
+        env:
+          GOOGLE_SERVICE_ACCOUNT_EMAIL: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_EMAIL }}
+          GOOGLE_SERVICE_ACCOUNT_KEY: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_KEY }}
+          GOOGLE_SHEETS_SPREADSHEET_ID: ${{ secrets.GOOGLE_SHEETS_SPREADSHEET_ID }}
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
+          envs: GOOGLE_SERVICE_ACCOUNT_EMAIL,GOOGLE_SERVICE_ACCOUNT_KEY,GOOGLE_SHEETS_SPREADSHEET_ID
           script: |
             set -e
             cd /opt/samurai-crm-app
             git pull
             npm install --production=false
+            # Прописываем Google-переменные в .env.local если ещё нет
+            if [ -n "$GOOGLE_SERVICE_ACCOUNT_EMAIL" ]; then
+              sed -i '/^GOOGLE_SERVICE_ACCOUNT_EMAIL=/d' .env.local
+              sed -i '/^GOOGLE_SERVICE_ACCOUNT_KEY=/d' .env.local
+              sed -i '/^GOOGLE_SHEETS_SPREADSHEET_ID=/d' .env.local
+              echo "GOOGLE_SERVICE_ACCOUNT_EMAIL=$GOOGLE_SERVICE_ACCOUNT_EMAIL" >> .env.local
+              printf 'GOOGLE_SERVICE_ACCOUNT_KEY="%s"\n' "$GOOGLE_SERVICE_ACCOUNT_KEY" >> .env.local
+              echo "GOOGLE_SHEETS_SPREADSHEET_ID=$GOOGLE_SHEETS_SPREADSHEET_ID" >> .env.local
+            fi
             NODE_OPTIONS="--max-old-space-size=2048" npm run build
             pm2 restart samurai-crm --update-env
             # Очищаем nginx-кеш
