@@ -6,7 +6,17 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-export const GROUPS = ['Старт', 'Основная (нач.)', 'Основная (оп.)', 'Цигун', 'Индивидуальные']
+// Конфигурация листов: одиночные группы + объединённый лист "Основная"
+type SheetConfig =
+  | { title: string; type: 'single'; group: string }
+  | { title: string; type: 'combined'; groups: string[] }
+
+const SHEET_CONFIGS: SheetConfig[] = [
+  { title: 'Старт',          type: 'single',   group: 'Старт' },
+  { title: 'Основная',       type: 'combined', groups: ['Основная (нач.)', 'Основная (оп.)'] },
+  { title: 'Цигун',          type: 'single',   group: 'Цигун' },
+  { title: 'Индивидуальные', type: 'single',   group: 'Индивидуальные' },
+]
 
 const MONTH_NAMES_RU = [
   'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
@@ -85,42 +95,71 @@ function subLabel(type: string | null): string {
   return type.includes('|') ? type.split('|')[1] : type
 }
 
-type Sub = { student_id: string; type: string | null; sessions_left: number | null; end_date: string | null; created_at: string; is_pending: boolean }
+type Sub = {
+  student_id: string; type: string | null; sessions_left: number | null
+  end_date: string | null; created_at: string; is_pending: boolean
+}
 
-// ─── Данные одной группы ────────────────────────────────────────────────────
+// ─── Генерация данных листа (одна или несколько групп) ───────────────────────
 
-async function generateGroupData(group: string, year: number, month: number) {
+async function generateSheetData(groups: string[], year: number, month: number, showGroup: boolean) {
   const mm = String(month).padStart(2, '0')
   const startDate = `${year}-${mm}-01`
   const nm = month === 12 ? 1 : month + 1
   const ny = month === 12 ? year + 1 : year
   const endDate = `${ny}-${String(nm).padStart(2, '0')}-01`
 
+  // Все посещения по всем группам этого листа
   const { data: attRows } = await supabase
-    .from('attendance').select('date, student_id')
-    .eq('group_name', group).eq('present', true)
+    .from('attendance').select('date, student_id, group_name')
+    .in('group_name', groups).eq('present', true)
     .gte('date', startDate).lt('date', endDate)
 
-  const dateSet = new Set<string>()
-  ;(attRows || []).forEach(a => dateSet.add(String(a.date).slice(0, 10)))
-  const trainingDates = Array.from(dateSet).sort()
-  if (trainingDates.length === 0) return null
-
-  const { data: students } = await supabase
-    .from('students').select('id, name')
-    .eq('group_name', group).eq('status', 'active').order('name')
-  if (!students || students.length === 0) return null
-
-  const attMap = new Map<string, Set<string>>()
+  // Уникальные даты тренировок + для объединённого листа отмечаем группу
+  const dateGroupMap = new Map<string, string>() // date → группа (для заголовка)
   ;(attRows || []).forEach(a => {
     const d = String(a.date).slice(0, 10)
-    if (!attMap.has(a.student_id)) attMap.set(a.student_id, new Set())
-    attMap.get(a.student_id)!.add(d)
+    if (!dateGroupMap.has(d)) {
+      // Для объединённого листа добавляем сокращение группы
+      const groupSuffix = showGroup
+        ? (a.group_name === 'Основная (нач.)' ? '\nнач.' : '\nоп.')
+        : ''
+      dateGroupMap.set(d, groupSuffix)
+    }
+  })
+  const trainingDates = Array.from(dateGroupMap.keys()).sort()
+  if (trainingDates.length === 0) return null
+
+  // Все студенты из всех групп этого листа
+  const { data: students } = await supabase
+    .from('students').select('id, name, group_name')
+    .in('group_name', groups).eq('status', 'active')
+    .order('group_name').order('name')
+  if (!students || students.length === 0) return null
+
+  // Для каждого студента собираем все его посещения (включая гостевые в других группах листа)
+  // Дополнительно ищем посещения студентов как гостей в любых группах
+  const studentIds = students.map(s => s.id)
+  const { data: allAttRows } = await supabase
+    .from('attendance').select('date, student_id')
+    .in('student_id', studentIds).eq('present', true)
+    .gte('date', startDate).lt('date', endDate)
+
+  // attMap: studentId → Set<date> (все их посещения за месяц, в любой группе)
+  const attMap = new Map<string, Set<string>>()
+  ;(allAttRows || []).forEach(a => {
+    const d = String(a.date).slice(0, 10)
+    // Учитываем только даты которые есть в заголовке листа
+    if (dateGroupMap.has(d)) {
+      if (!attMap.has(a.student_id)) attMap.set(a.student_id, new Set())
+      attMap.get(a.student_id)!.add(d)
+    }
   })
 
+  // Абонементы
   const { data: subsData } = await supabase
     .from('subscriptions').select('id, student_id, type, sessions_left, end_date, created_at, is_pending')
-    .in('student_id', students.map(s => s.id)).order('created_at', { ascending: true })
+    .in('student_id', studentIds).order('created_at', { ascending: true })
 
   const subMap = new Map<string, Sub[]>()
   ;(subsData || []).filter(s => !s.is_pending).forEach(sub => {
@@ -128,9 +167,11 @@ async function generateGroupData(group: string, year: number, month: number) {
     subMap.get(sub.student_id)!.push(sub as Sub)
   })
 
+  // Заголовок
+  const groupCol = showGroup ? ['Группа'] : []
   const header = [
-    'Клиент', 'Абонемент',
-    ...trainingDates.map((d, i) => `${i + 1}\n${fmtShort(d)}`),
+    'Клиент', ...groupCol, 'Абонемент',
+    ...trainingDates.map((d, i) => `${i + 1}\n${fmtShort(d)}${dateGroupMap.get(d) || ''}`),
     'Пос.\nтрен.', 'Посетил\nпо 1 абон.', 'Осталось\nпо 1 абон.', 'Итого\nпо 1 абон.',
     'Пос.\nпо 2 абон.', 'Осталось\nпо 2 абон.', 'Итого\nосталось', 'Статус',
     'Начало\n1 абон.', 'Конец\n1 абон.', 'Начало\n2 абон.', 'Конец\n2 абон.',
@@ -142,10 +183,15 @@ async function generateGroupData(group: string, year: number, month: number) {
   for (const student of students) {
     const attended = attMap.get(student.id) || new Set<string>()
     const subs = subMap.get(student.id) || []
-    const relevant = subs.filter(s => s.created_at.slice(0, 10) < endDate && (!s.end_date || s.end_date >= startDate))
+
+    // Абонементы, активные в этом месяце
+    const relevant = subs.filter(s =>
+      s.created_at.slice(0, 10) < endDate && (!s.end_date || s.end_date >= startDate)
+    )
     const pool = relevant.length > 0 ? relevant : subs.slice(-2)
     const sub1 = pool.length >= 2 ? pool[pool.length - 2] : (pool[0] || null)
     const sub2 = pool.length >= 2 ? pool[pool.length - 1] : null
+
     const totalAttended = attended.size
     let att1 = totalAttended, att2 = 0
     if (sub2 && sub1) {
@@ -153,15 +199,19 @@ async function generateGroupData(group: string, year: number, month: number) {
       att1 = Array.from(attended).filter(d => d < c).length
       att2 = Array.from(attended).filter(d => d >= c).length
     }
+
     const activeSub = sub2 || sub1
     let status = ''
     if (activeSub) {
-      const daysLeft = activeSub.end_date ? Math.ceil((new Date(activeSub.end_date).getTime() - new Date(today).getTime()) / 86400000) : null
+      const daysLeft = activeSub.end_date
+        ? Math.ceil((new Date(activeSub.end_date).getTime() - new Date(today).getTime()) / 86400000)
+        : null
       const sl = activeSub.sessions_left
       if ((sl !== null && sl <= 0) || (activeSub.end_date && activeSub.end_date < today)) status = 'Окончен'
       else if ((sl !== null && sl <= 3) || (daysLeft !== null && daysLeft <= 14)) status = 'Заканчивается'
       else status = 'Актив'
     }
+
     const sub1Remaining = sub1?.sessions_left ?? (sub1 ? '∞' : '')
     const sub1Total = sub1 && sub1.sessions_left !== null ? (sub1.sessions_left as number) + att1 : (sub1 ? '∞' : '')
     const sub2Remaining = sub2?.sessions_left ?? (sub2 ? '∞' : '')
@@ -170,8 +220,16 @@ async function generateGroupData(group: string, year: number, month: number) {
       if (vals.some(s => s.sessions_left === null)) return '∞'
       return vals.reduce((acc, s) => acc + (s.sessions_left || 0), 0)
     })()
+
+    // Сокращённое название группы для столбца
+    const groupShort = student.group_name === 'Основная (нач.)' ? 'нач.'
+      : student.group_name === 'Основная (оп.)' ? 'оп.'
+      : (student.group_name || '')
+
     rows.push([
-      student.name, subLabel((sub2 || sub1)?.type ?? null),
+      student.name,
+      ...(showGroup ? [groupShort] : []),
+      subLabel((sub2 || sub1)?.type ?? null),
       ...trainingDates.map(d => attended.has(d) ? fmtShort(d) : ''),
       totalAttended, att1, sub1Remaining, sub1Total,
       sub2 ? att2 : '', sub2 ? sub2Remaining : '',
@@ -180,6 +238,7 @@ async function generateGroupData(group: string, year: number, month: number) {
       sub2 ? fmt(sub2.created_at) : '', sub2 ? fmt(sub2.end_date) : '',
     ])
   }
+
   return { rows, colCount: header.length }
 }
 
@@ -195,16 +254,23 @@ export async function generateMonthlyReport(month: number, year: number) {
   const yearShort = String(year).slice(2)
   const results: { group: string; status: string; rows?: number }[] = []
 
-  for (const group of GROUPS) {
-    const sheetTitle = `${group} ${monthName} ${yearShort}`
+  for (const config of SHEET_CONFIGS) {
+    const sheetTitle = `${config.title} ${monthName} ${yearShort}`
+    const groups = config.type === 'combined' ? config.groups : [config.group]
+    const showGroup = config.type === 'combined'
+
+    // Удаляем старый лист если есть
     const old = existingSheets.find(s => s.properties?.title === sheetTitle)
     if (old?.properties?.sheetId != null) {
       await sheetsBatchUpdate(token, spreadsheetId, [{ deleteSheet: { sheetId: old.properties.sheetId } }])
     }
-    const data = await generateGroupData(group, year, month)
-    if (!data) { results.push({ group, status: 'нет данных' }); continue }
 
-    const addResp = await sheetsBatchUpdate(token, spreadsheetId, [{ addSheet: { properties: { title: sheetTitle } } }])
+    const data = await generateSheetData(groups, year, month, showGroup)
+    if (!data) { results.push({ group: config.title, status: 'нет данных' }); continue }
+
+    const addResp = await sheetsBatchUpdate(token, spreadsheetId, [
+      { addSheet: { properties: { title: sheetTitle } } },
+    ])
     const sheetId = addResp.replies?.[0]?.addSheet?.properties?.sheetId
     await sheetsValuesUpdate(token, spreadsheetId, sheetTitle, data.rows)
 
@@ -221,7 +287,7 @@ export async function generateMonthlyReport(month: number, year: number) {
         { autoResizeDimensions: { dimensions: { sheetId, dimension: 'COLUMNS', startIndex: 0, endIndex: data.colCount } } },
       ])
     }
-    results.push({ group, status: 'ok', rows: data.rows.length - 1 })
+    results.push({ group: config.title, status: 'ok', rows: data.rows.length - 1 })
   }
 
   return { ok: true, month, year, results, url: `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit` }
