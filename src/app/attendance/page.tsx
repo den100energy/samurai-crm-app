@@ -77,6 +77,7 @@ export default function AttendancePage() {
   const [photoUploading, setPhotoUploading] = useState(false)
   const [photoPublishing, setPhotoPublishing] = useState(false)
   const [photoPublished, setPhotoPublished] = useState(false)
+  const [savedGuestCount, setSavedGuestCount] = useState(0)
 
   useEffect(() => {
     async function load() {
@@ -93,18 +94,21 @@ export default function AttendancePage() {
       setGuestsLoaded(false)
       setShowGuests(false)
 
-      // Загрузить уже сохранённые отметки за эту дату (если есть)
+      // Загрузить уже сохранённые отметки за эту дату (все: свои + гости)
       let savedPresent = new Set<string>()
-      if (withSubs.length > 0) {
-        const { data: attData } = await supabase
-          .from('attendance')
-          .select('student_id, present')
-          .eq('date', date)
-          .in('student_id', withSubs.map(s => s.id))
+      const mainIds = new Set(withSubs.map(s => s.id))
 
-        if (attData && attData.length > 0) {
-          attData.forEach(a => { if (a.present) savedPresent.add(a.student_id) })
-        }
+      const { data: allAttData } = await supabase
+        .from('attendance')
+        .select('student_id, present')
+        .eq('date', date)
+        .eq('group_name', group)
+
+      if (allAttData && allAttData.length > 0) {
+        allAttData.forEach(a => { if (a.present) savedPresent.add(a.student_id) })
+        setSavedGuestCount(allAttData.filter(a => a.present && !mainIds.has(a.student_id)).length)
+      } else {
+        setSavedGuestCount(0)
       }
       setPresent(new Set(savedPresent))
       setOriginalPresent(new Set(savedPresent))
@@ -147,13 +151,12 @@ export default function AttendancePage() {
     if (!file) return
     setPhotoUploading(true)
     try {
-      const presentCount = present.size - guestsPresentCount
       const fd = new FormData()
       fd.append('file', file)
       fd.append('group_name', group)
       fd.append('session_date', date)
       fd.append('trainer_name', userName || '')
-      fd.append('student_count', String(presentCount + guestsPresentCount))
+      fd.append('student_count', String(mainPresentCount + effectiveGuestCount))
       fd.append('sort_order', String(sessionPhotos.length))
       const res = await fetch('/api/upload-training-photo', { method: 'POST', body: fd })
       if (!res.ok) { alert('Ошибка загрузки фото'); return }
@@ -184,12 +187,21 @@ export default function AttendancePage() {
         alert(`Ошибка публикации: ${err.error || 'неизвестная ошибка'}`)
         return
       }
-      setPhotoPublished(true)
+      await loadSessionPhotos()
     } catch {
       alert('Ошибка публикации в Telegram')
     } finally {
       setPhotoPublishing(false)
     }
+  }
+
+  async function handleResendToTelegram() {
+    await supabase
+      .from('training_photos')
+      .update({ student_count: mainPresentCount + effectiveGuestCount })
+      .eq('group_name', group)
+      .eq('session_date', date)
+    await handlePublishToTelegram()
   }
 
   async function loadGuests() {
@@ -205,6 +217,28 @@ export default function AttendancePage() {
     const withSubs = await loadWithSub(data || [])
     setGuests(withSubs)
     setGuestsLoaded(true)
+
+    // Восстанавливаем уже сохранённые отметки гостей за эту дату
+    if (withSubs.length > 0) {
+      const { data: guestAtt } = await supabase
+        .from('attendance')
+        .select('student_id, present')
+        .eq('date', date)
+        .eq('group_name', group)
+        .in('student_id', withSubs.map(g => g.id))
+      if (guestAtt && guestAtt.length > 0) {
+        setPresent(prev => {
+          const next = new Set(prev)
+          guestAtt.forEach(a => { if (a.present) next.add(a.student_id) })
+          return next
+        })
+        setOriginalPresent(prev => {
+          const next = new Set(prev)
+          guestAtt.forEach(a => { if (a.present) next.add(a.student_id) })
+          return next
+        })
+      }
+    }
   }
 
   function toggleGuests() {
@@ -423,6 +457,8 @@ export default function AttendancePage() {
   }
 
   const guestsPresentCount = guests.filter(g => present.has(g.id)).length
+  const mainPresentCount = students.filter(s => present.has(s.id)).length
+  const effectiveGuestCount = guestsLoaded ? guestsPresentCount : savedGuestCount
 
   return (
     <main className="max-w-lg mx-auto p-4">
@@ -554,8 +590,8 @@ export default function AttendancePage() {
           <button onClick={toggleGuests}
             className="w-full border border-dashed border-gray-300 text-gray-500 py-2.5 rounded-xl text-sm mb-4 hover:border-gray-400 hover:text-gray-700 transition-colors">
             {showGuests
-              ? `▲ Скрыть гостей${guestsPresentCount > 0 ? ` (отмечено: ${guestsPresentCount})` : ''}`
-              : `+ Гости из других групп${guestsPresentCount > 0 ? ` (${guestsPresentCount})` : ''}`}
+              ? `▲ Скрыть гостей${effectiveGuestCount > 0 ? ` (отмечено: ${effectiveGuestCount})` : ''}`
+              : `+ Гости из других групп${effectiveGuestCount > 0 ? ` (${effectiveGuestCount})` : ''}`}
           </button>
 
           {showGuests && (
@@ -590,8 +626,8 @@ export default function AttendancePage() {
           )}
 
           <div className="text-sm text-gray-500 text-center mb-3">
-            Присутствует: {present.size - guestsPresentCount} из {students.length}
-            {guestsPresentCount > 0 && ` + ${guestsPresentCount} гост.`}
+            Присутствует: {mainPresentCount} из {students.length}
+            {effectiveGuestCount > 0 && ` + ${effectiveGuestCount} гост.`}
           </div>
           {canEdit && (
             <button onClick={save} disabled={saving}
@@ -683,6 +719,15 @@ export default function AttendancePage() {
                 className="mt-2 w-full py-2.5 rounded-xl text-sm font-medium bg-[#229ED9] text-white disabled:opacity-50 transition-opacity"
               >
                 {photoPublishing ? 'Публикую...' : '✈️ Опубликовать в Telegram'}
+              </button>
+            )}
+            {photoPublished && (
+              <button
+                onClick={handleResendToTelegram}
+                disabled={photoPublishing}
+                className="mt-2 w-full py-2.5 rounded-xl text-sm font-medium bg-[#229ED9] text-white disabled:opacity-50 transition-opacity"
+              >
+                {photoPublishing ? 'Публикую...' : '🔄 Отправить заново'}
               </button>
             )}
           </div>
