@@ -734,6 +734,9 @@ export default function AttendancePage() {
         </>
       )}
 
+      {/* Monthly Google Sheets Report */}
+      <MonthlyReportBlock />
+
       <TrainingLogSheet
         isOpen={showLogSheet}
         onClose={handleLogSheetClose}
@@ -743,5 +746,81 @@ export default function AttendancePage() {
         existingLog={existingLog}
       />
     </main>
+  )
+}
+
+function MonthlyReportBlock() {
+  const now = new Date()
+  const [reportMonth, setReportMonth] = useState(now.getMonth() === 0 ? 12 : now.getMonth())
+  const [reportYear, setReportYear] = useState(now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear())
+  const [generating, setGenerating] = useState(false)
+  const [reportUrl, setReportUrl] = useState<string | null>(null)
+
+  const MONTH_NAMES = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь']
+
+  async function handleGenerate() {
+    setGenerating(true)
+    setReportUrl(null)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch('/api/reports/generate-monthly', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-supabase-auth': session?.access_token || '',
+        },
+        body: JSON.stringify({ month: reportMonth, year: reportYear }),
+      })
+      const data = await res.json()
+      if (!res.ok) { alert(`Ошибка: ${data.error || 'неизвестная'}`); return }
+      setReportUrl(data.url)
+    } catch {
+      alert('Ошибка при создании отчёта')
+    } finally {
+      setGenerating(false)
+    }
+  }
+
+  return (
+    <div className="mt-6 rounded-xl border border-gray-200 bg-gray-50 p-4">
+      <div className="text-sm font-medium text-gray-800 mb-3">📊 Отчёт посещаемости в Google Sheets</div>
+      <div className="flex gap-2 mb-3">
+        <select
+          value={reportMonth}
+          onChange={e => setReportMonth(Number(e.target.value))}
+          className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none"
+        >
+          {MONTH_NAMES.map((m, i) => (
+            <option key={i + 1} value={i + 1}>{m}</option>
+          ))}
+        </select>
+        <select
+          value={reportYear}
+          onChange={e => setReportYear(Number(e.target.value))}
+          className="border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none"
+        >
+          {[now.getFullYear() - 1, now.getFullYear()].map(y => (
+            <option key={y} value={y}>{y}</option>
+          ))}
+        </select>
+      </div>
+      <button
+        onClick={handleGenerate}
+        disabled={generating}
+        className="w-full py-2.5 rounded-xl text-sm font-medium bg-green-600 text-white disabled:opacity-50 transition-opacity"
+      >
+        {generating ? 'Создаю отчёт...' : '📊 Создать отчёт в Google Sheets'}
+      </button>
+      {reportUrl && (
+        <a
+          href={reportUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-2 block text-center text-sm text-blue-600 underline"
+        >
+          Открыть таблицу →
+        </a>
+      )}
+    </div>
   )
 }
