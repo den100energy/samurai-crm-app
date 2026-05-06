@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { google } from 'googleapis'
+import crypto from 'crypto'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -14,15 +14,77 @@ const MONTH_NAMES_RU = [
   'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь',
 ]
 
-function getGoogleAuth() {
+// ─── Google Sheets REST (без npm-пакета) ────────────────────────────────────
+
+async function getGoogleAccessToken(): Promise<string> {
   const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL!
   const key = (process.env.GOOGLE_SERVICE_ACCOUNT_KEY || '').replace(/\\n/g, '\n')
-  return new google.auth.JWT({
-    email,
-    key,
-    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+
+  const now = Math.floor(Date.now() / 1000)
+  const header = Buffer.from(JSON.stringify({ alg: 'RS256', typ: 'JWT' })).toString('base64url')
+  const payload = Buffer.from(JSON.stringify({
+    iss: email,
+    scope: 'https://www.googleapis.com/auth/spreadsheets',
+    aud: 'https://oauth2.googleapis.com/token',
+    exp: now + 3600,
+    iat: now,
+  })).toString('base64url')
+
+  const signingInput = `${header}.${payload}`
+  const sign = crypto.createSign('RSA-SHA256')
+  sign.update(signingInput)
+  const signature = sign.sign(key, 'base64url')
+  const jwt = `${signingInput}.${signature}`
+
+  const res = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+      assertion: jwt,
+    }),
   })
+  const data = await res.json()
+  if (!data.access_token) throw new Error(`Google auth failed: ${JSON.stringify(data)}`)
+  return data.access_token
 }
+
+async function sheetsGet(token: string, spreadsheetId: string) {
+  const res = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  )
+  return res.json()
+}
+
+async function sheetsValuesUpdate(
+  token: string, spreadsheetId: string, sheetTitle: string,
+  values: (string | number)[][]
+) {
+  const range = encodeURIComponent(`'${sheetTitle}'!A1`)
+  await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`,
+    {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ values }),
+    }
+  )
+}
+
+async function sheetsBatchUpdate(token: string, spreadsheetId: string, requests: unknown[]) {
+  const res = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`,
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ requests }),
+    }
+  )
+  return res.json()
+}
+
+// ─── Форматирование дат ──────────────────────────────────────────────────────
 
 function fmt(dateStr: string | null | undefined): string {
   if (!dateStr) return ''
@@ -41,8 +103,9 @@ function subLabel(type: string | null): string {
   return type.includes('|') ? type.split('|')[1] : type
 }
 
+// ─── Генерация данных одной группы ──────────────────────────────────────────
+
 type Sub = {
-  id: string
   student_id: string
   type: string | null
   sessions_left: number | null
@@ -58,7 +121,6 @@ async function generateGroupReport(group: string, year: number, month: number) {
   const ny = month === 12 ? year + 1 : year
   const endDate = `${ny}-${String(nm).padStart(2, '0')}-01`
 
-  // Unique training dates in month for this group
   const { data: attRows } = await supabase
     .from('attendance')
     .select('date, student_id')
@@ -73,7 +135,6 @@ async function generateGroupReport(group: string, year: number, month: number) {
 
   if (trainingDates.length === 0) return null
 
-  // Active students
   const { data: students } = await supabase
     .from('students')
     .select('id, name')
@@ -83,7 +144,6 @@ async function generateGroupReport(group: string, year: number, month: number) {
 
   if (!students || students.length === 0) return null
 
-  // Attendance map: studentId → Set<dateStr>
   const attMap = new Map<string, Set<string>>()
   ;(attRows || []).forEach(a => {
     const d = String(a.date).slice(0, 10)
@@ -91,7 +151,6 @@ async function generateGroupReport(group: string, year: number, month: number) {
     attMap.get(a.student_id)!.add(d)
   })
 
-  // Subscriptions
   const { data: subsData } = await supabase
     .from('subscriptions')
     .select('id, student_id, type, sessions_left, end_date, created_at, is_pending')
@@ -104,7 +163,6 @@ async function generateGroupReport(group: string, year: number, month: number) {
     subMap.get(sub.student_id)!.push(sub as Sub)
   })
 
-  // Header
   const header = [
     'Клиент', 'Абонемент',
     ...trainingDates.map((d, i) => `${i + 1}\n${fmtShort(d)}`),
@@ -129,7 +187,6 @@ async function generateGroupReport(group: string, year: number, month: number) {
     const attended = attMap.get(student.id) || new Set<string>()
     const subs = subMap.get(student.id) || []
 
-    // Find subs active during the month
     const relevant = subs.filter(s => {
       const started = s.created_at.slice(0, 10) < endDate
       const ended = !s.end_date || s.end_date >= startDate
@@ -137,13 +194,11 @@ async function generateGroupReport(group: string, year: number, month: number) {
     })
     const pool = relevant.length > 0 ? relevant : subs.slice(-2)
 
-    // sub1 = older, sub2 = newer (if two subs this month)
-    const sub1 = pool[pool.length >= 2 ? pool.length - 2 : 0] || null
+    const sub1 = pool.length >= 2 ? pool[pool.length - 2] : (pool[0] || null)
     const sub2 = pool.length >= 2 ? pool[pool.length - 1] : null
 
     const totalAttended = attended.size
 
-    // Sessions split between subs
     let att1 = totalAttended
     let att2 = 0
     if (sub2 && sub1) {
@@ -152,9 +207,8 @@ async function generateGroupReport(group: string, year: number, month: number) {
       att2 = Array.from(attended).filter(d => d >= changeover).length
     }
 
-    // Status
-    let status = ''
     const activeSub = sub2 || sub1
+    let status = ''
     if (activeSub) {
       const daysLeft = activeSub.end_date
         ? Math.ceil((new Date(activeSub.end_date).getTime() - new Date(today).getTime()) / 86400000)
@@ -171,38 +225,30 @@ async function generateGroupReport(group: string, year: number, month: number) {
 
     const sub1Remaining = sub1?.sessions_left ?? (sub1 ? '∞' : '')
     const sub1Total = sub1 && sub1.sessions_left !== null
-      ? (sub1.sessions_left as number) + att1
-      : (sub1 ? '∞' : '')
+      ? (sub1.sessions_left as number) + att1 : (sub1 ? '∞' : '')
     const sub2Remaining = sub2?.sessions_left ?? (sub2 ? '∞' : '')
     const totalRemaining = (() => {
       const vals = [sub1, sub2].filter(Boolean) as Sub[]
-      const hasNull = vals.some(s => s.sessions_left === null)
-      if (hasNull) return '∞'
-      const total = vals.reduce((acc, s) => acc + (s.sessions_left || 0), 0)
-      return total
+      if (vals.some(s => s.sessions_left === null)) return '∞'
+      return vals.reduce((acc, s) => acc + (s.sessions_left || 0), 0)
     })()
 
     rows.push([
       student.name,
       subLabel((sub2 || sub1)?.type ?? null),
       ...trainingDates.map(d => attended.has(d) ? fmtShort(d) : ''),
-      totalAttended,
-      att1,
-      sub1Remaining,
-      sub1Total,
-      sub2 ? att2 : '',
-      sub2 ? sub2Remaining : '',
-      totalRemaining,
-      status,
-      sub1 ? fmt(sub1.created_at) : '',
-      sub1 ? fmt(sub1.end_date) : '',
-      sub2 ? fmt(sub2.created_at) : '',
-      sub2 ? fmt(sub2.end_date) : '',
+      totalAttended, att1, sub1Remaining, sub1Total,
+      sub2 ? att2 : '', sub2 ? sub2Remaining : '',
+      totalRemaining, status,
+      sub1 ? fmt(sub1.created_at) : '', sub1 ? fmt(sub1.end_date) : '',
+      sub2 ? fmt(sub2.created_at) : '', sub2 ? fmt(sub2.end_date) : '',
     ])
   }
 
   return { rows, colCount: header.length }
 }
+
+// ─── Обработчик POST ─────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
   const authHeader = req.headers.get('authorization')
@@ -216,89 +262,77 @@ export async function POST(req: NextRequest) {
   const year: number = body.year || (now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear())
 
   const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID!
-  const auth = getGoogleAuth()
-  const sheets = google.sheets({ version: 'v4', auth })
 
-  const monthName = MONTH_NAMES_RU[month - 1]
-  const yearShort = String(year).slice(2)
+  try {
+    const token = await getGoogleAccessToken()
+    const sp = await sheetsGet(token, spreadsheetId)
+    const existingSheets: { properties: { title: string; sheetId: number } }[] = sp.sheets || []
 
-  // Get existing sheets
-  const { data: sp } = await sheets.spreadsheets.get({ spreadsheetId })
-  const existingSheets = sp.sheets || []
+    const monthName = MONTH_NAMES_RU[month - 1]
+    const yearShort = String(year).slice(2)
+    const results: { group: string; status: string; rows?: number }[] = []
 
-  const results: { group: string; status: string; rows?: number }[] = []
+    for (const group of GROUPS) {
+      const sheetTitle = `${group} ${monthName} ${yearShort}`
 
-  for (const group of GROUPS) {
-    const sheetTitle = `${group} ${monthName} ${yearShort}`
+      // Удаляем старый лист если есть
+      const old = existingSheets.find(s => s.properties?.title === sheetTitle)
+      if (old?.properties?.sheetId != null) {
+        await sheetsBatchUpdate(token, spreadsheetId, [
+          { deleteSheet: { sheetId: old.properties.sheetId } },
+        ])
+      }
 
-    // Remove old sheet with same title
-    const old = existingSheets.find(s => s.properties?.title === sheetTitle)
-    if (old?.properties?.sheetId != null) {
-      await sheets.spreadsheets.batchUpdate({
-        spreadsheetId,
-        requestBody: { requests: [{ deleteSheet: { sheetId: old.properties.sheetId! } }] },
-      })
-    }
+      const data = await generateGroupReport(group, year, month)
+      if (!data) { results.push({ group, status: 'нет данных' }); continue }
 
-    const data = await generateGroupReport(group, year, month)
-    if (!data) {
-      results.push({ group, status: 'нет данных' })
-      continue
-    }
+      // Создаём лист
+      const addResp = await sheetsBatchUpdate(token, spreadsheetId, [
+        { addSheet: { properties: { title: sheetTitle } } },
+      ])
+      const sheetId = addResp.replies?.[0]?.addSheet?.properties?.sheetId
 
-    // Create sheet
-    const addResp = await sheets.spreadsheets.batchUpdate({
-      spreadsheetId,
-      requestBody: { requests: [{ addSheet: { properties: { title: sheetTitle } } }] },
-    })
-    const sheetId = addResp.data.replies?.[0]?.addSheet?.properties?.sheetId
+      // Записываем данные
+      await sheetsValuesUpdate(token, spreadsheetId, sheetTitle, data.rows)
 
-    // Write data
-    await sheets.spreadsheets.values.update({
-      spreadsheetId,
-      range: `'${sheetTitle}'!A1`,
-      valueInputOption: 'USER_ENTERED',
-      requestBody: { values: data.rows },
-    })
-
-    // Format: bold header, freeze row, auto-resize
-    if (sheetId != null) {
-      await sheets.spreadsheets.batchUpdate({
-        spreadsheetId,
-        requestBody: {
-          requests: [
-            {
-              repeatCell: {
-                range: { sheetId, startRowIndex: 0, endRowIndex: 1 },
-                cell: {
-                  userEnteredFormat: {
-                    textFormat: { bold: true },
-                    backgroundColor: { red: 0.85, green: 0.85, blue: 0.85 },
-                    wrapStrategy: 'WRAP',
-                  },
+      // Форматируем
+      if (sheetId != null) {
+        await sheetsBatchUpdate(token, spreadsheetId, [
+          {
+            repeatCell: {
+              range: { sheetId, startRowIndex: 0, endRowIndex: 1 },
+              cell: {
+                userEnteredFormat: {
+                  textFormat: { bold: true },
+                  backgroundColor: { red: 0.85, green: 0.85, blue: 0.85 },
+                  wrapStrategy: 'WRAP',
+                  verticalAlignment: 'MIDDLE',
                 },
-                fields: 'userEnteredFormat(textFormat,backgroundColor,wrapStrategy)',
               },
+              fields: 'userEnteredFormat(textFormat,backgroundColor,wrapStrategy,verticalAlignment)',
             },
-            {
-              updateSheetProperties: {
-                properties: { sheetId, gridProperties: { frozenRowCount: 1 } },
-                fields: 'gridProperties.frozenRowCount',
-              },
+          },
+          {
+            updateSheetProperties: {
+              properties: { sheetId, gridProperties: { frozenRowCount: 1 } },
+              fields: 'gridProperties.frozenRowCount',
             },
-            {
-              autoResizeDimensions: {
-                dimensions: { sheetId, dimension: 'COLUMNS', startIndex: 0, endIndex: data.colCount },
-              },
+          },
+          {
+            autoResizeDimensions: {
+              dimensions: { sheetId, dimension: 'COLUMNS', startIndex: 0, endIndex: data.colCount },
             },
-          ],
-        },
-      })
+          },
+        ])
+      }
+
+      results.push({ group, status: 'ok', rows: data.rows.length - 1 })
     }
 
-    results.push({ group, status: 'ok', rows: data.rows.length - 1 })
+    const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit`
+    return NextResponse.json({ ok: true, month, year, results, url })
+  } catch (err) {
+    console.error('[generate-google-report]', err)
+    return NextResponse.json({ error: String(err) }, { status: 500 })
   }
-
-  const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit`
-  return NextResponse.json({ ok: true, month, year, results, url })
 }
