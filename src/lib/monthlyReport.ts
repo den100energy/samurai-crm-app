@@ -229,7 +229,7 @@ async function generateSheetData(groups: string[], year: number, month: number, 
     rows.push([
       student.name,
       ...(showGroup ? [groupShort] : []),
-      subLabel((sub2 || sub1)?.type ?? null),
+      subLabel((sub2 && att2 > att1 ? sub2 : sub1)?.type ?? null),
       ...trainingDates.map(d => attended.has(d) ? fmtShort(d) : ''),
       totalAttended, att1, sub1Remaining, sub1Total,
       sub2 ? att2 : '', sub2 ? sub2Remaining : '',
