@@ -774,8 +774,8 @@ function MonthlyReportBlock() {
       const data = await res.json()
       if (!res.ok) { alert(`Ошибка: ${data.error || 'неизвестная'}`); return }
       setReportUrl(data.url)
-    } catch {
-      alert('Ошибка при создании отчёта')
+    } catch (e) {
+      alert('Ошибка при создании отчёта: ' + String(e))
     } finally {
       setGenerating(false)
     }
