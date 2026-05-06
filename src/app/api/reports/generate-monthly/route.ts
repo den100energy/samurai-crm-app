@@ -18,12 +18,12 @@ export async function POST(req: NextRequest) {
   // Проверяем роль
   const supabaseAdmin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
   const { data: profile } = await supabaseAdmin
-    .from('users')
+    .from('user_profiles')
     .select('role')
     .eq('id', user.id)
     .maybeSingle()
 
-  if (!profile || !['owner', 'admin'].includes(profile.role)) {
+  if (!profile || !['founder', 'admin'].includes(profile.role)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
